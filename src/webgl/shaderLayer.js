@@ -498,22 +498,20 @@
 
         /**
          *
-         * @param name the control named ID which will be attached to the control
+         * @param {string} name the control named ID which will be attached to the control
          * @param {object} controlOptions control options defined by the underlying
          *  control, must have at least 'type' property
-         * @param {object} buildContext item with the same properties
-         *  as static.defaultControls
          */
-        addControl(name, controlOptions, buildContext) {
+        addControl(name, controlOptions) {
             if (this[name]) {
                 console.warn(`Shader ${this.constructor.name()} overrides as a control name ${name} existing property!`);
             }
 
-            this._ownedControls.push(name);
+            const controlObject = this.constructor.defaultControls[name];
             const control = $.WebGLModule.UIControls.build(this, name, controlOptions,
-                buildContext.default, buildContext.accepts, buildContext.required, this._hasInteractiveControls);
+                controlObject.default, controlObject.accepts, controlObject.required, this._hasInteractiveControls);
             this[name] = control;
-            return control;
+            this._ownedControls.push(name);
         }
 
         ////////////////////////////////////
