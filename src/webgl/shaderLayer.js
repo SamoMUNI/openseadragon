@@ -3,13 +3,12 @@
 (function($) {
 
     /**
-     * Shader sharing point
+     * Organizer of shaders
      * @class OpenSeadragon.WebGLModule.ShaderMediator
      */
     $.WebGLModule.ShaderMediator = class {
-
         /**
-         * Register shader
+         * Register shader (add shader to _layers object)
          * @param {typeof OpenSeadragon.WebGLModule.ShaderLayer} LayerRendererClass static class definition
          */
         static registerLayer(LayerRendererClass) {
@@ -20,11 +19,23 @@
             // if (!$.WebGLModule.SthishaderLayer.isPrototypeOf(LayerRendererClass)) {
             //     throw `${LayerRendererClass} does not inherit from ShaderLayer!`;
             // }static
-            this._layers[LayerRendererClass.type()] = LayerRendererClass;
+            if (this._acceptsShaders) {
+                this._layers[LayerRendererClass.type()] = LayerRendererClass;
+            } else {
+                console.warn("OpenSeadragon.WebGLModule.ShaderMediator::registerLayer(LayerRendererClass) ShaderMediator is set to not accept new shaders");
+            }
         }
 
+        /**
+         * Enable or disable shader registrations
+         * @param {boolean} accepts
+         */
         static setAcceptsRegistrations(accepts) {
-            this.acceptsShaders = accepts;
+            if (accepts === true || accepts === false) {
+                this._acceptsShaders = accepts;
+            } else {
+                console.warn("OpenSeadragon.WebGLModule.ShaderMediator::setAcceptsRegistrations(accepts) Accepts parameter must be either true or false");
+            }
         }
 
         /**
@@ -52,10 +63,8 @@
             return Object.keys(this._layers);
         }
     };
-    //todo why cannot be inside object :/
-    /* Rly, why? static acceptsShaders = true;
-                 static _layers = {} */
-    $.WebGLModule.ShaderMediator.acceptsShaders = true;
+    // static properties that cannot be inside an object because of the old version of javascript
+    $.WebGLModule.ShaderMediator._acceptsShaders = true;
     $.WebGLModule.ShaderMediator._layers = {};
 
     $.WebGLModule.BLEND_MODE = {
