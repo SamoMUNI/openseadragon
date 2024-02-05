@@ -97,7 +97,6 @@
                 }
             }
 
-            /* neviem z kade sa zjavilo idPattern a vobec nie idPattern.test | co je this.construktor vlastne vobec*/
             if (!this.constructor.idPattern.test(this.uniqueId)) {
                 throw "$.WebGLModule: invalid ID! Id can contain only letters, numbers and underscore. ID: " + this.uniqueId;
             }
@@ -858,18 +857,22 @@
             let gl = this.gl;
             let program;
 
-            // TU SOM SKONCIL, prechadzam ze co robi totot...
+            // if program is not already built
             if (!this._programs[idx]) {
                 program = gl.createProgram();
                 this._programs[idx] = program;
 
+                /* index++ neviem ci by nemal byt aj v ife, pokial sa ma odkazovat na index layeru v spec.shaders
+                    a zaroven nevadi ze layer je chybny */
                 let index = 0;
                 //init shader factories and unique id's
-                for (let key in spec.shaders) {
-                    let layer = spec.shaders[key];
-                    // tento if je potrebny??
+                for (let shaderName in spec.shaders) {
+                    let layer = spec.shaders[shaderName];
+                    // if shader object is not empty
                     if (layer) {
+                        // get shader class (extends OpenSeadragon.WebGLModule.ShaderLayer)
                         let ShaderFactoryClass = $.WebGLModule.ShaderMediator.getClass(layer.type);
+                        /* toto by som dal hore */
                         if (layer.type === "none") {
                             continue;
                         }
@@ -908,18 +911,29 @@
             return idx;
         }
 
-        // layer = dictionary so shaderom
+        /**
+         * Set layer object properties
+         * @param {Object} spec specification to be used
+         * @param {function} ShaderFactoryClass shader class, extends OpenSeadragon.WebGLModule.ShaderLayer (asi zatial plainShader)
+         * @param {Object} layer concrete shader object from spec.shaders
+         * @param {number} idx index of shader in spec.shaders (starts with 0)
+         */
         _initializeShaderFactory(spec, ShaderFactoryClass, layer, idx) {
             if (!ShaderFactoryClass) {
                 layer.error = "Unknown layer type.";
                 layer.desc = `The layer type '${layer.type}' has no associated factory.`;
+                /* layer.name je undefined, asi si chcel ze ako ja layer nazvany v spec.shaders, ale neviem ako to ziskat */
                 console.warn("Skipping layer " + layer.name);
                 return;
             }
             const _this = this;
             layer._index = idx;
             layer.visible = layer.visible === undefined ? true : layer.visible;
+            /* unikatne indexovanie je dobre spravene ?? povedzem this.uniqueId = 1, idx = 11 da to iste ako this.uniqueId = 11, idx = 1
+                navrhujem tam dat podtrznik alebo tak 1_11 / 11_1*/
+            // vytvara shader(id, options)
             layer._renderContext = new ShaderFactoryClass(`${this.uniqueId}${idx}`, {
+                // ma odkaz sam na seba vyssie
                 layer: layer,
                 webgl: this.webglContext,
                 // dava sa UI controls nech to volaju ked sa zmeni ich hodnota (triggeruje prekreslenie viewportu)
@@ -936,6 +950,7 @@
                     throw "Not yet implemented!";
                 }
             });
+            /* momentalne layer.params = {}, layer.dataReferences = [0] */
             layer._renderContext.construct(layer.params || {}, layer.dataReferences);
 
             if (!layer._renderContext.initialized()) {

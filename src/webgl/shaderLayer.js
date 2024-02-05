@@ -147,6 +147,8 @@
             if (!$.WebGLModule.idPattern.test(this.uid)) {
                 console.error("Invalid ID for the shader: id must match to the pattern", $.WebGLModule.idPattern, id);
             }
+
+            // create cache parameter in layer object + assign layer object to __visualisationLayer
             this._setContextVisualisationLayer(privateOptions.layer);
 
             //todo custom control names share namespace with this API - unique names or controls in seperate object?
@@ -166,6 +168,7 @@
          *  options.use_mode: blending mode - default alpha ("show"), custom blending ("mask") and clipping mask blend ("mask_clip")
          * @param {[number]} dataReferences indexes of data being requested for this shader
          */
+        /* options = {}, dataReferences = [0] */
         construct(options, dataReferences) {
             this._ownedControls = [];
             this._buildControls(options);
@@ -502,6 +505,7 @@
          * @param {object} controlOptions control options defined by the underlying
          *  control, must have at least 'type' property
          */
+        /* controlOptions dojdu ako {} */
         addControl(name, controlOptions) {
             if (this[name]) {
                 console.warn(`Shader ${this.constructor.name()} overrides as a control name ${name} existing property!`);
@@ -518,11 +522,12 @@
         ////////// PRIVATE /////////////////
         ////////////////////////////////////
 
-
+        /* options = {} */
         _buildControls(options) {
             let controls = this.constructor.defaultControls,
                 customParams = this.constructor.customParams;
 
+            /* Pokial opacity nieje alebo neprijma float tak sa vytvori */
             if (controls.opacity === undefined || (typeof controls.opacity === "object" && !controls.opacity.accepts("float"))) {
                 controls.opacity = {
                     default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
@@ -531,18 +536,23 @@
             }
 
             for (let control in controls) {
+                console.log('som vo fori cez controls');
                 if (control.startsWith("use_")) {
                     continue;
                 }
-                let buildContext = controls[control];
 
+                let buildContext = controls[control];
+                /* ak sa nachadza control v this.defaultControls */
                 if (buildContext) {
+                    console.log('v prvom ife, control = ', control);
                     this.addControl(control, options[control], buildContext);
                     continue;
                 }
 
                 let customContext = customParams[control];
+                /* ak sa nachadza control v this.customParams */
                 if (customContext) {
+                    console.log('v drugom ife');
                     let targetType;
                     const dType = typeof customContext.default,
                         rType = typeof customContext.required;
@@ -585,6 +595,10 @@
             }
         }
 
+        /**
+         * Creates shader.cache parameter, which is object and creates shader.cache.shadertype parameter, which is also an object
+         * @param {Object} visualisationLayer shader object
+         */
         _setContextVisualisationLayer(visualisationLayer) {
             this.__visualisationLayer = visualisationLayer;
             if (!this.__visualisationLayer.cache) {
@@ -719,16 +733,16 @@
 
         /**
          * Build UI control object based on given parameters
-         * @param {OpenSeadragon.WebGLModule.ShaderLayer} context owner of the control
-         * @param {string} name name used for the layer, should be unique among different context types
-         * @param {object|*} params parameters passed to the control (defined by the control) or set as default value if not object
-         * @param {object} defaultParams default parameters that the shader might leverage above defaults of the control itself
-         * @param {function} accepts required GLSL type of the control predicate, for compatibility typechecking
-         * @param {object} requiredParams parameters that override anything sent by user or present by defaultParams
-         * @param {boolean} interactivityEnabled must be false if HTML nodes are not managed
+         * @param {OpenSeadragon.WebGLModule.ShaderLayer} context owner of the control (shader vlastnik controlu)
+         * @param {string} name name used for the layer, should be unique among different context types (meno controlu)
+         * @param {object|*} params parameters passed to the control (defined by the control) or set as default value if not object ({})
+         * @param {object} defaultParams default parameters that the shader might leverage above defaults of the control itself (control.default)
+         * @param {function} accepts required GLSL type of the control predicate, for compatibility typechecking (control.accepts)
+         * @param {object} requiredParams parameters that override anything sent by user or present by defaultParams ({})
+         * @param {boolean} interactivityEnabled must be false if HTML nodes are not managed (ty vole nevim co je)
          * @return {OpenSeadragon.WebGLModule.UIControls.IControl}
          */
-        static build(context, name, params, defaultParams = {}, accepts = () => true, requiredParams = {}, interactivityEnabled = true) {            //if not an object, but a value: make it the default one
+        static build(context, name, params, defaultParams = {}, accepts = () => true, requiredParams = {}, interactivityEnabled = true) { //if not an object, but a value: make it the default one
             if (!(typeof params === 'object')) {
                 params = {default: params};
             }
@@ -737,6 +751,7 @@
             }
             let originalType = defaultParams.type;
 
+            // merge dP, p, rP recursively, without modifying original objects
             defaultParams = $.extend(true, {}, defaultParams, params, requiredParams);
 
             if (!this._items[defaultParams.type]) {
