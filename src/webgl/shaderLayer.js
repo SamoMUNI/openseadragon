@@ -527,14 +527,6 @@
             let controls = this.constructor.defaultControls,
                 customParams = this.constructor.customParams;
 
-            /* Pokial opacity nieje alebo neprijma float tak sa vytvori */
-            if (controls.opacity === undefined || (typeof controls.opacity === "object" && !controls.opacity.accepts("float"))) {
-                controls.opacity = {
-                    default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
-                    accepts: (type, instance) => type === "float"
-                };
-            }
-
             for (let control in controls) {
                 console.log('som vo fori cez controls');
                 if (control.startsWith("use_")) {
@@ -646,7 +638,12 @@
      *  but limited in automated docs --> require field that summarises its usage)
      * @member {object}
      */
-    $.WebGLModule.ShaderLayer.defaultControls = {};
+    $.WebGLModule.ShaderLayer.defaultControls = {
+        opacity: {
+            default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
+            accepts: (type, instance) => type === "float"
+        }
+    };
 
     /**
      * Declare custom parameters for documentation purposes.
