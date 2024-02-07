@@ -730,51 +730,59 @@
 
         /**
          * Build UI control object based on given parameters
-         * @param {OpenSeadragon.WebGLModule.ShaderLayer} context owner of the control (shader vlastnik controlu)
-         * @param {string} name name used for the layer, should be unique among different context types (meno controlu)
+         * @param {OpenSeadragon.WebGLModule.ShaderLayer} owner owner of the control (shader)
+         * @param {string} controlName name used for the control, should be unique among different shader types (meno controlu)
+         * @param {object} controlObject object defining control (eg.: opacity: <controlObject>)
          * @param {object|*} params parameters passed to the control (defined by the control) or set as default value if not object ({})
-         * @param {object} defaultParams default parameters that the shader might leverage above defaults of the control itself (control.default)
-         * @param {function} accepts required GLSL type of the control predicate, for compatibility typechecking (control.accepts)
-         * @param {object} requiredParams parameters that override anything sent by user or present by defaultParams ({})
-         * @param {boolean} interactivityEnabled must be false if HTML nodes are not managed (ty vole nevim co je)
          * @return {OpenSeadragon.WebGLModule.UIControls.IControl}
          */
-        static build(context, name, params, defaultParams = {}, accepts = () => true, requiredParams = {}, interactivityEnabled = true) { //if not an object, but a value: make it the default one
+        static build(owner, controlName, controlObject, params) {
+            let defaultParams = controlObject.default,
+                accepts = controlObject.accepts,
+                requiredParams = controlObject.required === undefined ? {} : controlObject.required;
+
+            let interactivityEnabled = owner._hasInteractiveControls;
+
+            // if not an object, but a value, make it the default one
             if (!(typeof params === 'object')) {
                 params = {default: params};
             }
+            //must be false if HTML nodes are not managed
             if (!interactivityEnabled) {
                 params.interactive = false;
             }
             let originalType = defaultParams.type;
 
-            // merge dP, p, rP recursively, without modifying original objects
+            // merge dP, p, rP recursively, without modifying p and rP
             defaultParams = $.extend(true, {}, defaultParams, params, requiredParams);
 
+            // if control's type (eg.: opacity -> range) not already present in this._items
             if (!this._items[defaultParams.type]) {
                 if (!this._impls[defaultParams.type]) {
-                    return this._buildFallback(defaultParams.type, originalType, context,
-                        name, params, defaultParams, accepts, requiredParams, interactivityEnabled);
+                    return this._buildFallback(defaultParams.type, originalType,
+                        owner, controlName, controlObject, params);
                 }
 
                 let cls = new this._impls[defaultParams.type](
-                    context, name, `${name}_${context.uid}`, defaultParams
+                    owner, controlName, `${controlName}_${owner.uid}`, defaultParams
                 );
                 if (accepts(cls.type, cls)) {
                     return cls;
                 }
-                return this._buildFallback(defaultParams.type, originalType, context,
-                    name, params, defaultParams, accepts, requiredParams, interactivityEnabled);
-            } else {
-                let contextComponent = this.getUiElement(defaultParams.type);
+                return this._buildFallback(defaultParams.type, originalType,
+                    owner, controlName, controlObject, params);
+            } else { // control's type (eg.: range/number/...) is present in this._items
+                console.log('UIControls:build - prechadzam tadeto');
+                let controlTypeObject = this.getUiElement(defaultParams.type);
                 let comp = new $.WebGLModule.UIControls.SimpleUIControl(
-                    context, name, `${name}_${context.uid}`, defaultParams, contextComponent
+                    owner, controlName, defaultParams, controlTypeObject
                 );
+                /* comp.type === float, tuto naozaj pri range v _items je definovany type: float */
                 if (accepts(comp.type, comp)) {
                     return comp;
                 }
-                return this._buildFallback(contextComponent.glType, originalType, context,
-                    name, params, defaultParams, accepts, requiredParams, interactivityEnabled);
+                return this._buildFallback(controlTypeObject.glType, originalType,
+                    owner, controlName, controlObject, params);
             }
         }
 
@@ -841,7 +849,7 @@
         /////////////////////////
 
 
-        static _buildFallback(newType, originalType, context, name, params, defaultParams, requiredType, requiredParams, interactivityEnabled) {
+        static _buildFallback(newType, originalType, owner, controlName, controlObject, params) {
             //repeated check when building object from type
 
             params.interactive = false;
@@ -851,7 +859,7 @@
             } else { //otherwise try to build with originalType (default)
                 params.type = originalType;
                 console.warn("Incompatible UI control type '" + newType + "': making the input non-interactive.");
-                return this.build(context, name, params, defaultParams, requiredType, requiredParams, interactivityEnabled);
+                return this.build(owner, controlName, controlObject, params);
             }
         }
     };
