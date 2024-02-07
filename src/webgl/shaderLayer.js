@@ -63,7 +63,7 @@
             return Object.keys(this._layers);
         }
     };
-    // static properties that cannot be inside an object because of the old version of javascript
+    // attributes that should've been static but cannot be so because of the old version of javascript
     $.WebGLModule.ShaderMediator._acceptsShaders = true;
     $.WebGLModule.ShaderMediator._layers = {};
 
