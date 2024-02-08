@@ -141,15 +141,22 @@
          * Global supported options
          * @param {string} id unique ID among all webgl instances and shaders
          * @param {object} privateOptions options that should not be touched, necessary for linking the layer to the core
+         * @param {object} privateOptions.shaderObject concrete shader object definition from spec.shaders
+         * @param {WebGL2RenderingContext} privateOptions.webgl
+         * @param {boolean} privateOptions.interactive
+         * @param {function} privateOptions.invalidate
+         * @param {function} privateOptions.rebuild
+         * @param {function} privateOptions.refetch
          */
         constructor(id, privateOptions) {
+            // "rendererId" + <index of shader in spec.shaders>
             this.uid = id;
             if (!$.WebGLModule.idPattern.test(this.uid)) {
                 console.error("Invalid ID for the shader: id must match to the pattern", $.WebGLModule.idPattern, id);
             }
 
-            // create cache parameter in layer object + assign layer object to __visualisationLayer
-            this._setContextVisualisationLayer(privateOptions.layer);
+            // this.__visualisationLayer = shaderObject, ??
+            this._setContextVisualisationLayer(privateOptions.shaderObject);
 
             //todo custom control names share namespace with this API - unique names or controls in seperate object?
             this.webglContext = privateOptions.webgl;
