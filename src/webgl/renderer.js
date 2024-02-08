@@ -915,30 +915,30 @@
          * Set layer object properties
          * @param {Object} spec specification to be used
          * @param {function} ShaderFactoryClass shader class, extends OpenSeadragon.WebGLModule.ShaderLayer (asi zatial plainShader)
-         * @param {Object} layer concrete shader object from spec.shaders
-         * @param {number} idx index of shader in spec.shaders (starts with 0)
+         * @param {Object} shaderObject concrete shader object definition from spec.shaders
+         * @param {number} idx index of shaderObject in spec.shaders
          */
-        _initializeShaderFactory(spec, ShaderFactoryClass, layer, idx) {
+        _initializeShaderFactory(spec, ShaderFactoryClass, shaderObject, idx) {
             if (!ShaderFactoryClass) {
-                layer.error = "Unknown layer type.";
-                layer.desc = `The layer type '${layer.type}' has no associated factory.`;
-                /* layer.name je undefined, asi si chcel ze ako ja layer nazvany v spec.shaders, ale neviem ako to ziskat */
-                console.warn("Skipping layer " + layer.name);
+                shaderObject.error = "Unknown shaderObject type.";
+                shaderObject.desc = `The shaderObject type '${shaderObject.type}' has no associated factory.`;
+                /* shaderObject.name je undefined, asi si chcel ze ako ja shaderObject nazvany v spec.shaders, ale neviem ako to ziskat */
+                console.warn("Skipping shaderObject " + shaderObject.name);
                 return;
             }
             const _this = this;
-            layer._index = idx;
-            layer.visible = layer.visible === undefined ? true : layer.visible;
+            shaderObject._index = idx;
+            shaderObject.visible = shaderObject.visible === undefined ? true : shaderObject.visible;
             /* unikatne indexovanie je dobre spravene ?? povedzem this.uniqueId = 1, idx = 11 da to iste ako this.uniqueId = 11, idx = 1
                 navrhujem tam dat podtrznik alebo tak 1_11 / 11_1*/
             // vytvara shader(id, options)
-            layer._renderContext = new ShaderFactoryClass(`${this.uniqueId}${idx}`, {
+            shaderObject._renderContext = new ShaderFactoryClass(`${this.uniqueId}${idx}`, {
                 // ma odkaz sam na seba vyssie
-                layer: layer,
+                shaderObject: shaderObject,
                 webgl: this.webglContext,
+                interactive: this.supportsHtmlControls(),
                 // dava sa UI controls nech to volaju ked sa zmeni ich hodnota (triggeruje prekreslenie viewportu)
                 invalidate: this.resetCallback,
-                interactive: this.supportsHtmlControls(),
                 // triggeruje prekompilovanie a prekreslenie viewportu
                 rebuild: this.rebuildCurrentProgram.bind(this, undefined),
                 refetch: function() {
@@ -950,10 +950,9 @@
                     throw "Not yet implemented!";
                 }
             });
-            /* momentalne layer.params = {}, layer.dataReferences = [0] */
-            layer._renderContext.construct(layer.params || {}, layer.dataReferences);
-
-            if (!layer._renderContext.initialized()) {
+            /* momentalne shaderObject.params = {}, shaderObject.dataReferences = [0] */
+            shaderObject._renderContext.construct(shaderObject.params || {}, shaderObject.dataReferences);
+            if (!shaderObject._renderContext.initialized()) {
                 console.error(`Invalid shader ${ShaderFactoryClass.name()}! Construct must call super implementation!`);
             }
         }
