@@ -864,11 +864,6 @@
         }
     };
 
-    //implementation of UI control classes
-    //more complex functionality
-    $.WebGLModule.UIControls._impls = {
-        //colormap: $.WebGLModule.UIControls.ColorMap
-    };
     //implementation of UI control objects
     //simple functionality
     $.WebGLModule.UIControls._items = {
@@ -981,6 +976,12 @@
             glType: "bool",
             uiType: "bool"
         }
+    };
+
+    //implementation of UI control classes
+    //more complex functionality
+    $.WebGLModule.UIControls._impls = {
+        //colormap: $.WebGLModule.UIControls.ColorMap
     };
 
     /**
