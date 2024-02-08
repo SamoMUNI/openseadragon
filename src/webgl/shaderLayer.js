@@ -512,8 +512,8 @@
             }
 
             const controlObject = this.constructor.defaultControls[name];
-            const control = $.WebGLModule.UIControls.build(this, name, controlOptions,
-                controlObject.default, controlObject.accepts, controlObject.required, this._hasInteractiveControls);
+            const control = $.WebGLModule.UIControls.build(this, name, controlObject, controlOptions);
+            // create new attribute to shaderLayer class -> shaderLayer.<control name> = <control object>
             this[name] = control;
             this._ownedControls.push(name);
         }
