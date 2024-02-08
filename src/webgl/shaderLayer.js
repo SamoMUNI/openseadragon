@@ -5,6 +5,8 @@
     /**
      * Organizer of shaders
      * @class OpenSeadragon.WebGLModule.ShaderMediator
+     * @property {object} _layers storage of shaders, shader.type(): <shader>
+     * @property {boolean} _acceptsShaders allow new shaders
      */
     $.WebGLModule.ShaderMediator = class {
         /**
