@@ -1009,17 +1009,15 @@
          *       this.params...
          *   }
          *
-         * @param {WebGLModule.ShaderLayer} context shader context owning this control
+         * @param {ShaderLayer} owner shader context owning this control
          * @param {string} name name of the control (key to the params in the shader configuration)
-         * @param {string} webGLVariableName configuration parameters,
-         *      depending on the params.type field (the only one required)
          * @param {string} uniq another element to construct the DOM id from, mostly for compound controls
          */
-        constructor(context, name, webGLVariableName, uniq = "") {
-            this.context = context;
-            this.id = `${uniq}${name}-${context.uid}`;
+        constructor(owner, name, uniq = "") {
+            this.owner = owner;
             this.name = name;
-            this.webGLVariableName = webGLVariableName;
+            this.id = `${uniq}${name}-${owner.uid}`;
+            this.webGLVariableName = `${name}_${owner.uid}`;
             this._params = {};
             this.__onchange = {};
         }
@@ -1312,7 +1310,7 @@
             if (paramName === "default") {
                 paramName = "";
             }
-            const value = this.context.loadProperty(this.name + paramName, defaultValue);
+            const value = this.owner.loadProperty(this.name + paramName, defaultValue);
             //check param in case of input cache collision between shader types
             return this.getSafeParam(value, defaultValue, paramName === "" ? "default" : paramName);
         }
@@ -1329,7 +1327,7 @@
             if (paramName === "default") {
                 paramName = "";
             }
-            return this.context.storeProperty(this.name + paramName, value);
+            return this.owner.storeProperty(this.name + paramName, value);
         }
 
         /**
