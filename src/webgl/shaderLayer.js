@@ -169,9 +169,6 @@
             if (!this.__visualisationLayer.cache) {
                 this.__visualisationLayer.cache = {};
             }
-            if (!this.__visualisationLayer.cache[this.constructor.type()]) {
-                this.__visualisationLayer.cache[this.constructor.type()] = {};
-            }
         }
 
         /**
@@ -407,13 +404,14 @@
          * @param {string} defaultValue default value if no stored value available
          * @return {string} stored value or default value
          */
+        /* Pozera do this.__visualizationLayer.cache ci tam je name, ak ano vrati ho, ak nie vrati defaultValue */
         loadProperty(name, defaultValue) {
-            let selfType = this.constructor.type();
+            /* podla mna uplne zbytocny if */
             if (!this.__visualisationLayer) {
                 return defaultValue;
             }
 
-            const value = this.__visualisationLayer.cache[selfType][name];
+            const value = this.__visualisationLayer.cache[name];
             return value === undefined ? defaultValue : value;
         }
 
@@ -423,7 +421,7 @@
          * @param {*} value value
          */
         storeProperty(name, value) {
-            this.__visualisationLayer.cache[this.constructor.type()][name] = value;
+            this.__visualisationLayer.cache[name] = value;
         }
 
         /**
