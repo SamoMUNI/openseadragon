@@ -157,9 +157,6 @@
                 console.error("Invalid ID for the shader: id must match to the pattern", $.WebGLModule.idPattern, id);
             }
 
-            // this.__visualisationLayer = shaderObject, ??
-            this._setContextVisualisationLayer(privateOptions.shaderObject);
-
             //todo custom control names share namespace with this API - unique names or controls in seperate object?
             this.webglContext = privateOptions.webgl;
             this.invalidate = privateOptions.invalidate;
@@ -167,6 +164,14 @@
             this._rebuild = privateOptions.rebuild;
             this._refetch = privateOptions.refetch;
             this._hasInteractiveControls = privateOptions.interactive;
+
+            this.__visualisationLayer = privateOptions.shaderObject;
+            if (!this.__visualisationLayer.cache) {
+                this.__visualisationLayer.cache = {};
+            }
+            if (!this.__visualisationLayer.cache[this.constructor.type()]) {
+                this.__visualisationLayer.cache[this.constructor.type()] = {};
+            }
         }
 
         /**
@@ -593,20 +598,6 @@
                         }
                     }
                 }
-            }
-        }
-
-        /**
-         * Creates shader.cache parameter, which is object and creates shader.cache.shadertype parameter, which is also an object
-         * @param {Object} visualisationLayer shader object
-         */
-        _setContextVisualisationLayer(visualisationLayer) {
-            this.__visualisationLayer = visualisationLayer;
-            if (!this.__visualisationLayer.cache) {
-                this.__visualisationLayer.cache = {};
-            }
-            if (!this.__visualisationLayer.cache[this.constructor.type()]) {
-                this.__visualisationLayer.cache[this.constructor.type()] = {};
             }
         }
     }; //end of shaderLayer
