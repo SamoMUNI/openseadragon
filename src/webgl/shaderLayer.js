@@ -1395,10 +1395,20 @@
      */
     $.WebGLModule.UIControls.SimpleUIControl = class extends $.WebGLModule.UIControls.IControl {
 
+        /**
+         *
+         * @param {ShaderLayer} owner owner of the control (shader)
+         * @param {string} controlName name of the control (eg. "opacity")
+         * @param {object} params controlObject.default
+         * @param {object} intristicComponent control type object from UIControls._items
+         * @param {*} uniq
+         */
         //uses intristicComponent that holds all specifications needed to work with the component uniformly
-        constructor(context, name, webGLVariableName, params, intristicComponent, uniq = "") {
-            super(context, name, webGLVariableName, uniq);
+        constructor(owner, controlName, params, intristicComponent, uniq = "") {
+            super(owner, controlName, uniq);
             this.component = intristicComponent;
+            // do _params da params s urcenym poradim properties (asi)
+            // tu som skoncil
             this._params = this.getParams(params);
         }
 
