@@ -318,14 +318,14 @@
         }
 
         /**
-         * @param id control id to delete
+         * @param {string} controlName name of control to delete
          */
-        removeControl(id) {
-            if (!this._ownedControls[id]) {
+        removeControl(controlName) {
+            if (!this._ownedControls[controlName]) {
                 return;
             }
-            delete this._ownedControls[id];
-            delete this[id];
+            delete this._ownedControls[controlName];
+            delete this[controlName];
         }
 
         /**
