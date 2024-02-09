@@ -471,9 +471,7 @@
                         channel = this.loadProperty(name, options[name]);
                     }
 
-                    if (!channel || typeof channel !== "string" || this.constructor.__chanPattern.exec(channel) === null) {
-                        console.warn(`Invalid channel '${name}'. Will use channel '${def}'.`, channel, options);
-                        this.storeProperty(name, "r");
+                    if (!channel || typeof channel !== "string" || this.constructor.__channelPattern.exec(channel) === null) {
                         channel = def;
                     }
 
@@ -676,7 +674,7 @@
     };
     $.WebGLModule.ShaderLayer.modes["mask_clip"] = "blend_clip"; //todo parser error not camel case
     $.WebGLModule.ShaderLayer.__globalIncludes = {};
-    $.WebGLModule.ShaderLayer.__chanPattern = new RegExp('[rgba]{1,4}');
+    $.WebGLModule.ShaderLayer.__channelPattern = new RegExp('[rgba]{1,4}');
 
     /**
      * Factory Manager for predefined UIControls
