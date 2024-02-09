@@ -459,57 +459,76 @@
         /**
          * Set sampling channel
          * @param {object} options
-         * @param {string} options.use_channel[X] chanel swizzling definition to sample
+         * @param {string} options.use_channel[X] "r", "g" or "b" channel to sample index X, default "r"
          */
         resetChannel(options) {
-            const parseChannel = (name, def, sourceDef) => {
-                const predefined = this.constructor.defaultControls[name];
+            const parseChannel = (controlName, def, sourceDef) => {
+                const predefined = this.constructor.defaultControls[controlName];
 
-                if (options[name] || predefined) {
+                if (options[controlName] || predefined) {
+                    console.log('idem aj cez if v resetchanelli', options[controlName], predefined);
+                    /* ak je use_channel{i} v defaultControls, nastav podla toho channel (je, plainShader si ho tam prihodil pri definicii)
+                        teda channel = "rgba" */
                     let channel = predefined ? (predefined.required ? predefined.required : predefined.default) : undefined;
                     if (!channel) {
-                        channel = this.loadProperty(name, options[name]);
+                        /* pokial najde v this.__visualisationLayer.cache controlName tak to vrati,
+                            inak vrati options[controlName] ({}.controlName = undefined) */
+                        channel = this.loadProperty(controlName, options[controlName]);
                     }
 
+                    // (if channel is not defined) or (is defined and not string) or (is string and contains nowhere __channelPattern)
                     if (!channel || typeof channel !== "string" || this.constructor.__channelPattern.exec(channel) === null) {
+                        console.warn(`Invalid channel '${controlName}'. Will use channel '${def}'.`, channel, options);
+                        // sets this.__visalisationLayer.cache[controlName] = "r";
+                        this.storeProperty(controlName, def);
                         channel = def;
                     }
 
+                    // sourceDef is object, has function acceptsChannelCount which returns boolean
                     if (!sourceDef.acceptsChannelCount(channel.length)) {
-                        throw `${this.constructor.name()} does not support channel length for channel: ${channel}`;
+                        throw `${this.constructor.name()} does not support channel length ${channel.length} for channel: ${channel}`;
                     }
 
-                    if (channel !== options[name]) {
-                        this.storeProperty(name, channel);
+                    /* toto neviem ci nechces skor cekovat s pouzitim loadProperty ze co je v cachke */
+                    if (channel !== options[controlName]) {
+                        this.storeProperty(controlName, channel);
                     }
                     return channel;
                 }
                 return def;
             };
+            /* source = { acceptsChannelCount: (x) => x === 4, description: "4d texture to render AS-IS" } */
             this.__channels = this.constructor.sources().map((source, i) => parseChannel(`use_channel${i}`, "r", source));
+            /* nastavuje __channels = ["rgba"] */
+            console.log('this.__channels = ', this.__channels);
         }
 
         /**
          * Set blending mode
          * @param {object} options
-         * @param {string} options.use_mode blending mode to use: "show" or "mask"
+         * @param {string} options.use_mode blending mode to use: "show" or "mask" or "mask_clip"
          */
+        /* options dojdu ako {} */
         resetMode(options) {
             const predefined = this.constructor.defaultControls.use_mode;
+            console.log('predefined in resetMode ->', predefined);
+
             if (options["use_mode"]) {
                 this._mode = predefined && predefined.required;
+                // if not predefined.required try to load from cache, if not in cache use options.use_mode
                 if (!this._mode) {
                     this._mode = this.loadProperty("use_mode", options.use_mode);
                 }
-
+                /* nerozumiem moc tomuto ifu */
                 if (this._mode !== options.use_mode) {
                     this.storeProperty("use_mode", this._mode);
                 }
             } else {
                 this._mode = predefined ? (predefined.default || "show") : "show";
             }
-
-            this.__mode = this.constructor.modes[this._mode] || "show";
+            /* ani nerozumiem preco sa pouziva _mode a __mode, naco? */
+            this.
+            __mode = this.constructor.modes[this._mode] || "show";
         }
 
         /**
@@ -527,6 +546,7 @@
             const controlObject = this.constructor.defaultControls[name];
             const control = $.WebGLModule.UIControls.build(this, name, controlObject, controlOptions);
             // create new attribute to shaderLayer class -> shaderLayer.<control name> = <control object>
+            console.log('addControl nastavuje shaderu', this.constructor.name(), 'atribut s nazvom controlu', name);
             this[name] = control;
             this._ownedControls.push(name);
         }
@@ -535,13 +555,15 @@
         ////////// PRIVATE /////////////////
         ////////////////////////////////////
 
+        // volane z konstruktora, vytvara controls podla defaultControls (this[controlname] = SimpleUIControl)
         /* options = {} */
         _buildControls(options) {
             let controls = this.constructor.defaultControls,
                 customParams = this.constructor.customParams;
 
+            console.log('this.constructor.defaultControls = ', controls);
             for (let control in controls) {
-                console.log('som vo fori cez controls');
+                console.log('som vo fori cez controls, control =', control);
                 if (control.startsWith("use_")) {
                     continue;
                 }
@@ -550,12 +572,13 @@
                 /* ak sa nachadza control v this.defaultControls */
                 if (buildContext) {
                     console.log('v prvom ife, control = ', control);
+                    // creates this[control] = <SimpleUIControl>
                     this.addControl(control, options[control], buildContext);
                     continue;
                 }
 
                 let customContext = customParams[control];
-                /* ak sa nachadza control v this.customParams */
+                /* ak sa nachadza control v this.customParams, VOBEC SOM NEPRESIEL TUTO CAST */
                 if (customContext) {
                     console.log('v drugom ife');
                     let targetType;
@@ -756,12 +779,15 @@
             defaultParams = $.extend(true, {}, defaultParams, params, requiredParams);
 
             // if control's type (eg.: opacity -> range) not already present in this._items
+            /* VOBEC SOM NEPRESIEL TUTO CAST */
             if (!this._items[defaultParams.type]) {
                 if (!this._impls[defaultParams.type]) {
                     return this._buildFallback(defaultParams.type, originalType,
                         owner, controlName, controlObject, params);
                 }
-
+                /* TOTO NEVIEM CO ROBI, ale menil som konstruktory IControl a Simplecontrol cize asi sa posielaju zle veci
+                    `${controlName}_${owner.uid}` vyzera ako webglvariable, co predtym brali obidva konstruktory, simple
+                    ho iba posunul hore do rodica Icontrol a ten to nastavil... Ale neviem preco tu su defaultParams ze sa posielaju */
                 let cls = new this._impls[defaultParams.type](
                     owner, controlName, `${controlName}_${owner.uid}`, defaultParams
                 );
@@ -1064,8 +1090,16 @@
                         }
                     }
                 });
+                console.log('to = ', to);
                 return to;
             }
+
+            console.log('const t =', t);
+            console.log('this.supports.all', this.supportsAll);
+            console.log('this.supports = ', this.supports);
+            console.log('realne idem aj cez getParams, inak do params doslo: ', params);
+            /* params = Object { type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: ", interactive: false } */
+            /* supports = Object { title: "Range", interactive: true, default: 0, min: 0, max: 100, step: 1 } */
             return mergeSafeType(this.supports, params, this.supportsAll);
         }
 
@@ -1407,7 +1441,6 @@
             super(owner, controlName, uniq);
             this.component = intristicComponent;
             // do _params da params s urcenym poradim properties (asi)
-            // tu som skoncil
             this._params = this.getParams(params);
         }
 
