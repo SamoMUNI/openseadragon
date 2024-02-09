@@ -70,8 +70,8 @@
             this.ready = function() { };
             this.htmlControlsId = null;
             this.webGlPreferredVersion = "2.0";
-            this.htmlShaderPartHeader = function(title, html, dataId, isVisible, layer, isControllable = true) {
-                return `<div class="configurable-border"><div class="shader-part-name">${title}</div>${html}</div>`;
+            this.htmlShaderPartHeader = function(html, dataId, isVisible, layer, isControllable = true) {
+                return `<div class="configurable-border"><div class="shader-part-name">${dataId}</div>${html}</div>`;
             };
             this.resetCallback = function() { };
             //called once a visualisation is compiled and linked (might not happen)

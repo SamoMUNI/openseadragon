@@ -301,7 +301,18 @@
             return program._osdOptions[name];
         }
 
-        /* neviem teda co to robi no */
+        /**
+         * Tipujem ze bude mat vela byproductov, no idem nato asi :()
+         * @param {WebGLProgram} program webgl program corresponding to a specification
+         * @param {[string]} order array containing keys from specification.shaders
+         * @param {object} specification concrete specification from I guess this.renderer._programSpecifications
+         * @param {object} options
+         * @param {boolean} options.withHtml whether html should be also created (false if no UI controls are desired)
+         * @param {string} options.textureType id of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
+         * @param {string} options.instanceCount number of instances to draw at once
+         * @param {boolean} options.debug draw debugging info
+         * @returns {number} ??? asi vrati pocet pouzitelnych shaderov I guess
+         */
         //todo try to implement on the global scope version-independntly
         compileSpecification(program, order, specification, options) {
             var definition = "",
@@ -312,8 +323,9 @@
                 dataCount = 0,
                 globalScopeCode = {};
 
-            order.forEach(dataId => {
-                let layer = specification.shaders[dataId];
+            order.forEach(shaderName => {
+                // layer = shaderObject
+                let layer = specification.shaders[shaderName];
                 layer.rendering = false;
 
                 if (layer.type === "none") {
@@ -321,9 +333,9 @@
                     layer.error = "Not an error - layer type none.";
                 } else if (layer.error) {
                     if (options.withHtml) {
-                        html = _this.renderer.htmlShaderPartHeader(layer.name, layer.error, dataId, false, layer, false) + html;
+                        html = _this.renderer.htmlShaderPartHeader(layer.error, shaderName, false, layer, false) + html;
                     }
-                    $.console.warn(layer.error, layer["desc"]);
+                    $.console.warn(`specification.shaders.${shaderName} has en error:`, layer.error, "\nError description:", layer.desc);
 
                 } else if (layer._renderContext && (layer._index || layer._index === 0)) {
                     //todo consider html generating in the renderer
@@ -356,17 +368,17 @@
 
                     //reverse order append to show first the last drawn element (top)
                     if (options.withHtml) {
-                        html = _this.renderer.htmlShaderPartHeader(layer.name,
-                            layer._renderContext.htmlControls(), dataId, visible, layer, true) + html;
+                        html = _this.renderer.htmlShaderPartHeader(layer._renderContext.htmlControls(),
+                            shaderName, visible, layer, true) + html;
                     }
                 } else {
                     if (options.withHtml) {
-                        html = _this.renderer.htmlShaderPartHeader(layer.name,
-                            `The requested specification type does not work properly.`, dataId, false, layer, false) + html;
+                        html = _this.renderer.htmlShaderPartHeader(`The requested specification type does not work properly.`,
+                            shaderName, false, layer, false) + html;
                     }
                     $.console.warn("Invalid shader part.", "Missing one of the required elements.", layer);
                 }
-            });
+            }); // end of order.forEach
 
             if (!options.textureType) {
                 if (dataCount === 1) {
