@@ -174,16 +174,19 @@
         /**
          * Manual constructor, must call super.construct(...) if overridden, but unlike
          * constructor the call can be adjusted (e.g. adjust option values)
-         * @param {WebGLModule.ShaderLayerParams} options
-         *  options.use_channel[X]: "r", "g" or "b" channel to sample index X, default "r"
-         *  options.use_mode: blending mode - default alpha ("show"), custom blending ("mask") and clipping mask blend ("mask_clip")
-         * @param {[number]} dataReferences indexes of data being requested for this shader
+         * @param {object} options this.__visualisationLayer.params
+         * @param {string} options.use_channel[X]: "r", "g" or "b" channel to sample index X, default "r"
+         * @param {string} options.use_mode: blending mode - default alpha ("show"), custom blending ("mask") and clipping mask blend ("mask_clip")
+         * @param {[number]} dataReferences indexes of data being requested for this shader (this.__visualisationLayer.dataReferences)
          */
         /* options = {}, dataReferences = [0] */
         construct(options, dataReferences) {
             this._ownedControls = [];
+            // prechadza controls v defaultControls a nastavi pre kazdy this[control] = <SimpleUIControl>, plus mena da do _ownedControls
             this._buildControls(options);
+            // nastavi this.__channels na ["rgba"] plus do shaderObject.cache da use_channel0: "rgba" (opacity tam este neni!)
             this.resetChannel(options);
+            // nastavi this._mode a this.__mode na "show", inak by mohla aj do cache nastavovat...
             this.resetMode(options);
         }
 
