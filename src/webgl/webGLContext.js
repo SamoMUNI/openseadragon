@@ -339,7 +339,6 @@
 
                 } else if (layer._renderContext && (layer._index || layer._index === 0)) {
                     //todo consider html generating in the renderer
-                    let visible = false;
                     usableShaders++;
 
                     //make visible textures if 'visible' flag set
@@ -361,7 +360,6 @@
                         }
 
                         layer.rendering = true;
-                        visible = true;
                         $.extend(globalScopeCode, _this.globalCodeRequiredByShaderType(layer.type));
                         dataCount += layer.dataReferences.length;
                     }
@@ -369,7 +367,7 @@
                     //reverse order append to show first the last drawn element (top)
                     if (options.withHtml) {
                         html = _this.renderer.htmlShaderPartHeader(layer._renderContext.htmlControls(),
-                            shaderName, visible, layer, true) + html;
+                            shaderName, layer.visible, layer, true) + html;
                     }
                 } else {
                     if (options.withHtml) {
