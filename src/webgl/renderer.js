@@ -857,48 +857,45 @@
             let gl = this.gl;
             let program;
 
+            let index = -1;
             // if program is not already built
             if (!this._programs[idx]) {
                 program = gl.createProgram();
                 this._programs[idx] = program;
-
-                /* index++ neviem ci by nemal byt aj v ife, pokial sa ma odkazovat na index layeru v spec.shaders
-                    a zaroven nevadi ze layer je chybny */
-                let index = 0;
-                //init shader factories and unique id's
-                for (let shaderName in spec.shaders) {
-                    let layer = spec.shaders[shaderName];
-                    // if shader object is not empty
-                    if (layer) {
-                        // get shader class (extends OpenSeadragon.WebGLModule.ShaderLayer)
-                        let ShaderFactoryClass = $.WebGLModule.ShaderMediator.getClass(layer.type);
-                        /* toto by som dal hore */
-                        if (layer.type === "none") {
+                for (let key in spec.shaders) {
+                    index++;
+                    let shaderObject = spec.shaders[key];
+                    // invalid shader
+                    if (!shaderObject || shaderObject.type === "none") {
+                        console.error(`Invalid shader object on index ${index} in specification:`, spec);
                             continue;
                         }
-
-                        this._initializeShaderFactory(spec, ShaderFactoryClass, layer, index++);
+                    // create shader
+                    let ShaderFactoryClass = $.WebGLModule.ShaderMediator.getClass(shaderObject.type); // get <shaderObject.type>(eg.: identity) shader class (extends OpenSeadragon.WebGLModule.ShaderLayer)
+                    this._initializeShaderFactory(spec, ShaderFactoryClass, shaderObject, index);
                     }
-                }
-            } else {
+            } else { // program was already built
                 program = this._programs[idx];
                 for (let key in spec.shaders) {
-                    let layer = spec.shaders[key];
-
-                    if (layer) {
-                        if (!layer.error &&
-                            layer._renderContext &&
-                            layer._renderContext.constructor.type() === layer.type) {
+                    index++;
+                    let shaderObject = spec.shaders[key];
+                    // invalid shader
+                    if (!shaderObject || shaderObject.type === "none") {
+                        console.error(`Invalid shader object on index ${index} in specification:`, spec);
                             continue;
                         }
-                        delete layer.error;
-                        delete layer.desc;
-                        if (layer.type === "none") {
+                    // shader is already built correctly
+                    if (!shaderObject.error &&
+                        shaderObject._renderContext &&
+                        shaderObject._renderContext.constructor.type() === shaderObject.type &&
+                        shaderObject._index === index) {
                             continue;
                         }
-                        let ShaderFactoryClass = $.WebGLModule.ShaderMediator.getClass(layer.type);
-                        this._initializeShaderFactory(spec, ShaderFactoryClass, layer, layer._index);
-                    }
+                    // recreate shader
+                    delete shaderObject.error;
+                    delete shaderObject.desc;
+                    let ShaderFactoryClass = $.WebGLModule.ShaderMediator.getClass(shaderObject.type);
+                    this._initializeShaderFactory(spec, ShaderFactoryClass, shaderObject, index);
                 }
             }
 
@@ -912,7 +909,7 @@
         }
 
         /**
-         * Set layer object properties
+         * Set shaderObject properties
          * @param {Object} spec specification to be used
          * @param {function} ShaderFactoryClass shader class, extends OpenSeadragon.WebGLModule.ShaderLayer (asi zatial plainShader)
          * @param {Object} shaderObject concrete shader object definition from spec.shaders
