@@ -806,11 +806,22 @@
             specification.desc = error;
         }
 
-        _buildSpecification(program, order, specification, options) {
+        /**
+         *
+         * @param {WebGLProgram} program webgl program corresponding to a specification
+         * @param {object} specification concrete specification from this._programSpecifications
+         * @param {object} options
+         * @param {boolean} options.withHtml whether html should be also created (false if no UI controls are desired)
+         * @param {string} options.textureType id of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
+         * @param {string} options.instanceCount number of instances to draw at once
+         * @param {boolean} options.debug draw debugging info
+         */
+        _buildSpecification(program, specification, options) {
             try {
+                // this.htmlControlsId is an not empty string
                 options.withHtml = this.supportsHtmlControls();
                 const usableShaderCount = this.webglContext.compileSpecification(
-                    program, order, specification, options);
+                    program, specification.order, specification, options);
 
                 if (usableShaderCount < 1) {
                     this._buildFailed(specification, `Empty specification: no valid specification has been specified.
