@@ -345,7 +345,13 @@
                     //todo either allways visible or ensure textures do not get loaded
                     if (layer.visible) {
                         let renderCtx = layer._renderContext;
-                        definition += renderCtx.getFragmentShaderDefinition() + `
+
+                        // returns array of strings where one element corresponds to one glsl code line
+                        let fsd = renderCtx.getFragmentShaderDefinition();
+
+                        // map adds tabs to glsl code lines, join puts them all together separating them with newlines
+                        definition += fsd.map((glLine) => "    " + glLine).join("\n");
+                        definition += `
     vec4 lid_${layer._index}_xo() {
         ${renderCtx.getFragmentShaderExecution()}
     }`;

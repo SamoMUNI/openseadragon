@@ -215,7 +215,7 @@
                     glsl.push(code.trim());
                 }
             }
-            return glsl.join("\n");
+            return glsl;
         }
 
         setBlendMode(name) {
