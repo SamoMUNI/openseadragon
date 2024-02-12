@@ -303,6 +303,7 @@
 
         /**
          * Tipujem ze bude mat vela byproductov, no idem nato asi :()
+         * Generating HTML: html = getNewHtmlString() + html (reverse order append to show first the last drawn element (top))
          * @param {WebGLProgram} program webgl program corresponding to a specification
          * @param {[string]} order array containing keys from specification.shaders
          * @param {object} specification concrete specification from I guess this.renderer._programSpecifications
@@ -328,16 +329,16 @@
                 let layer = specification.shaders[shaderName];
                 layer.rendering = false;
 
-                if (layer.type === "none") {
+                if (layer.type === "none") { // skip the layer
                     //prevents the layer from being accounted for
                     layer.error = "Not an error - layer type none.";
-                } else if (layer.error) {
+                } else if (layer.error) { // layer with error
                     if (options.withHtml) {
                         html = _this.renderer.htmlShaderPartHeader(layer.error, shaderName, false, layer, false) + html;
                     }
                     $.console.warn(`specification.shaders.${shaderName} has en error:`, layer.error, "\nError description:", layer.desc);
 
-                } else if (layer._renderContext && (layer._index || layer._index === 0)) {
+                } else if (layer._renderContext && layer._index !== undefined) { // properly built layer
                     //todo consider html generating in the renderer
                     usableShaders++;
 
@@ -349,7 +350,8 @@
                         // returns array of strings where one element corresponds to one glsl code line
                         let fsd = renderCtx.getFragmentShaderDefinition();
 
-                        // map adds tabs to glsl code lines, join puts them all together separating them with newlines
+                        /* map adds tabs to glsl code lines, join puts them all together separating them with newlines
+                            (join used because we do not want to add newline to the last line of code) */
                         definition += fsd.map((glLine) => "    " + glLine).join("\n");
                         definition += `
     vec4 lid_${layer._index}_xo() {
@@ -375,12 +377,12 @@
                         html = _this.renderer.htmlShaderPartHeader(layer._renderContext.htmlControls(),
                             shaderName, layer.visible, layer, true) + html;
                     }
-                } else {
+                } else { // layer not skipped, not with error, but still not correctly built
                     if (options.withHtml) {
                         html = _this.renderer.htmlShaderPartHeader(`The requested specification type does not work properly.`,
                             shaderName, false, layer, false) + html;
                     }
-                    $.console.warn("Invalid shader part.", "Missing one of the required elements.", layer);
+                    $.console.warn(`specification.shaders.${shaderName} was not correctly built, shaderObject:`, layer);
                 }
             }); // end of order.forEach
 

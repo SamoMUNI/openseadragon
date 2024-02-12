@@ -876,7 +876,7 @@
                 for (let key in spec.shaders) {
                     index++;
                     let shaderObject = spec.shaders[key];
-                    // invalid shader
+                    // invalid shader or type === "none", which means skip this layer
                     if (!shaderObject || shaderObject.type === "none") {
                         console.error(`Invalid shader object on index ${index} in specification:`, spec);
                             continue;
@@ -890,7 +890,7 @@
                 for (let key in spec.shaders) {
                     index++;
                     let shaderObject = spec.shaders[key];
-                    // invalid shader
+                    // invalid shader or type === "none", which means skip this layer
                     if (!shaderObject || shaderObject.type === "none") {
                         console.error(`Invalid shader object on index ${index} in specification:`, spec);
                             continue;
@@ -910,6 +910,7 @@
                 }
             }
 
+            // set spec.order: [string] to array containing shaderObject keys from spec.shaders
             if (!Array.isArray(spec.order) || spec.order.length < 1) {
                 spec.order = Object.keys(spec.shaders);
             }

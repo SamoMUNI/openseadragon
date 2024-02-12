@@ -622,7 +622,7 @@
                 }
             }
         }
-    }; //end of shaderLayer
+    };
 
     /**
      * Declare supported controls by a particular shader
@@ -698,6 +698,8 @@
     $.WebGLModule.ShaderLayer.modes["mask_clip"] = "blend_clip"; //todo parser error not camel case
     $.WebGLModule.ShaderLayer.__globalIncludes = {};
     $.WebGLModule.ShaderLayer.__channelPattern = new RegExp('[rgba]{1,4}');
+    /* END OF SHADER LAYER */
+
 
     /**
      * Factory Manager for predefined UIControls
