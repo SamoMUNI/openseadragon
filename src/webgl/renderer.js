@@ -915,7 +915,7 @@
                 spec.order = Object.keys(spec.shaders);
             }
 
-            this._buildSpecification(program, spec.order, spec, options);
+            this._buildSpecification(program, spec, options);
             this.visualisationReady(idx, spec);
             return idx;
         }
