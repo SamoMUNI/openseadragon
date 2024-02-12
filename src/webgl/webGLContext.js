@@ -353,10 +353,14 @@
                         /* map adds tabs to glsl code lines, join puts them all together separating them with newlines
                             (join used because we do not want to add newline to the last line of code) */
                         definition += fsd.map((glLine) => "    " + glLine).join("\n");
+                        // getFSE `return ${this.sampleChannel("osd_texture_coords")};` (from plainShader)
+                        // getFSE = osd_texture(0, osd_texture_coords).rgba
+                        // tu som skoncil no
                         definition += `
     vec4 lid_${layer._index}_xo() {
         ${renderCtx.getFragmentShaderExecution()}
     }`;
+                        console.log('order.foreach, definition po pridani:', definition);
                         if (renderCtx.opacity) {
                             execution += `
         vec4 l${layer._index}_out = lid_${layer._index}_xo();
@@ -372,7 +376,6 @@
                         dataCount += layer.dataReferences.length;
                     }
 
-                    //reverse order append to show first the last drawn element (top)
                     if (options.withHtml) {
                         html = _this.renderer.htmlShaderPartHeader(layer._renderContext.htmlControls(),
                             shaderName, layer.visible, layer, true) + html;

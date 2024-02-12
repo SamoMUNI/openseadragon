@@ -209,12 +209,17 @@
             this._blendUniform = `${this.uid}_blend`;
             this._clipUniform = `${this.uid}_clip`;
             let glsl = [`uniform int ${this._blendUniform};`, `uniform bool ${this._clipUniform};`];
+            console.log('shader controls', this._ownedControls);
+            /* only opacity in _ownedControls, dont know where is use_channel0 from plain shader ??? */
             for (let control of this._ownedControls) {
+                // `uniform controlGLtype controlGLname;`
                 let code = this[control].define();
                 if (code) {
                     glsl.push(code.trim());
                 }
             }
+            console.log('glsl', glsl);
+            console.log('s joinom', glsl.join("\n"));
             return glsl;
         }
 
@@ -376,6 +381,7 @@
          */
         sampleChannel(textureCoords, otherDataIndex = 0, raw = false) {
             let refs = this.__visualisationLayer.dataReferences;
+            /* Array [ "rgba" ] */
             const chan = this.__channels[otherDataIndex];
 
             if (otherDataIndex >= refs.length) {
@@ -387,6 +393,7 @@
                         return 'vec4(0.0)';
                 }
             }
+            // return `osd_texture(${index}, ${vec2coords})`;
             let sampled = `${this.webglContext.sampleTexture(refs[otherDataIndex], textureCoords)}.${chan}`;
             // if (raw) return sampled;
             // return this.filter(sampled);
