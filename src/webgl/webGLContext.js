@@ -316,7 +316,9 @@
          */
         //todo try to implement on the global scope version-independntly
         compileSpecification(program, order, specification, options) {
+            // fragment shader's code placed outside of the main function
             var definition = "",
+            // fragment shader's code placed inside the main function
                 execution = "",
                 html = "",
                 _this = this,
@@ -355,23 +357,27 @@
                         definition += fsd.map((glLine) => "    " + glLine).join("\n");
                         // getFSE `return ${this.sampleChannel("osd_texture_coords")};` (from plainShader)
                         // getFSE = osd_texture(0, osd_texture_coords).rgba
-                        // tu som skoncil no
                         definition += `
     vec4 lid_${layer._index}_xo() {
         ${renderCtx.getFragmentShaderExecution()}
     }`;
                         console.log('order.foreach, definition po pridani:', definition);
-                        if (renderCtx.opacity) {
+
+                        if (renderCtx.opacity) { // multiply alpha channel by opacity and than call blend function
                             execution += `
         vec4 l${layer._index}_out = lid_${layer._index}_xo();
         l${layer._index}_out.a *= ${renderCtx.opacity.sample()};
         blend(l${layer._index}_out, ${renderCtx._blendUniform}, ${renderCtx._clipUniform});`;
-                        } else {
+                        } else { // immediately call blend function
                             execution += `
         blend(lid_${layer._index}_xo(), ${renderCtx._blendUniform}, ${renderCtx._clipUniform});`; //todo remove ${renderCtx.__mode}
                         }
 
                         layer.rendering = true;
+
+                        // tu som skoncil a neni to to iste.. zaujimave
+                        console.log('abc', _this.globalCodeRequiredByShaderType(layer.type));
+                        console.log('asdasd', layer.__globalIncludes);
                         $.extend(globalScopeCode, _this.globalCodeRequiredByShaderType(layer.type));
                         dataCount += layer.dataReferences.length;
                     }

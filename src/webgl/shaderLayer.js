@@ -215,11 +215,10 @@
                 // `uniform controlGLtype controlGLname;`
                 let code = this[control].define();
                 if (code) {
+                    // trim removes whitespace from beggining and the end of the string
                     glsl.push(code.trim());
                 }
             }
-            console.log('glsl', glsl);
-            console.log('s joinom', glsl.join("\n"));
             return glsl;
         }
 
@@ -534,8 +533,7 @@
                 this._mode = predefined ? (predefined.default || "show") : "show";
             }
             /* ani nerozumiem preco sa pouziva _mode a __mode, naco? */
-            this.
-            __mode = this.constructor.modes[this._mode] || "show";
+            this.__mode = this.constructor.modes[this._mode] || "show";
         }
 
         /**

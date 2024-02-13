@@ -964,6 +964,7 @@
             if (!shaderObject._renderContext.initialized()) {
                 console.error(`Invalid shader ${ShaderFactoryClass.name()}! Construct must call super implementation!`);
             }
+            console.log('Shader hotofson, zacina dalsia era !', shaderObject._renderContext);
         }
 
         /**
