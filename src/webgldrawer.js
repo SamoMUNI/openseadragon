@@ -59,7 +59,8 @@
 
     OpenSeadragon.WebGLDrawer = class WebGLDrawer extends OpenSeadragon.DrawerBase{
         constructor(options){
-           super(options);
+            console.log('Robim origo webgldrawer');
+            super(options);
 
             /**
              * The HTML element (canvas) that this drawer uses for drawing
