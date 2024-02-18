@@ -150,6 +150,7 @@
             this._clippingCanvas = this._clippingContext = null;
             this._outputCanvas = this._outputContext = null;
 
+            /* recommended mechanism for applications to programmatically halt their use of the WebGL API */
             let ext = gl.getExtension('WEBGL_lose_context');
             if(ext){
                 ext.loseContext();
@@ -213,7 +214,9 @@
         */
         draw(tiledImages){
             let gl = this._gl;
+            /* pravdepodobne bounds: $.Rect su hranice kontajneru */
             let view = {
+                /* returns $.Rect = the bounds of the visible area in viewport coordinates, ignores the viewport rotation */
                 bounds: this.viewport.getBoundsNoRotate(true),
                 center: this.viewport.getCenter(true),
                 rotation: this.viewport.getRotation(true) * Math.PI / 180
