@@ -42,6 +42,8 @@
  * @param {OpenSeadragon.Viewer} options.viewer - The Viewer that owns this Drawer.
  * @param {OpenSeadragon.Viewport} options.viewport - Reference to Viewer viewport.
  * @param {HTMLElement} options.element - Parent element.
+ * @param {Number} [options.debugGridColor] - Optional see debugGridColor in {@link OpenSeadragon.Options} for details.
+ * @param {any} options.options - Optional
  * @abstract
  */
 

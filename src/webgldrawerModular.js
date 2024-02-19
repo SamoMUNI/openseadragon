@@ -54,7 +54,8 @@
     * @param {OpenSeadragon.Viewer} options.viewer - The Viewer that owns this Drawer.
     * @param {OpenSeadragon.Viewport} options.viewport - Reference to Viewer viewport.
     * @param {Element} options.element - Parent element.
-    * @param {Number} [options.debugGridColor] - See debugGridColor in {@link OpenSeadragon.Options} for details.
+    * @param {Number} [options.debugGridColor] - Optional see debugGridColor in {@link OpenSeadragon.Options} for details.
+    * @param {any} options.options - Optional
     */
 
     OpenSeadragon.WebGLDrawer = class WebGLDrawer extends OpenSeadragon.DrawerBase{
@@ -214,11 +215,12 @@
         */
         draw(tiledImages){
             let gl = this._gl;
-            /* pravdepodobne bounds: $.Rect su hranice kontajneru */
             let view = {
                 /* returns $.Rect = the bounds of the visible area in viewport coordinates, ignores the viewport rotation */
                 bounds: this.viewport.getBoundsNoRotate(true),
+                /* probably returns $.Point = center of viewport I guess */
                 center: this.viewport.getCenter(true),
+                /* returns number, the current rotation in degrees. */
                 rotation: this.viewport.getRotation(true) * Math.PI / 180
             };
 
@@ -241,6 +243,7 @@
             //iterate over tiled images and draw each one using a two-pass rendering pipeline if needed
             tiledImages.forEach( (tiledImage, tiledImageIndex) => {
 
+                /* get array of Tiles that make up the current view */
                 let tilesToDraw = tiledImage.getTilesToDraw();
 
                 if(tilesToDraw.length === 0 || tiledImage.getOpacity() === 0){
@@ -255,7 +258,7 @@
                     tiledImage.debugMode
                 );
 
-                let useTwoPassRendering = useContext2dPipeline || (tiledImage.opacity < 1) || firstTile.hasTransparency;
+                let useTwoPassRendering = useContext2dPipeline || (tiledImage.getOpacity() < 1) || firstTile.hasTransparency;
 
                 // using the context2d pipeline requires a clean rendering (back) buffer to start
                 if(useContext2dPipeline){
