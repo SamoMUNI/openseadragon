@@ -490,6 +490,7 @@
 
     }
 
+    /* Called only from draw function fill last 4 params on index index */
     // private
     _getTileData(tile, tiledImage, textureInfo, viewMatrix, index, texturePositionArray, textureDataArray, matrixArray, opacityArray) {
 

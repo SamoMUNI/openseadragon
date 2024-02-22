@@ -506,6 +506,8 @@ blend(osd_texture(texture_location, osd_texture_coords), 0, false)`, options);
         // this._outputContext.imageSmoothingEnabled = enabled;
     }
 
+    /* podobne ako webgldrawer _getTileData ale toto sa mi lubi viac, je krajsia funckia, sustredi sa iba na maticu
+        tie ostatne veci ktore sa nastavuju v _getTileData su podla mna prebytocne do tejto funkcie dat... */
     // private
     _getTileMatrix(tile, tiledImage, viewMatrix){
         // compute offsets that account for tile overlap; needed for calculating the transform matrix appropriately
@@ -542,6 +544,7 @@ blend(osd_texture(texture_location, osd_texture_coords), 0, false)`, options);
         return overallMatrix.values;
     }
 
+    /* uplne ine ako webgldrawer */
     _resizeRenderer(){
         const size = this._calculateCanvasSize();
         this.renderer.setDimensions(0, 0, size.x, size.y);
@@ -598,6 +601,7 @@ blend(osd_texture(texture_location, osd_texture_coords), 0, false)`, options);
         return 0;
     }
 
+    /* celkooom podobne, ale namiesto indexovanie v textureMape canvasom chce pouzivat dake tile.cache api */
     _tileReadyHandler(event){
         //todo tile overlap
         let tile = event.tile;
@@ -656,6 +660,7 @@ blend(osd_texture(texture_location, osd_texture_coords), 0, false)`, options);
         };
     }
 
+    /* uplne rovnake ako vo webgldrawer */
     _calculateOverlapFraction(tile, tiledImage){
         let overlap = tiledImage.source.tileOverlap;
         let nativeWidth = tile.sourceBounds.width; // in pixels
