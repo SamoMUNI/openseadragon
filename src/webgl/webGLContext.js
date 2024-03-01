@@ -677,6 +677,18 @@
             }
         }
 
+        /**
+         * This is were drawing really happens...
+         * Why is this named programUsed?
+         * @param {WebGLProgram} program currently being used with renderer
+         * @param {Object} currentConfig specification corresponding to program (from renderer._programSpecifications)
+         * @param {WebGLTexture} texture to use
+         * @param {Object} tileOpts texture settings
+         * @param {OpenSeadragon.Mat3} tileOpts.transform matrix
+         * @param {number} tileOpts.zoom
+         * @param {number} tileOpts.pixelSize
+         * @param {[8 Numbers]} tileOpts.textureCoords pri old to bolo 12 numbers(dva trojuholniky, tu si myslim ze 8 lebo pouziva triangle strip)
+         */
         /* zas nejake webgl srandy, ktorym som  moc nepochapal ... */
         programUsed(program, currentConfig, texture, tileOpts = {}) {
             if (!this.renderer.running) {
@@ -696,6 +708,7 @@
             gl.uniform1f(this._locationZoomLevel, tileOpts.zoom || 1);
 
             const options = program._osdOptions;
+            // console.log('options z webglContext: programused = ', options);
             //if compiled as instanced drawing
             /* ze instancovane renderovanie mozem zatial preskocit, cize asi len else vetva ma momentalne zaujima */
             if (options.instanceCount > 1) {

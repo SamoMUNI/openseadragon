@@ -435,12 +435,13 @@
          * Renders data using WebGL
          * @param {GLuint|[GLuint]} texture or texture array for instanced drawing
          *
-         * @param {object} tileOpts
+         * @param {Object} tileOpts
+         * @param {OpenSeadragon.Mat3|[OpenSeadragon.Mat3]} tileOpts.transform position transform
+         *      matrix or flat matrix array (instance drawing)
          * @param {number} tileOpts.zoom value passed to the shaders as zoom_level
          * @param {number} tileOpts.pixelSize value passed to the shaders as pixel_size_in_fragments
-         * @param {OpenSeadragon.Mat3|[OpenSeadragon.Mat3]} tileOpts.transform position transform
-         *   matrix or flat matrix array (instance drawing)
-         * @param {number?} tileOpts.instanceCount how many instances to draw in case instanced drawing is enabled
+         * @param {[8 Numbers]} tileOpts.textureCoords 8 numbers representing triangle strip
+         * @param {number?} tileOpts.instanceCount OPTIONAL how many instances to draw in case instanced drawing is enabled
          *
          * @instance
          * @memberOf WebGLModule
@@ -607,9 +608,8 @@
                 /**
                  * @event fatal-error
                  */
-                /* zly komentar */
                 this.raiseEvent('fatal-error', {message: "No specification specified!",
-                    details: "::prepare() called with no specification set."});
+                    details: "renderer.js::init() called with no specification set."});
                 return;
             }
             this._program = firstProgram;

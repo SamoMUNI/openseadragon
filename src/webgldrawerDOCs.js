@@ -210,7 +210,8 @@
     }
 
     /**
-    *
+    * If clip, crop, composite or debug -> useContext2dPipeline
+    * If useContext2dPipeline or tiledImage.opacity < 1 or ??? -> useTwoPassRendering
     * @param {Array} tiledImages Array of TiledImage objects to draw
     */
     draw(tiledImages) {
@@ -418,7 +419,7 @@
       }); // end of tiledImages.forEach
 
       if (renderingBufferHasImageData) {
-        console.log('Dostal som sa seeem !');
+        console.log('Sem som sa pravdepodobne dostal lebo nepouzivam context2dpipeline !');
         this._outputContext.drawImage(this._renderingCanvas, 0, 0);
       }
 
@@ -426,6 +427,7 @@
 
     // Public API required by all Drawer implementations
     /**
+     * UNUSED
     * Required by DrawerBase, but has no effect on WebGLDrawer.
     * @param {Boolean} enabled
     */
@@ -434,6 +436,7 @@
     }
 
     /**
+     * UNUSED
     * Draw a rect onto the output canvas for debugging purposes
     * @param {OpenSeadragon.Rect} rect
     */
@@ -454,7 +457,7 @@
       context.restore();
     }
 
-    // private
+    // private UNUSED
     _getTextureDataFromTile(tile) {
       return tile.getCanvasContext().canvas;
     }
@@ -797,7 +800,6 @@
 
       //make the additional canvas elements mirror size changes to the output canvas
       this.viewer.addHandler("resize", function () {
-
         if (_this._outputCanvas !== _this.viewer.drawer.canvas) {
           _this._outputCanvas.style.width = _this.viewer.drawer.canvas.clientWidth + 'px';
           _this._outputCanvas.style.height = _this.viewer.drawer.canvas.clientHeight + 'px';
@@ -944,6 +946,7 @@
 
     }
 
+    /* Called only from _renderToClippingCanvas */
     // private
     _setClip(rect) {
       this._clippingContext.beginPath();
@@ -951,6 +954,7 @@
       this._clippingContext.clip();
     }
 
+    /* Called only from _applyContext2DPipeline */
     // private
     _renderToClippingCanvas(item) {
 
@@ -1019,7 +1023,7 @@
       }
     }
 
-    /* Called only from _drawDebugInfoOnTile */
+    /* Called only from _drawDebugInfo */
     // private
     _drawDebugInfoOnTile(tile, count, i, tiledImage, stroke, fill) {
 

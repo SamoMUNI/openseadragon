@@ -54,7 +54,7 @@
     * @param {OpenSeadragon.Viewer} options.viewer - The Viewer that owns this Drawer.
     * @param {OpenSeadragon.Viewport} options.viewport - Reference to Viewer viewport.
     * @param {Element} options.element - Parent element.
-    * @param {Number} [options.debugGridColor] - See debugGridColor in {@link OpenSeadragon.Options} for details.
+    * @param {[String]} [options.debugGridColor] - See debugGridColor in {@link OpenSeadragon.Options} for details.
     */
 
     OpenSeadragon.WebGLDrawer = class WebGLDrawer extends OpenSeadragon.DrawerBase{
@@ -259,9 +259,11 @@
                     // if the rendering buffer has image data currently, write it to the output canvas now and clear it
 
                     if(renderingBufferHasImageData){
+                        console.log('predas sa TO STALO TERAZ...');
                         this._outputContext.drawImage(this._renderingCanvas, 0, 0);
                     }
 
+                    console.log('ale tak ako toto urcite sa stalo');
                     // clear the buffer
                     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
                     gl.clear(gl.COLOR_BUFFER_BIT); // clear the back buffer
@@ -764,7 +766,7 @@
 
             //make the additional canvas elements mirror size changes to the output canvas
             this.viewer.addHandler("resize", function(){
-
+                console.log('Resize event');
                 if(_this._outputCanvas !== _this.viewer.drawer.canvas){
                     _this._outputCanvas.style.width = _this.viewer.drawer.canvas.clientWidth + 'px';
                     _this._outputCanvas.style.height = _this.viewer.drawer.canvas.clientHeight + 'px';

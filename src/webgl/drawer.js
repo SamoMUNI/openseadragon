@@ -53,13 +53,15 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
 
         const gl = this.renderer.gl;
         this.maxTextureUnits = 4 || gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
-        this.maxDrawBufferUnits = gl.getParameter(gl.MAX_DRAW_BUFFERS);
+        this.maxDrawBufferUnits = gl.getParameter(gl.MAX_DRAW_BUFFERS); // unused
 
         this._createSinglePassShader('TEXTURE_2D');
 
+        /* returns $.Point */
         const size = this._calculateCanvasSize();
         this.renderer.init(size.x, size.y);
         this._size = size;
+        // enable blending
         this.renderer.setDataBlendingEnabled(true);
 
         this.destroyed = false;
@@ -70,7 +72,9 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
         // this._tileTexturePositions = new Float32Array(this.maxTextureUnits * 8);
         // this._transformMatrices = new Float32Array(this.maxTextureUnits * 9);
 
-
+        /* .bind(this) sets the context of _resizeRenderer to context from which is called,
+            skusal som to s (e) => .. a fungovalo to rovnako, lebo unnamed arrow funcs
+            takisto dedia kontext (alebo tak nejak mi to tusim Jirka vysvetlil) */
         this.viewer.addHandler("resize", this._resizeRenderer.bind(this));
         // Add listeners for events that require modifying the scene or camera
         this.viewer.addHandler("tile-ready", this._tileReadyHandler.bind(this));
@@ -168,6 +172,10 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
         return this.renderer.canvas;
     }
 
+    /**
+     * If true enable stencil test, else disable stencil test
+     * @param {Boolean} enabled whether enable stencil test or not
+     */
     enableStencilTest(enabled) {
         if (enabled) {
             if (!this._stencilTestEnabled) {
@@ -201,20 +209,22 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
             }
         }
 
+        /* to iste ako origo az na zoom je tu navyse */
         let viewport = {
             bounds: this.viewport.getBoundsNoRotate(true),
             center: this.viewport.getCenter(true),
             rotation: this.viewport.getRotation(true) * Math.PI / 180,
             zoom: this.viewport.getZoom(true)
         };
-
+        /* to iste ako origo */
         let flipMultiplier = this.viewport.flipped ? -1 : 1;
         // calculate view matrix for viewer
         let posMatrix = $.Mat3.makeTranslation(-viewport.center.x, -viewport.center.y);
         let scaleMatrix = $.Mat3.makeScaling(2 / viewport.bounds.width * flipMultiplier, -2 / viewport.bounds.height);
         let rotMatrix = $.Mat3.makeRotation(-viewport.rotation);
         let viewMatrix = scaleMatrix.multiply(rotMatrix).multiply(posMatrix);
-        this._batchTextures = Array(this.maxTextureUnits);
+
+        //this._batchTextures = Array(this.maxTextureUnits);
 
         if (twoPassRendering) {
             this._resizeOffScreenTextures(0);
@@ -227,7 +237,7 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
         }
     }
 
-
+    /* returns number probably ? nezistil som co je viewport zoom */
     tiledImageViewportToImageZoom(tiledImage, viewportZoom) {
         var ratio = tiledImage._scaleSpring.current.value *
             tiledImage.viewport._containerInnerSize.x /
@@ -237,14 +247,14 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
 
 
     _drawSinglePass(tiledImages, viewport, viewMatrix) {
+        console.log('Idem drawovat single pass');
         const gl = this.renderer.gl;
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
         for (const tiledImage of tiledImages) {
             let tilesToDraw = tiledImage.getTilesToDraw();
-
-            if (tilesToDraw.length === 0) {
+            if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
                 continue;
             }
 
@@ -264,6 +274,7 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
             this.renderer.useProgram(sourceShader._programIndexTarget);
             gl.clear(gl.STENCIL_BUFFER_BIT);
 
+            /* to iste az na pixelSize ktory je tu navyse */
             let overallMatrix = viewMatrix;
             let imageRotation = tiledImage.getRotation(true);
             // if needed, handle the tiledImage being rotated
@@ -287,14 +298,17 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
 
             // iterate over tiles and add data for each one to the buffers
             for (let tileIndex = tilesToDraw.length - 1; tileIndex >= 0; tileIndex--){
+                /* tile sa ziska tak isto */
                 const tile = tilesToDraw[tileIndex].tile;
+                /* toto je presne to co je lepsie spravene, specialne matica, specialne data */
                 const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
                 const tileData = this._textureMap[tile.cacheKey];
 
+                /* DRAW */
                 this.renderer.processData(tileData.texture, {
                     transform: matrix,
-                    zoom: viewport.zoom,
-                    pixelSize: pixelSize,
+                    zoom: viewport.zoom, //asi cislo
+                    pixelSize: pixelSize, //asi cislo
                     textureCoords: tileData.position,
                 });
 
@@ -350,10 +364,11 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
                     tiles: tilesToDraw.map(info => info.tile),
                 });
             }
-        }
+        } //end of for tiledImage of tiledImages
     }
 
     _drawTwoPass(tiledImages, viewport, viewMatrix) {
+        console.log('Idem drawovat two pass');
         const gl = this.renderer.gl;
         gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -441,6 +456,7 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
         }
     }
 
+    /* Called only from constructor */
     //single pass shaders are built-in shaders compiled from JSON
     _createSinglePassShader(textureType) {
         this.defaultRenderingSpecification = {
@@ -551,17 +567,28 @@ blend(osd_texture(texture_location, osd_texture_coords), 0, false)`, options);
         this._size = size;
     }
 
-    _bindOffScreenTexture(index) {
+    /**
+     * Binds gl.FRAMEBUFFER to i-th texture from this._renderOffScreenTextures
+     * @param {number} i index to this._renderOffScreenTextures
+     */
+    _bindOffScreenTexture(i) {
         const gl = this.renderer.gl;
-        if (index < 0) {
+        if (i < 0) {
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         } else {
-            let texture = this._renderOffScreenTextures[index];
+            let texture = this._renderOffScreenTextures[i];
             gl.bindFramebuffer(gl.FRAMEBUFFER, this._renderOffScreenBuffer);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
         }
     }
 
+    /**
+     * Creates count or maxTextureUnits textures, whatever is lower
+     * return count asi nebude dobre fungovat, co ked je ??
+     * neviem preco sa to vola resize ??
+     * @param {number} count number of textures to create
+     * @returns {number}
+     */
     _resizeOffScreenTextures(count) {
         //create at most count textures, with max texturing units constraint
         const gl = this.renderer.gl;
