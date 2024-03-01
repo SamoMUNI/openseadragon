@@ -43,6 +43,7 @@
  * @param {OpenSeadragon.Viewport} options.viewport - Reference to Viewer viewport.
  * @param {HTMLElement} options.element - Parent element.
  * @param {Number} [options.debugGridColor] - Optional see debugGridColor in {@link OpenSeadragon.Options} for details.
+ * // podla mna toto to ma byt @param {[String]} [options.debugGridColor] - Optional see debugGridColor in {@link OpenSeadragon.Options} for details.
  * @param {any} options.options - Optional
  * @abstract
  */
