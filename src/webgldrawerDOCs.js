@@ -475,6 +475,7 @@
 
       // set composite operation; ignore for first image drawn
       this._outputContext.globalCompositeOperation = tiledImageIndex === 0 ? null : tiledImage.compositeOperation || this.viewer.compositeOperation;
+      // if CLIP or CROP needed
       if (tiledImage._croppingPolygons || tiledImage._clip) {
         this._renderToClippingCanvas(tiledImage);
         this._outputContext.drawImage(this._clippingCanvas, 0, 0);
@@ -483,14 +484,14 @@
         this._outputContext.drawImage(this._renderingCanvas, 0, 0);
       }
       this._outputContext.restore();
+
+      // if DEBUGGING enabled
       if (tiledImage.debugMode) {
         let colorIndex = this.viewer.world.getIndexOfItem(tiledImage) % this.debugGridColor.length;
         let strokeStyle = this.debugGridColor[colorIndex];
         let fillStyle = this.debugGridColor[colorIndex];
         this._drawDebugInfo(tilesToDraw, tiledImage, strokeStyle, fillStyle);
       }
-
-
     }
 
     /* Called only from draw function fill last 4 params on index index */

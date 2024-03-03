@@ -55,12 +55,13 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
         this.maxTextureUnits = 4 || gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
         this.maxDrawBufferUnits = gl.getParameter(gl.MAX_DRAW_BUFFERS); // unused
 
-        this._createSinglePassShader('TEXTURE_2D');
+        this.renderer._createSinglePassShader('TEXTURE_2D');
 
         /* returns $.Point */
         const size = this._calculateCanvasSize();
         this.renderer.init(size.x, size.y);
         this._size = size;
+
         // enable blending
         this.renderer.setDataBlendingEnabled(true);
 
@@ -87,6 +88,7 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
         });
         this.viewer.world.addHandler("add-item", (e) => {
             //todo: use this.renderer.uniqueId to set rendering targets
+            console.log('ADD-ITEM EVENT !!!');
             let shader = e.item.source.shader;
             if (shader) {
                 if (Number.isInteger(shader._programIndexTarget)) {
@@ -94,17 +96,18 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
                 }
                 const targetIndex = this.renderer.getSpecificationsCount();
                 if (this.renderer.addRenderingSpecifications(shader)) {
-                    this.renderer.buildProgram(targetIndex, null, true, this.buildOptions);
+                    this.renderer.buildProgram(targetIndex, null, true, this.renderer.buildOptions);
                     shader._programIndexTarget = targetIndex;
                     return;
                 }
             } else {
-                e.item.source.shader = shader = this.defaultRenderingSpecification;
+                e.item.source.shader = shader = this.renderer.defaultRenderingSpecification;
             }
             //set default program: identity
             shader._programIndexTarget = 0;
         });
         this.viewer.world.addHandler("remove-item", (e) => {
+            console.log('REMOVE-ITEM EVENT !!!');
             const tIndex = e.item.source.shader._programIndexTarget;
             if (tIndex > 0) {
                 this.renderer.setRenderingSpecification(tIndex, null);
@@ -157,7 +160,7 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
     }
 
     /**
-     * create the HTML element (canvas in this case) that the image will be drawn into
+     * Creates renderer for this drawer and returns his canvas.
      * @returns {Element} the canvas to draw into
      */
     _createDrawingElement(){
@@ -173,7 +176,7 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
     }
 
     /**
-     * If true enable stencil test, else disable stencil test
+     * If parameter enabled is true then stencil test, else disable stencil test
      * @param {Boolean} enabled whether enable stencil test or not
      */
     enableStencilTest(enabled) {
@@ -265,9 +268,9 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
 
             const sourceShader = tiledImage.source.shader;
             if (tiledImage.debugMode !== this.renderer.getCompiled("debug", sourceShader._programIndexTarget)) {
-                this.buildOptions.debug = tiledImage.debugMode;
+                this.renderer.buildOptions.debug = tiledImage.debugMode;
                 //todo per image-level debug info :/
-                this.renderer.buildProgram(sourceShader._programIndexTarget, null, true, this.buildOptions);
+                this.renderer.buildProgram(sourceShader._programIndexTarget, null, true, this.renderer.buildOptions);
             }
 
 
@@ -454,35 +457,6 @@ $.WebGL = class WebGL extends OpenSeadragon.DrawerBase {
                 });
             }
         }
-    }
-
-    /* Called only from constructor */
-    //single pass shaders are built-in shaders compiled from JSON
-    _createSinglePassShader(textureType) {
-        this.defaultRenderingSpecification = {
-            shaders: {
-                renderShader: {
-                    type: "identity",
-                    dataReferences: [0],
-                }
-            }
-        };
-        this.buildOptions = {
-            withHtml: false,
-            textureType: textureType,
-            //batch rendering (artifacts)
-            //instanceCount: this.maxTextureUnits,
-            instanceCount: 1,
-            debug: false
-        };
-
-        // number of specifications in $.WebGLModule._programSpecifications: []
-        const index = this.renderer.getSpecificationsCount();
-        // adds defaultRenderingSpecification to $.WebGLModule._programSpecifications
-        this.renderer.addRenderingSpecifications(this.defaultRenderingSpecification);
-        // index of defaultRenderingSpecification in _programSpecifications, order??, force??,
-        // options.withHtml, options.textureType, options.instanceCount, options.debug
-        this.renderer.buildProgram(index, null, true, this.buildOptions);
     }
 
     //two pass shaders are special

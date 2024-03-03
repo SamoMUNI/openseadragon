@@ -213,11 +213,12 @@
         }
 
         /**
-         * Change the dimensions, useful for borders, used by openSeadragonGL
+         * Sets viewport dimensions.
          * @instance
          * @memberOf WebGLModule
          */
         setDimensions(x, y, width, height) {
+            console.log('som v setDimensions, w,h:', width, height);
             if (width === this.width && height === this.height) {
                 return;
             }
@@ -431,7 +432,7 @@
             this._origDataSources = sources || [];
         }
 
-        /**
+        /** DRAWING !
          * Renders data using WebGL
          * @param {GLuint|[GLuint]} texture or texture array for instanced drawing
          *
@@ -1001,6 +1002,37 @@
                 this._dataSources.push(this._origDataSources[id]);
             }
         }
+
+        /* PRESUNUTE SEM Z DRAWERu */
+        /* Called only from drawer's constructor */
+        //single pass shaders are built-in shaders compiled from JSON
+        _createSinglePassShader(textureType) {
+            this.defaultRenderingSpecification = {
+                shaders: {
+                    renderShader: {
+                        type: "identity",
+                        dataReferences: [0],
+                    }
+                }
+            };
+            this.buildOptions = {
+                withHtml: false,
+                textureType: textureType,
+                //batch rendering (artifacts)
+                //instanceCount: this.maxTextureUnits,
+                instanceCount: 1,
+                debug: false
+            };
+
+            // number of specifications in $.WebGLModule._programSpecifications: []
+            const index = this.getSpecificationsCount();
+            // adds defaultRenderingSpecification to $.WebGLModule._programSpecifications
+            this.addRenderingSpecifications(this.defaultRenderingSpecification);
+            // index of defaultRenderingSpecification in _programSpecifications, order??, force??,
+            // options.withHtml, options.textureType, options.instanceCount, options.debug
+            this.buildProgram(index, null, true, this.buildOptions);
+        }
+
     };
 
     /**
