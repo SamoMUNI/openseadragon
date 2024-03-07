@@ -390,7 +390,7 @@
         /* zly warning asi mal byt nazov funkcie */
         useProgram(i) {
             if (!this._initialized) {
-                $.console.warn("$.WebGLModule::useSpecification(): not initialized.");
+                $.console.warn("$.WebGLModule::useProgram(): renderer not initialized.");
                 return;
             }
 
@@ -421,12 +421,11 @@
         /**
          * Set data srouces
          */
-        /* zly warning asi mal byt nazov funkcie
-         naco je dane ze sources || [], malo by byt jasne ze neposlem undefined premennu */
+        /* naco je dane ze sources || [], malo by byt jasne ze neposlem undefined premennu */
         /* nikde nieje volana */
-         setSources(sources) {
+        setSources(sources) {
             if (!this._initialized) {
-                $.console.warn("$.WebGLModule::useSpecification(): not initialized.");
+                $.console.warn("$.WebGLModule::setSources(): renderer not initialized.");
                 return;
             }
             this._origDataSources = sources || [];
@@ -448,6 +447,7 @@
          * @memberOf WebGLModule
          */
         processData(texture, tileOpts) {
+            console.log('v process data, this prrogam:', this._program, this._programSpecifications);
             const spec = this._programSpecifications[this._program];
             if (!spec) {
                 $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
@@ -592,14 +592,13 @@
 
         /**
          * Initialization. It is separated from preparation as this actually initiates the rendering,
-         * sometimes this can happen only when other things are ready. Must be performed after
-         * all the prepare() strategy finished: e.g. as onPrepared. Or use prepareAndInit();
-         *
+         * sometimes this can happen only when other things are ready.
          * @param {int} width width of the first tile going to be drawn
          * @param {int} height height of the first tile going to be drawn
          * @param firstProgram
          */
         init(width = 1, height = 1, firstProgram = 0) {
+            console.log('V inite...');
             if (this._initialized) {
                 $.console.error("Already initialized!");
                 return;

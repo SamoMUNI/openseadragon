@@ -115,6 +115,11 @@
             // spusta velky build rendereru s default specifikaciou
             this.renderer._createSinglePassShader('TEXTURE_2D');
 
+            /* returns $.Point */
+            const size = this._calculateCanvasSize();
+            this.renderer.init(size.x, size.y);
+            this._size = size;
+
             this._setupCanvases();
 
             this.context = this._outputContext; // API required by tests
@@ -527,7 +532,8 @@
 
         }
 
-        // private
+        // private, original _getTileData, nahradene getTileMatrix
+        /*
         _getTileData(tile, tiledImage, textureInfo, viewMatrix, index, texturePositionArray, textureDataArray, matrixArray, opacityArray){
 
             let texture = textureInfo.texture;
@@ -571,9 +577,9 @@
             textureDataArray[index] = texture;
             matrixArray[index] = overallMatrix.values;
 
-        }
+        }*/
 
-        // private
+        // private original _setuprenderer, was called in constructor
         /*
         _setupRenderer(){
             let gl = this._gl;
@@ -1308,8 +1314,8 @@
         _drawSinglePass(tiledImages, viewport, viewMatrix) {
             console.log('Idem drawovat single pass');
             const gl = this._gl;
-            gl.clear(gl.COLOR_BUFFER_BIT);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.clear(gl.COLOR_BUFFER_BIT);
 
             for (const tiledImage of tiledImages) {
                 let tilesToDraw = tiledImage.getTilesToDraw();
