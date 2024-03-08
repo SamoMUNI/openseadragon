@@ -159,50 +159,58 @@
         /**
         * Clean up the renderer, removing all resources
         */
-        destroy(){
-            if(this._destroyed){
+        destroy() {
+            console.log('Drawer::destroy() function is being called.');
+            if (this._destroyed) {
                 return;
             }
-            // clear all resources used by the renderer, geometries, textures etc
-            let gl = this._gl;
+            const gl = this._gl;
 
             // adapted from https://stackoverflow.com/a/23606581/1214731
             var numTextureUnits = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
             for (let unit = 0; unit < numTextureUnits; ++unit) {
                 gl.activeTexture(gl.TEXTURE0 + unit);
                 gl.bindTexture(gl.TEXTURE_2D, null);
-                gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+                gl.bindTexture(gl.TEXTURE_CUBE_MAP, null); //unused
             }
             gl.bindBuffer(gl.ARRAY_BUFFER, null);
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
-            gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null); //unused
+            gl.bindRenderbuffer(gl.RENDERBUFFER, null); //unused
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
+            // Delete all our created resources
             let canvases = Array.from(this._TextureMap.keys());
             canvases.forEach(canvas => {
                 this._cleanupImageData(canvas); // deletes texture, removes from _TextureMap
             });
 
-            // Delete all our created resources
-            gl.deleteBuffer(this._secondPass.bufferOutputPosition);
-            gl.deleteFramebuffer(this._glFrameBuffer);
+            // from drawer
+            this._renderOffScreenTextures.forEach(t => {
+                if (t) {
+                    gl.deleteTexture(t);
+                }
+            });
+            this._renderOffScreenTextures = [];
+
+            if (this._renderOffScreenBuffer) {
+                gl.deleteFramebuffer(this._renderOffScreenBuffer);
+            }
 
             // make canvases 1 x 1 px and delete references
-            this._renderingCanvas.width = this._renderingCanvas.height = 1;
             this._clippingCanvas.width = this._clippingCanvas.height = 1;
             this._outputCanvas.width = this._outputCanvas.height = 1;
-            this._renderingCanvas = null;
+            this._renderingCanvas.width = this._renderingCanvas.height = 1;
             this._clippingCanvas = this._clippingContext = null;
             this._outputCanvas = this._outputContext = null;
+            this._renderingCanvas = null;
 
             let ext = gl.getExtension('WEBGL_lose_context');
-            if(ext){
+            if (ext) {
                 ext.loseContext();
             }
 
             // set our webgl context reference to null to enable garbage collection
             this._gl = null;
-
             // set our destroyed flag to true
             this._destroyed = true;
         }
