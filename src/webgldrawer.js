@@ -378,16 +378,6 @@
             });
         }
 
-        // private
-        _makeQuadVertexBuffer(left, right, top, bottom){
-            return new Float32Array([
-                left, bottom,
-                right, bottom,
-                left, top,
-                left, top,
-                right, bottom,
-                right, top]);
-        }
 
         // private
         _tileReadyHandler(event){
@@ -454,22 +444,7 @@
             }
         }
 
-        // private
-        _calculateOverlapFraction(tile, tiledImage){
-            let overlap = tiledImage.source.tileOverlap;
-            let nativeWidth = tile.sourceBounds.width; // in pixels
-            let nativeHeight = tile.sourceBounds.height; // in pixels
-            let overlapWidth  = (tile.x === 0 ? 0 : overlap) + (tile.isRightMost ? 0 : overlap); // in pixels
-            let overlapHeight = (tile.y === 0 ? 0 : overlap) + (tile.isBottomMost ? 0 : overlap); // in pixels
-            let widthOverlapFraction = overlap / (nativeWidth + overlapWidth); // as a fraction of image including overlap
-            let heightOverlapFraction = overlap / (nativeHeight + overlapHeight); // as a fraction of image including overlap
-            return {
-                x: widthOverlapFraction,
-                y: heightOverlapFraction
-            };
-        }
-
-        // private
+        // private, only for tile ready handler
         _uploadImageData(tileContext){
 
             let gl = this._gl;
@@ -487,7 +462,21 @@
             }
         }
 
-        /* Removes tileCanvas from texture map + free texture from GPU */
+        // private, nemenil som
+        _calculateOverlapFraction(tile, tiledImage){
+            let overlap = tiledImage.source.tileOverlap;
+            let nativeWidth = tile.sourceBounds.width; // in pixels
+            let nativeHeight = tile.sourceBounds.height; // in pixels
+            let overlapWidth  = (tile.x === 0 ? 0 : overlap) + (tile.isRightMost ? 0 : overlap); // in pixels
+            let overlapHeight = (tile.y === 0 ? 0 : overlap) + (tile.isBottomMost ? 0 : overlap); // in pixels
+            let widthOverlapFraction = overlap / (nativeWidth + overlapWidth); // as a fraction of image including overlap
+            let heightOverlapFraction = overlap / (nativeHeight + overlapHeight); // as a fraction of image including overlap
+            return {
+                x: widthOverlapFraction,
+                y: heightOverlapFraction
+            };
+        }
+
         // private
         _cleanupImageData(tileCanvas){
             let textureInfo = this._TextureMap.get(tileCanvas);
@@ -497,6 +486,37 @@
             //release the texture from the GPU
             if(textureInfo){
                 this._gl.deleteTexture(textureInfo.texture);
+            }
+        }
+
+
+        /* Context2DPipeline functions ------------------------------------------------------------------------------------------------------------------ */
+        /**
+        * Draw data from the rendering canvas onto the output canvas, with clipping,
+        * cropping and/or debug info as requested.
+        * @private
+        * @param {OpenSeadragon.TiledImage} tiledImage - the tiledImage to draw
+        * @param {Array} tilesToDraw - array of objects containing tiles that were drawn
+        */
+        _applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex){
+            // composite onto the output canvas, clipping if necessary
+            this._outputContext.save();
+
+            // set composite operation; ignore for first image drawn
+            this._outputContext.globalCompositeOperation = tiledImageIndex === 0 ? null : tiledImage.compositeOperation || this.viewer.compositeOperation;
+            if(tiledImage._croppingPolygons || tiledImage._clip){
+                this._renderToClippingCanvas(tiledImage);
+                this._outputContext.drawImage(this._clippingCanvas, 0, 0);
+
+            } else {
+                this._outputContext.drawImage(this._renderingCanvas, 0, 0);
+            }
+            this._outputContext.restore();
+            if(tiledImage.debugMode){
+                let colorIndex = this.viewer.world.getIndexOfItem(tiledImage) % this.debugGridColor.length;
+                let strokeStyle = this.debugGridColor[colorIndex];
+                let fillStyle = this.debugGridColor[colorIndex];
+                this._drawDebugInfo(tilesToDraw, tiledImage, strokeStyle, fillStyle);
             }
         }
 
@@ -681,56 +701,41 @@
             context.restore();
         }
 
-        // modified from https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Adding_2D_content_to_a_WebGL_context
-        static initShaderProgram(gl, vsSource, fsSource) {
 
-            function loadShader(gl, type, source) {
-                const shader = gl.createShader(type);
+        // Public API required by all Drawer implementations
+        /**
+         * Required by DrawerBase, but has no effect on WebGLDrawer.
+         * @param {Boolean} enabled
+         */
+        setImageSmoothingEnabled(enabled){
+            // noop - this property does not impact WebGLDrawer
+        } //unused
 
-                // Send the source to the shader object
+        /**
+         * Draw a rect onto the output canvas for debugging purposes
+         * @param {OpenSeadragon.Rect} rect
+         */
+        drawDebuggingRect(rect){
+            let context = this._outputContext;
+            context.save();
+            context.lineWidth = 2 * $.pixelDensityRatio;
+            context.strokeStyle = this.debugGridColor[0];
+            context.fillStyle = this.debugGridColor[0];
 
-                gl.shaderSource(shader, source);
-
-                // Compile the shader program
-
-                gl.compileShader(shader);
-
-                // See if it compiled successfully
-
-                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                    $.console.error(
-                        `An error occurred compiling the shaders: ${gl.getShaderInfoLog(shader)}`
-                    );
-                    gl.deleteShader(shader);
-                    return null;
-                }
-
-                return shader;
-            }
-
-            const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
-            const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
-
-            // Create the shader program
-
-            const shaderProgram = gl.createProgram();
-            gl.attachShader(shaderProgram, vertexShader);
-            gl.attachShader(shaderProgram, fragmentShader);
-            gl.linkProgram(shaderProgram);
-
-            // If creating the shader program failed, alert
-
-            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-            $.console.error(
-                `Unable to initialize the shader program: ${gl.getProgramInfoLog(
-                shaderProgram
-                )}`
+            context.strokeRect(
+                rect.x * $.pixelDensityRatio,
+                rect.y * $.pixelDensityRatio,
+                rect.width * $.pixelDensityRatio,
+                rect.height * $.pixelDensityRatio
             );
-            return null;
-            }
 
-            return shaderProgram;
-        }
+            context.restore();
+        } //unused
+
+        _getTextureDataFromTile(tile){
+            return tile.getCanvasContext().canvas;
+        } //unused
+
 
         /* NOVE FUNCKIE Z DRAW.JS ------------------------------------------------------------------------------------------------------------------ */
         /**
