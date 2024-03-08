@@ -116,9 +116,9 @@
             this.renderer._createSinglePassShader('TEXTURE_2D');
 
             /* returns $.Point */
-            const size = this._calculateCanvasSize();
-            this.renderer.init(size.x, size.y);
-            this._size = size;
+            // const size = this._calculateCanvasSize();
+            this.renderer.init(this.canvas.width, this.canvas.height);
+            this._size = new $.Point(this.canvas.width, this.canvas.height);
 
             this._setupCanvases();
 
