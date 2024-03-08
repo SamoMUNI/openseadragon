@@ -87,7 +87,7 @@
             this._renderingCanvas = null;
             this._gl = null;
             /* nove */
-            this._renderingBufferHasImageData = false;
+            this._renderingCanvasHasImageData = false; //
 
             this.context = this._outputContext; // API required by tests
 
@@ -299,7 +299,7 @@
             }
 
             /* context2dPipeline was not used, data are still in _renderingCanvas */
-            if (this._renderingBufferHasImageData) {
+            if (this._renderingCanvasHasImageData) {
                 this._outputContext.drawImage(this._renderingCanvas, 0, 0);
             }
         }//end of draw function
@@ -942,9 +942,9 @@
                 if (useContext2dPipeline) {
                     // draw from the rendering canvas onto the output canvas, clipping/cropping if needed.
                     this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
-                    this._renderingBufferHasImageData = false;
+                    this._renderingCanvasHasImageData = false;
                 } else {
-                    this._renderingBufferHasImageData = true;
+                    this._renderingCanvasHasImageData = true;
                 }
 
                 // Fire tiled-image-drawn event.
