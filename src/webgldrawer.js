@@ -224,7 +224,7 @@
         *
         * @returns {Boolean} true
         */
-        canRotate(){
+        canRotate() {
             return true;
         }
 
@@ -232,23 +232,23 @@
         /**
         * @returns {Boolean} true if canvas and webgl are supported
         */
-        static isSupported(){
-            let canvasElement = document.createElement( 'canvas' );
-            let webglContext = $.isFunction( canvasElement.getContext ) &&
-                        canvasElement.getContext( 'webgl' );
+        static isSupported() {
+            let canvasElement = document.createElement('canvas');
+            let webglContext = $.isFunction(canvasElement.getContext) &&
+                        canvasElement.getContext('webgl');
             let ext = webglContext.getExtension('WEBGL_lose_context');
-            if(ext){
+            if (ext) {
                 ext.loseContext();
             }
-            return !!( webglContext );
+            return !!(webglContext);
         }
 
         /**
-         *
-         * @returns 'webgl'
+         * Drawer type.
+         * @returns 'webgl' [should return]
          */
-        getType(){
-            return 'webgl';
+        getType() {
+            return 'myImplementation';
         }
 
         /**
@@ -256,7 +256,7 @@
          * @private
          * @returns {HTMLCanvasElement} the canvas to draw into
          */
-        _createDrawingElement(){
+        _createDrawingElement() {
             let canvas = $.makeNeutralElement("canvas");
             let viewportSize = this._calculateCanvasSize();
             canvas.width = viewportSize.x;
@@ -268,7 +268,7 @@
         *
         * @param {Array} tiledImages Array of TiledImage objects to draw
         */
-        draw(tiledImages){
+        draw(tiledImages) {
             // clear the output canvas
             this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
 
@@ -300,18 +300,17 @@
 
             /* context2dPipeline was not used, data are still in _renderingCanvas */
             if (this._renderingBufferHasImageData) {
-                        this._outputContext.drawImage(this._renderingCanvas, 0, 0);
-                    }
+                this._outputContext.drawImage(this._renderingCanvas, 0, 0);
+            }
         }//end of draw function
 
 
         /* Dane z draweru uz, neviem co robil ten predtym s texturou MOZNO TREBA DACO SPRAVIT ESTE */
-        _resizeRenderer(){
+        _resizeRenderer() {
             const size = this._calculateCanvasSize();
             this.renderer.setDimensions(0, 0, size.x, size.y);
             this._size = size;
         }
-        // private
         /*
         _resizeRenderer(){
             let gl = this._gl;
@@ -336,16 +335,14 @@
         }
         */
 
-
-        // private
-        _setupCanvases(){
+        _setupCanvases() {
             this._outputCanvas = this.canvas; //canvas on screen
             this._outputContext = this._outputCanvas.getContext('2d');
 
-            this._renderingCanvas = this.renderer.canvas;
+            this._renderingCanvas = this.renderer.canvas; //canvas for webgl
             this._gl = this.renderer.gl;
 
-            this._clippingCanvas = document.createElement('canvas');
+            this._clippingCanvas = document.createElement('canvas'); //canvas for clipping and cropping
             this._clippingContext = this._clippingCanvas.getContext('2d');
 
             this._renderingCanvas.width = this._clippingCanvas.width = this._outputCanvas.width;
@@ -379,8 +376,7 @@
         }
 
 
-        // private
-        _tileReadyHandler(event){
+        _tileReadyHandler(event) {
             let tile = event.tile;
             let tiledImage = event.tiledImage;
             let tileContext = tile.getCanvasContext();
@@ -444,8 +440,8 @@
             }
         }
 
-        // private, only for tile ready handler
-        _uploadImageData(tileContext){
+        // only for tile ready handler
+        _uploadImageData(tileContext) {
 
             let gl = this._gl;
             let canvas = tileContext.canvas;
@@ -462,8 +458,8 @@
             }
         }
 
-        // private, nemenil som
-        _calculateOverlapFraction(tile, tiledImage){
+        // nemenil som
+        _calculateOverlapFraction(tile, tiledImage) {
             let overlap = tiledImage.source.tileOverlap;
             let nativeWidth = tile.sourceBounds.width; // in pixels
             let nativeHeight = tile.sourceBounds.height; // in pixels
@@ -477,8 +473,9 @@
             };
         }
 
-        // private
-        _cleanupImageData(tileCanvas){
+        /* Removes tileCanvas from texture map + free texture from GPU,
+            called from destroy and when image-unloaded event happens */
+        _cleanupImageData(tileCanvas) {
             let textureInfo = this._TextureMap.get(tileCanvas);
             //remove from the map
             this._TextureMap.delete(tileCanvas);
@@ -498,7 +495,7 @@
         * @param {OpenSeadragon.TiledImage} tiledImage - the tiledImage to draw
         * @param {Array} tilesToDraw - array of objects containing tiles that were drawn
         */
-        _applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex){
+        _applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex) {
             // composite onto the output canvas, clipping if necessary
             this._outputContext.save();
 
@@ -520,15 +517,13 @@
             }
         }
 
-        // private
-        _setClip(rect){
+        _setClip(rect) {
             this._clippingContext.beginPath();
             this._clippingContext.rect(rect.x, rect.y, rect.width, rect.height);
             this._clippingContext.clip();
         }
 
-        // private
-        _renderToClippingCanvas(item){
+        _renderToClippingCanvas(item) {
 
             this._clippingContext.clearRect(0, 0, this._clippingCanvas.width, this._clippingCanvas.height);
             this._clippingContext.save();
@@ -561,7 +556,6 @@
             this._clippingContext.restore();
         }
 
-        // private
         _offsetForRotation(options) {
             var point = options.point ?
                 options.point.times($.pixelDensityRatio) :
@@ -580,7 +574,6 @@
             context.translate(-point.x, -point.y);
         }
 
-        // private
         _drawDebugInfo( tilesToDraw, tiledImage, stroke, fill ) {
 
             for ( var i = tilesToDraw.length - 1; i >= 0; i-- ) {
@@ -593,7 +586,6 @@
             }
         }
 
-        // private
         _drawDebugInfoOnTile(tile, count, i, tiledImage, stroke, fill) {
 
             var context = this._outputContext;
@@ -695,7 +687,6 @@
             context.restore();
         }
 
-        // private
         _restoreRotationChanges() {
             var context = this._outputContext;
             context.restore();
@@ -739,7 +730,7 @@
 
         /* NOVE FUNCKIE Z DRAW.JS ------------------------------------------------------------------------------------------------------------------ */
         /**
-         * twopass - E, singlepass - D
+         * twopass - Enabled, singlepass - Disabled
          * If parameter enabled is true then stencil test, else disable stencil test
          * @param {Boolean} enabled whether enable stencil test or not
          */
@@ -841,15 +832,15 @@
          * @param {OpenSeadragon.Mat3} viewMatrix to apply
          */
         _drawSinglePass(tiledImages, viewport, viewMatrix) {
-            console.log('Idem drawovat single pass');
+            // console.log('Idem drawovat single pass');
             const gl = this._gl;
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
-            for (const tiledImage of tiledImages) {
+            tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 let tilesToDraw = tiledImage.getTilesToDraw();
                 if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
-                    continue;
+                    return;
                 }
 
                 //todo better access to the rendering context
@@ -941,6 +932,21 @@
                 //     });
                 // }
 
+                /* pridane z webgldrawer */
+                let useContext2dPipeline = (tiledImage.compositeOperation ||
+                    this.viewer.compositeOperation ||
+                    tiledImage._clip ||
+                    tiledImage._croppingPolygons ||
+                    tiledImage.debugMode
+                );
+                if (useContext2dPipeline) {
+                    // draw from the rendering canvas onto the output canvas, clipping/cropping if needed.
+                    this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
+                    this._renderingBufferHasImageData = false;
+                } else {
+                    this._renderingBufferHasImageData = true;
+                }
+
                 // Fire tiled-image-drawn event.
                 // TODO: the image data may not be on the output canvas yet!!
                 if( this.viewer ){
@@ -961,7 +967,7 @@
                         tiles: tilesToDraw.map(info => info.tile),
                     });
                 }
-            } //end of for tiledImage of tiledImages
+            }); //end of for tiledImage of tiledImages
         }
 
         /* iba pre draw funkciu, ani nepouzite zatial lebo cez if nejdem tymto */
@@ -1059,7 +1065,6 @@
 
         /* podobne ako webgldrawer _getTileData ale toto sa mi lubi viac, je krajsia funckia, sustredi sa iba na maticu
         tie ostatne veci ktore sa nastavuju v _getTileData su podla mna prebytocne do tejto funkcie dat... */
-        // private
         _getTileMatrix(tile, tiledImage, viewMatrix){
             // compute offsets that account for tile overlap; needed for calculating the transform matrix appropriately
             // x, y, w, h in viewport coords
