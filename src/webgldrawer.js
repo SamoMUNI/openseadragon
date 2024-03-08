@@ -86,8 +86,18 @@
             this._clippingContext = null;
             this._renderingCanvas = null;
             this._gl = null;
+
             /* nove */
-            this._renderingCanvasHasImageData = false; //
+            this._renderingCanvasHasImageData = false;
+
+            this._renderOffScreenTextures = [];
+            // how many textures in _renderOffScreenTextures have correctly set their size to textureSize
+            this._offScreenTexturesInfo = {
+                initialized: 0,
+                textureSize: new $.Point(0, 0)
+            };
+            this._renderOffScreenBuffer = null; // framebuffer for any texture from _renderOffScreenTextures
+
 
             this.context = this._outputContext; // API required by tests
 
@@ -127,7 +137,7 @@
             this.viewer.rejectEventHandler("tile-drawn", "The WebGLDrawer does not raise the tile-drawn event");
             this.viewer.rejectEventHandler("tile-drawing", "The WebGLDrawer does not raise the tile-drawing event");
 
-            /* Pridane event handleri z draweru */
+            /* Pridane event handlery z draweru */
             this.viewer.world.addHandler("add-item", (e) => {
                 //todo: use this.renderer.uniqueId to set rendering targets
                 console.log('ADD-ITEM EVENT !!!');
@@ -198,6 +208,7 @@
 
             if (this._renderOffScreenBuffer) {
                 gl.deleteFramebuffer(this._renderOffScreenBuffer);
+                this._renderOffScreenBuffer = null;
             }
 
             // make canvases 1 x 1 px and delete references
@@ -304,37 +315,9 @@
             }
         }//end of draw function
 
-
-        /* Dane z draweru uz, neviem co robil ten predtym s texturou MOZNO TREBA DACO SPRAVIT ESTE */
-        _resizeRenderer() {
-            const size = this._calculateCanvasSize();
-            this.renderer.setDimensions(0, 0, size.x, size.y);
-            this._size = size;
-        }
-        /*
-        _resizeRenderer(){
-            let gl = this._gl;
-            let w = this._renderingCanvas.width;
-            let h = this._renderingCanvas.height;
-            gl.viewport(0, 0, w, h);
-
-            //release the old texture
-            gl.deleteTexture(this._renderToTexture);
-            //create a new texture and set it up
-            this._renderToTexture = gl.createTexture();
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, this._renderToTexture);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-            //bind the frame buffer to the new texture
-            gl.bindFramebuffer(gl.FRAMEBUFFER, this._glFrameBuffer);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._renderToTexture, 0);
-        }
-        */
-
+        /**
+         * Initial setup of all three canvases (output, clipping, rendering) and their contexts (2d, 2d, webgl) + resize event handler registration
+         */
         _setupCanvases() {
             this._outputCanvas = this.canvas; //canvas on screen
             this._outputContext = this._outputCanvas.getContext('2d');
@@ -348,114 +331,7 @@
             this._renderingCanvas.width = this._clippingCanvas.width = this._outputCanvas.width;
             this._renderingCanvas.height = this._clippingCanvas.height = this._outputCanvas.height;
 
-
-            //make the additional canvas elements mirror size changes to the output canvas
-            let _this = this;
-            this.viewer.addHandler("resize", function(){
-                console.log('Resize event');
-                if(_this._outputCanvas !== _this.viewer.drawer.canvas){
-                    _this._outputCanvas.style.width = _this.viewer.drawer.canvas.clientWidth + 'px';
-                    _this._outputCanvas.style.height = _this.viewer.drawer.canvas.clientHeight + 'px';
-                }
-
-                let viewportSize = _this._calculateCanvasSize();
-                if( _this._outputCanvas.width !== viewportSize.x ||
-                    _this._outputCanvas.height !== viewportSize.y ) {
-                    _this._outputCanvas.width = viewportSize.x;
-                    _this._outputCanvas.height = viewportSize.y;
-                }
-
-                _this._renderingCanvas.style.width = _this._outputCanvas.clientWidth + 'px';
-                _this._renderingCanvas.style.height = _this._outputCanvas.clientHeight + 'px';
-                _this._renderingCanvas.width = _this._clippingCanvas.width = _this._outputCanvas.width;
-                _this._renderingCanvas.height = _this._clippingCanvas.height = _this._outputCanvas.height;
-
-                // important - update the size of the rendering viewport!
-                _this._resizeRenderer();
-            });
-        }
-
-
-        _tileReadyHandler(event) {
-            let tile = event.tile;
-            let tiledImage = event.tiledImage;
-            let tileContext = tile.getCanvasContext();
-            let canvas = tileContext.canvas;
-            let textureInfo = this._TextureMap.get(canvas);
-
-            // if this is a new image for us, create a gl Texture for this tile and bind the canvas with the image data
-            if(!textureInfo){
-                // set the texture
-                let gl = this._gl;
-                let options = this.renderer.webglContext.options;
-                let texture = gl.createTexture();
-
-                gl.activeTexture(gl.TEXTURE0);
-                gl.bindTexture(gl.TEXTURE_2D, texture);
-                // Set the parameters so we can render any size image.
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, options.wrap);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, options.wrap);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, options.minFilter);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, options.magFilter);
-                // Upload the image into the texture.
-                this._uploadImageData(tileContext);
-
-
-                // set the position
-                let position;
-                let overlap = tiledImage.source.tileOverlap;
-                if( overlap > 0){
-                    // calculate the normalized position of the rect to actually draw
-                    // discarding overlap.
-                    let overlapFraction = this._calculateOverlapFraction(tile, tiledImage);
-
-                    let left = tile.x === 0 ? 0 : overlapFraction.x;
-                    let top = tile.y === 0 ? 0 : overlapFraction.y;
-                    let right = tile.isRightMost ? 1 : 1 - overlapFraction.x;
-                    let bottom = tile.isBottomMost ? 1 : 1 - overlapFraction.y;
-                    position = new Float32Array([
-                        left, bottom,
-                        left, top,
-                        right, bottom,
-                        right, top
-                    ]);
-                } else {
-                    // no overlap: this texture can use the unit quad as its position data
-                    position = new Float32Array([
-                        0, 1,
-                        0, 0,
-                        1, 1,
-                        1, 0
-                    ]);
-                }
-
-
-                let textureInfo = {
-                    texture: texture,
-                    position: position,
-                };
-
-                // add it to our _TextureMap
-                this._TextureMap.set(canvas, textureInfo);
-            }
-        }
-
-        // only for tile ready handler
-        _uploadImageData(tileContext) {
-
-            let gl = this._gl;
-            let canvas = tileContext.canvas;
-
-            try{
-                if(!canvas){
-                    throw('Tile context does not have a canvas', tileContext);
-                }
-                // This depends on gl.TEXTURE_2D being bound to the texture
-                // associated with this canvas before calling this function
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-            } catch (e){
-                $.console.error('Error uploading image data to WebGL', e);
-            }
+            this._registerResizeEventHandler();
         }
 
         // nemenil som
@@ -693,6 +569,145 @@
         }
 
 
+        /* Event handlers ------------------------------------------------------------------------------------------------------------------ */
+        _uploadImageData(tileContext) {
+            let gl = this._gl;
+            let canvas = tileContext.canvas;
+
+            try{
+                if(!canvas){
+                    throw('Tile context does not have a canvas', tileContext);
+                }
+                // This depends on gl.TEXTURE_2D being bound to the texture
+                // associated with this canvas before calling this function
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+            } catch (e){
+                $.console.error('Error uploading image data to WebGL', e);
+            }
+        }
+
+        _tileReadyHandler(event) {
+            let tile = event.tile;
+            let tiledImage = event.tiledImage;
+            let tileContext = tile.getCanvasContext();
+            let canvas = tileContext.canvas;
+            let textureInfo = this._TextureMap.get(canvas);
+
+            // if this is a new image for us, create a gl Texture for this tile and bind the canvas with the image data
+            if(!textureInfo){
+                // set the texture
+                let gl = this._gl;
+                let options = this.renderer.webglContext.options;
+                let texture = gl.createTexture();
+
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                // Set the parameters so we can render any size image.
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, options.wrap);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, options.wrap);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, options.minFilter);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, options.magFilter);
+                // Upload the image into the texture.
+                this._uploadImageData(tileContext);
+
+
+                // set the position
+                let position;
+                let overlap = tiledImage.source.tileOverlap;
+                if( overlap > 0){
+                    // calculate the normalized position of the rect to actually draw
+                    // discarding overlap.
+                    let overlapFraction = this._calculateOverlapFraction(tile, tiledImage);
+
+                    let left = tile.x === 0 ? 0 : overlapFraction.x;
+                    let top = tile.y === 0 ? 0 : overlapFraction.y;
+                    let right = tile.isRightMost ? 1 : 1 - overlapFraction.x;
+                    let bottom = tile.isBottomMost ? 1 : 1 - overlapFraction.y;
+                    position = new Float32Array([
+                        left, bottom,
+                        left, top,
+                        right, bottom,
+                        right, top
+                    ]);
+                } else {
+                    // no overlap: this texture can use the unit quad as its position data
+                    position = new Float32Array([
+                        0, 1,
+                        0, 0,
+                        1, 1,
+                        1, 0
+                    ]);
+                }
+
+
+                let textureInfo = {
+                    texture: texture,
+                    position: position,
+                };
+
+                // add it to our _TextureMap
+                this._TextureMap.set(canvas, textureInfo);
+            }
+        }
+
+        /* Dane z draweru uz, neviem co robil ten predtym s texturou MOZNO TREBA DACO SPRAVIT ESTE */
+        _resizeRenderer() {
+            const size = this._calculateCanvasSize();
+            this.renderer.setDimensions(0, 0, size.x, size.y);
+            this._size = size;
+        }
+        /*
+        _resizeRenderer(){
+            let gl = this._gl;
+            let w = this._renderingCanvas.width;
+            let h = this._renderingCanvas.height;
+            gl.viewport(0, 0, w, h);
+
+            //release the old texture
+            gl.deleteTexture(this._renderToTexture);
+            //create a new texture and set it up
+            this._renderToTexture = gl.createTexture();
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, this._renderToTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            //bind the frame buffer to the new texture
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this._glFrameBuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._renderToTexture, 0);
+        }
+        */
+
+        _registerResizeEventHandler() {
+            // make the additional canvas elements mirror size changes to the output canvas
+            const _this = this;
+            this.viewer.addHandler("resize", function() {
+                console.log('Resize event');
+                if(_this._outputCanvas !== _this.viewer.drawer.canvas){
+                    _this._outputCanvas.style.width = _this.viewer.drawer.canvas.clientWidth + 'px';
+                    _this._outputCanvas.style.height = _this.viewer.drawer.canvas.clientHeight + 'px';
+                }
+
+                let viewportSize = _this._calculateCanvasSize();
+                if( _this._outputCanvas.width !== viewportSize.x ||
+                    _this._outputCanvas.height !== viewportSize.y ) {
+                    _this._outputCanvas.width = viewportSize.x;
+                    _this._outputCanvas.height = viewportSize.y;
+                }
+
+                _this._renderingCanvas.style.width = _this._outputCanvas.clientWidth + 'px';
+                _this._renderingCanvas.style.height = _this._outputCanvas.clientHeight + 'px';
+                _this._renderingCanvas.width = _this._clippingCanvas.width = _this._outputCanvas.width;
+                _this._renderingCanvas.height = _this._clippingCanvas.height = _this._outputCanvas.height;
+
+                // important - update the size of the rendering viewport!
+                _this._resizeRenderer();
+            });
+        }
+
+
         // Public API required by all Drawer implementations
         /**
          * Required by DrawerBase, but has no effect on WebGLDrawer.
@@ -763,66 +778,52 @@
         }
 
         /**
-         * Iba pre draw funkciu
-         * Creates count or maxTextureUnits textures, whatever is lower
-         * return count asi nebude dobre fungovat, co ked je ??
-         * neviem preco sa to vola resize ??
-         * @param {number} count number of textures to create
-         * @returns {number}
+         * Iba pre draw funkciu,
+         * Initialize Min(count, gl.maxTextureImageUnits) textures in this._renderOffScreenTextures
+         * @param {number} count number of textures to initialize
          */
         _resizeOffScreenTextures(count) {
-            //create at most count textures, with max texturing units constraint
-            const gl = this.renderer.gl;
-
-            count = Math.min(count, this.maxTextureUnits);
-
-            if (count > 0) {
-                //append or reinitialize textures
-                const rebuildStartIndex =
-                    this._renderBufferSize === this._size ?
-                    this._renderOffScreenTextures.length : 0;
-
-                let i;
-                for (i = rebuildStartIndex; i < count; i++) {
-                    let texture = this._renderOffScreenTextures[i];
-                    if (!texture) {
-                        this._renderOffScreenTextures[i] = texture = gl.createTexture();
-                    }
-                    gl.bindTexture(gl.TEXTURE_2D, texture);
-                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8,
-                        this._size.x, this._size.y, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
-                }
-
-                //destroy any textures that we don't need todo maybe just keep dont bother?
-                for (let j = this._renderOffScreenTextures.length - 1; j >= i; j--) {
-                    let texture = this._renderOffScreenTextures.pop();
-                    gl.deleteTexture(texture);
-                }
-
-                this._renderBufferSize = this._size;
-                return count;
+            if (count < 1) {
+                return;
             }
-            //just leave the textures be, freeing consumes time
-            return 0;
+
+            const gl = this._gl;
+            count = Math.min(count, gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS));
+            //append or reinitialize textures
+            //const rebuildStartIndex = (this._offScreenTexturesInfo.size !== this._size) ? this._renderOffScreenTextures.length : 0;
+            //let i = rebuildStartIndex;
+            for (let i = 0; i < count; ++i) {
+                let texture = this._renderOffScreenTextures[i];
+                if (!texture) {
+                    this._renderOffScreenTextures[i] = texture = gl.createTexture();
+                }
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8,
+                    this._size.x, this._size.y, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+            }
+
+            //destroy any textures that we don't need todo maybe just keep dont bother?
+            //for (let j = this._renderOffScreenTextures.length - 1; j >= i; j--) {
+                //let texture = this._renderOffScreenTextures.pop();
+                //gl.deleteTexture(texture);
+            //}
+            this._offScreenTexturesInfo.initialized = count;
+            this._offScreenTexturesInfo.textureSize = this._size;
         }
 
         /**
-         * Iba pre twopass
-         * Binds gl.FRAMEBUFFER to i-th texture from this._renderOffScreenTextures
-         * @param {number} i index to this._renderOffScreenTextures
+         * Iba pre twopass,
+         * Binds _renderOffScreenBuffer to i-th texture from _renderOffScreenTextures
+         * @param {number} i index to texture in this._renderOffScreenTextures
          */
         _bindOffScreenTexture(i) {
-            const gl = this.renderer.gl;
-            if (i < 0) {
-                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-            } else {
-                let texture = this._renderOffScreenTextures[i];
-                gl.bindFramebuffer(gl.FRAMEBUFFER, this._renderOffScreenBuffer);
-                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-            }
+            const gl = this._gl;
+            let texture = this._renderOffScreenTextures[i];
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this._renderOffScreenBuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
         }
 
         /**
