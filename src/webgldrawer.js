@@ -59,7 +59,7 @@
 
     OpenSeadragon.WebGLDrawer = class WebGLDrawer extends OpenSeadragon.DrawerBase{
         constructor(options){
-            console.log('Robim origo webgldrawer');
+            console.log('Robim moju implementaciu');
             super(options);
 
             /**
@@ -78,31 +78,21 @@
             // private members
             this._destroyed = false;
             this._TextureMap = new Map();
-            this._TileMap = new Map();
+            this._TileMap = new Map(); //unused
 
-            this._gl = null;
-            this._firstPass = null;
-            this._secondPass = null;
-            this._glFrameBuffer = null;
-            this._renderToTexture = null;
-            this._glFramebufferToCanvasTransform = null;
             this._outputCanvas = null;
             this._outputContext = null;
             this._clippingCanvas = null;
             this._clippingContext = null;
             this._renderingCanvas = null;
+            this._gl = null;
+            /* nove */
+            this._renderingBufferHasImageData = false;
 
-            // Add listeners for events that require modifying the scene or camera
-            this.viewer.addHandler("tile-ready", ev => this._tileReadyHandler(ev));
-            this.viewer.addHandler("image-unloaded", (e) => {
-                this._cleanupImageData(e.context2D.canvas);
-            });
+            this.context = this._outputContext; // API required by tests
 
-            // Reject listening for the tile-drawing and tile-drawn events, which this drawer does not fire
-            this.viewer.rejectEventHandler("tile-drawn", "The WebGLDrawer does not raise the tile-drawn event");
-            this.viewer.rejectEventHandler("tile-drawing", "The WebGLDrawer does not raise the tile-drawing event");
 
-            // Creates a renderer
+            /***** SETUP RENDERER *****/
             this.renderer = new $.WebGLModule($.extend(this.options, {
                 uniqueId: "openseadragon", //todo OSD creates multiple drawers - navigator + main + possibly other - find way to differentiate
                 "2.0": {
@@ -111,6 +101,7 @@
                     }
                 }
             }));
+
             // this._setupRenderer(); TREBA CEKNUT CI SA NASTAVUJE RENDERER SAM ALE MYSLIM ZE HEJ...
             // spusta velky build rendereru s default specifikaciou
             this.renderer._createSinglePassShader('TEXTURE_2D');
@@ -120,9 +111,21 @@
             this.renderer.init(this.canvas.width, this.canvas.height);
             this._size = new $.Point(this.canvas.width, this.canvas.height);
 
+
+            /***** SETUP CANVASES *****/
             this._setupCanvases();
 
-            this.context = this._outputContext; // API required by tests
+
+            /***** EVENT HANDLERS *****/
+            // Add listeners for events that require modifying the scene or camera
+            this.viewer.addHandler("tile-ready", ev => this._tileReadyHandler(ev));
+            this.viewer.addHandler("image-unloaded", (e) => {
+                this._cleanupImageData(e.context2D.canvas);
+            });
+
+            // Reject listening for the tile-drawing and tile-drawn events, which this drawer does not fire
+            this.viewer.rejectEventHandler("tile-drawn", "The WebGLDrawer does not raise the tile-drawn event");
+            this.viewer.rejectEventHandler("tile-drawing", "The WebGLDrawer does not raise the tile-drawing event");
 
             /* Pridane event handleri z draweru */
             this.viewer.world.addHandler("add-item", (e) => {
@@ -153,7 +156,8 @@
                     this.renderer.setRenderingSpecification(tIndex, null);
                 }
             });
-       }
+        }//end of constructor
+
 
         // Public API required by all Drawer implementations
         /**
