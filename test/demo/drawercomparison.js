@@ -15,8 +15,9 @@ const labels = {
 }
 const drawers = {
     canvas: "Context2d drawer (default in OSD &lt;= 4.1.0)",
-    webgl: "New WebGL drawer",
-    universalWebgl: "New WebGL (Modular)",
+    webgl: "webgldrawer",
+    myImplementation: "my new implementation",
+    universalWebgl: "Jirka's modular drawer",
 }
 
 //Support drawer type from the url

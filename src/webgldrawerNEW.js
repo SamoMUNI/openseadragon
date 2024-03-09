@@ -86,18 +86,7 @@
             this._clippingContext = null;
             this._renderingCanvas = null;
             this._gl = null;
-
-            /* nove */
             this._renderingCanvasHasImageData = false;
-
-            this._renderOffScreenTextures = [];
-            // how many textures in _renderOffScreenTextures have correctly set their size to textureSize
-            this._offScreenTexturesInfo = {
-                initialized: 0,
-                textureSize: new $.Point(0, 0)
-            };
-            this._renderOffScreenBuffer = null; // framebuffer for any texture from _renderOffScreenTextures
-
 
             this.context = this._outputContext; // API required by tests
 
@@ -118,9 +107,20 @@
 
             /* returns $.Point */
             // const size = this._calculateCanvasSize();
+            console.log('Som v konstruktori draweru, renderer canvasu a this._size nastavujem na', this.canvas.width, this.canvas.height);
             this.renderer.init(this.canvas.width, this.canvas.height);
             this._size = new $.Point(this.canvas.width, this.canvas.height);
 
+            this.renderer.setDataBlendingEnabled(true); // enable blending
+
+            this._renderOffScreenTextures = []; // textures to render into instead of canvas
+            this._offScreenTexturesInfo = { // how many textures in _renderOffScreenTextures have correctly set their size to textureSize
+                initialized: 0,
+                textureSize: new $.Point(0, 0)
+            };
+            this._renderOffScreenBuffer = null; // buffer to be used with any texture from _renderOffScreenTextures
+
+            console.log('V konstruktori draweru, po inicializacii je renderer =', this.renderer);
 
             /***** SETUP CANVASES *****/
             this._setupCanvases();
@@ -300,12 +300,12 @@
             let twoPassRendering = false;
 
             if (twoPassRendering) {
-                this._resizeOffScreenTextures(0);
                 this.enableStencilTest(true);
+                this._resizeOffScreenTextures(0);
                 this._drawTwoPass(tiledImages, view, viewMatrix);
             } else {
-                this._resizeOffScreenTextures(tiledImages.length);
                 this.enableStencilTest(false);
+                // this._resizeOffScreenTextures(tiledImages.length); podla mna to je zbytocne, naco su mi offscreentextury vo first passe?
                 this._drawSinglePass(tiledImages, view, viewMatrix);
             }
 
@@ -441,10 +441,10 @@
             context.save();
 
             context.translate(point.x, point.y);
-            if(this.viewport.flipped){
+            if (this.viewport.flipped) {
                 context.rotate(Math.PI / 180 * -options.degrees);
                 context.scale(-1, 1);
-            } else{
+            } else {
                 context.rotate(Math.PI / 180 * options.degrees);
             }
             context.translate(-point.x, -point.y);
@@ -650,12 +650,7 @@
             }
         }
 
-        /* Dane z draweru uz, neviem co robil ten predtym s texturou MOZNO TREBA DACO SPRAVIT ESTE */
-        _resizeRenderer() {
-            const size = this._calculateCanvasSize();
-            this.renderer.setDimensions(0, 0, size.x, size.y);
-            this._size = size;
-        }
+        /* Old resizeRenderer, MOZNO TREBA DACO SPRAVIT ESTE, neviem co sa tu sibrinkuje s tou texturou... */
         /*
         _resizeRenderer(){
             let gl = this._gl;
@@ -702,8 +697,12 @@
                 _this._renderingCanvas.width = _this._clippingCanvas.width = _this._outputCanvas.width;
                 _this._renderingCanvas.height = _this._clippingCanvas.height = _this._outputCanvas.height;
 
+                console.log('Resize event, rC.width:rC.height', _this._renderingCanvas.width, _this._renderingCanvas.height);
                 // important - update the size of the rendering viewport!
-                _this._resizeRenderer();
+                // _this._resizeRenderer(); OLD WAY
+                // NEW WAY
+                _this.renderer.setDimensions(0, 0, _this._renderingCanvas.width, _this._renderingCanvas.height);
+                _this._size = viewportSize;
             });
         }
 
@@ -833,32 +832,41 @@
          * @param {OpenSeadragon.Mat3} viewMatrix to apply
          */
         _drawSinglePass(tiledImages, viewport, viewMatrix) {
-            // console.log('Idem drawovat single pass');
+            //console.log('Idem drawovat single pass, pocet tiledImages =', tiledImages.length);
             const gl = this._gl;
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
+                //console.log('Vo for cykli cez tiledImages, prechod cislo', tiledImageIndex);
                 let tilesToDraw = tiledImage.getTilesToDraw();
+                // nothing to draw or opacity is zero
                 if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
+                    //console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
                     return;
                 }
 
                 //todo better access to the rendering context
-                const shader = this.renderer.specification(0).shaders.renderShader._renderContext;
-                shader.setBlendMode(tiledImage.index === 0 ?
+                /* plainshader je konkretna shader instancia (plain shader extends shaderLayer) */
+                const plainShader = this.renderer.specification(0).shaders.renderShader._renderContext;
+                /* bere parameter name, spravi renderer.BLEND_MODE[name], ak to nieje undefined tak nastavi shader.blendMode na to,
+                ak to je undefined tak nastavi shader.blendMode na renderer.BLEND_MODE["source-over"] */
+                plainShader.setBlendMode(tiledImage.index === 0 ?
                     "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
+                //tile level opacity not supported with single pass rendering
+                /* opacity is an IControl instantion */
+                plainShader.opacity.set(tiledImage.opacity);
 
-                const sourceShader = tiledImage.source.shader;
-                if (tiledImage.debugMode !== this.renderer.getCompiled("debug", sourceShader._programIndexTarget)) {
-                    this.renderer.buildOptions.debug = tiledImage.debugMode;
-                    //todo per image-level debug info :/
-                    this.renderer.buildProgram(sourceShader._programIndexTarget, null, true, this.renderer.buildOptions);
-                }
+                const specificationObject = tiledImage.source.shader;
+                /* this.renderer.getCompiled ti vytiahne z webglprogramu z jeho _osdOptions co je v "debug" parametri si myslim */
+                // if (tiledImage.debugMode !== this.renderer.getCompiled("debug", specificationObject._programIndexTarget)) {
+                //     this.renderer.buildOptions.debug = tiledImage.debugMode;
+                //     //todo per image-level debug info :/
+                //     this.renderer.buildProgram(specificationObject._programIndexTarget, null, true, this.renderer.buildOptions);
+                // } po vykomentovani tohto tu som vyriesil error s tym cervenym stvorcom ktory sa tam daval naviac pri zapnuti debugu... inak netusim co to robi :((
+                this.renderer.useProgram(specificationObject._programIndexTarget);
+                // gl.clear(gl.STENCIL_BUFFER_BIT); neviem naco to tu je, skusim som odkomentovat a nic sa nestalo...
 
-
-                this.renderer.useProgram(sourceShader._programIndexTarget);
-                gl.clear(gl.STENCIL_BUFFER_BIT);
 
                 /* to iste az na pixelSize ktory je tu navyse */
                 let overallMatrix = viewMatrix;
@@ -876,22 +884,26 @@
                 }
                 let pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
-                //tile level opacity not supported with single pass rendering
-                shader.opacity.set(tiledImage.opacity);
-
                 //batch rendering (artifacts)
                 //let batchSize = 0;
 
                 // iterate over tiles and add data for each one to the buffers
-                for (let tileIndex = tilesToDraw.length - 1; tileIndex >= 0; tileIndex--){
+                for (let tileIndex = 0; tileIndex < tilesToDraw.length; ++tileIndex) {
                     const tile = tilesToDraw[tileIndex].tile;
+
                     const tileContext = tile.getCanvasContext();
                     const tileData = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                     if (tileData === null) {
-                        throw Error("webgldrawer::drawXPass: tile has no context!");
+                        throw Error("webgldrawer::drawSinglePass: tile has no context!");
                     }
+
                     const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
-                    shader.opacity.set(tile.opacity * tiledImage.opacity);
+                    if (tile.flipped) {
+                        //console.log('from my impl matrix =', matrix);
+                        //console.log('from my impl tile.cachceKey =', tile.cacheKey);
+                    }
+
+                    plainShader.opacity.set(tile.opacity * tiledImage.opacity);
 
                     /* DRAW */
                     this.renderer.processData(tileData.texture, {
@@ -941,7 +953,7 @@
                     tiledImage.debugMode
                 );
                 if (useContext2dPipeline) {
-                    // draw from the rendering canvas onto the output canvas, clipping/cropping if needed.
+                    // draw from the rendering canvas onto the output canvas, clipping/cropping if needed
                     this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
                     this._renderingCanvasHasImageData = false;
                 } else {
@@ -974,7 +986,7 @@
         /* iba pre draw funkciu, ani nepouzite zatial lebo cez if nejdem tymto */
         _drawTwoPass(tiledImages, viewport, viewMatrix) {
             console.log('Idem drawovat two pass');
-            const gl = this.renderer.gl;
+            const gl = this._gl;
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             let drawnItems = 0;
@@ -1087,7 +1099,8 @@
                 x, y, 1,
             ]);
 
-            if(tile.flipped){
+            if (tile.flipped) {
+                //console.log('Tile is flipped from myimp');
                 // flip the tile around the center of the unit quad
                 let t1 = $.Mat3.makeTranslation(0.5, 0);
                 let t2 = $.Mat3.makeTranslation(-0.5, 0);

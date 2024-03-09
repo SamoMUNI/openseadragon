@@ -458,6 +458,7 @@ $.Viewer = function( options ) {
     for (let i = 0; i < drawerCandidates.length; i++) {
 
         let drawerCandidate = drawerCandidates[i];
+        // console.log('viewer: drawerCandidate =', drawerCandidate);
         let Drawer = null;
 
         //if inherits from a drawer base, use it
@@ -465,7 +466,9 @@ $.Viewer = function( options ) {
             Drawer = drawerCandidate;
             drawerCandidate = 'custom';
         } else if (typeof drawerCandidate === "string") {
+            // console.log('viewer: drawercandidate je string');
             Drawer = $.determineDrawer(drawerCandidate);
+            // console.log('viewer: drawer =', Drawer);
         } else {
             $.console.warn('Unsupported drawer! Drawer must be an existing string type, or a class that extends OpenSeadragon.DrawerBase.');
             continue;
@@ -4010,9 +4013,25 @@ function onFlip() {
  * Find drawer
  */
 $.determineDrawer = function( id ){
+    // let i = 0;
     for (let property in OpenSeadragon) {
+        // console.log('property and i=', property, i++);
         const drawer = OpenSeadragon[ property ],
             proto = drawer.prototype;
+        // if (!proto) {
+        //     continue;
+        // }
+        // console.log(proto);
+        // if (!(proto instanceof OpenSeadragon.DrawerBase)) {
+        //     continue;
+        // }
+        // if (!$.isFunction( proto.getType )) {
+        //     continue;
+        // }
+        // console.log($.isFunction( proto.getType ));
+        // console.log('SOM KONECNE TU');
+        // console.log('drawer=', drawer, 'id=', id);
+        // console.log(proto.getType.call( drawer ));
         if( proto &&
             proto instanceof OpenSeadragon.DrawerBase &&
             $.isFunction( proto.getType ) &&

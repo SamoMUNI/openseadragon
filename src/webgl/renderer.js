@@ -218,7 +218,7 @@
          * @memberOf WebGLModule
          */
         setDimensions(x, y, width, height) {
-            console.log('som v setDimensions, w,h:', width, height);
+            console.log('som v setDimensions, x,y,w,h:', x, y, width, height);
             if (width === this.width && height === this.height) {
                 return;
             }
@@ -231,7 +231,7 @@
         }
 
         /**
-         *
+         * from webgl20 gets webglProgram._osdOptions[name]
          */
         getCompiled(name, programIndex = this._program) {
             return this.webglContext.getCompiled(this._programs[programIndex], name);
@@ -447,7 +447,7 @@
          * @memberOf WebGLModule
          */
         processData(texture, tileOpts) {
-            console.log('v process data, this prrogam:', this._program, this._programSpecifications);
+            // console.log('v process data');
             const spec = this._programSpecifications[this._program];
             if (!spec) {
                 $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
@@ -598,7 +598,7 @@
          * @param firstProgram
          */
         init(width = 1, height = 1, firstProgram = 0) {
-            console.log('V inite...');
+            console.log('V inite, width:height =', width, height);
             if (this._initialized) {
                 $.console.error("Already initialized!");
                 return;
@@ -616,7 +616,7 @@
             this.getCurrentProgramIndex(); //validates index
 
             this._initialized = true;
-            this.setDimensions(width, height);
+            this.setDimensions(0, 0, width, height); // pridal som dve nuly na zaciatok
 
             //todo rotate anticlockwise to cull backfaces
             this.gl.enable(this.gl.CULL_FACE);
@@ -756,6 +756,7 @@
         }
 
         _loadDebugInfo() {
+            console.log('renderer:_loadDebugInfo');
             if (!this.debug) {
                 return;
             }
@@ -916,7 +917,7 @@
             }
 
             this._buildSpecification(program, spec, options);
-            this.visualisationReady(idx, spec);
+            this.visualisationReady(idx, spec); // useless now
             return idx;
         }
 
@@ -1025,7 +1026,7 @@
 
             // number of specifications in $.WebGLModule._programSpecifications: []
             const index = this.getSpecificationsCount();
-            // adds defaultRenderingSpecification to $.WebGLModule._programSpecifications
+            // $.WebGLModule._programSpecifications[0] = this.defaultRenderingSpecification
             this.addRenderingSpecifications(this.defaultRenderingSpecification);
             // index of defaultRenderingSpecification in _programSpecifications, order??, force??,
             // options.withHtml, options.textureType, options.instanceCount, options.debug

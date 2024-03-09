@@ -711,7 +711,7 @@
             // console.log('options z webglContext: programused = ', options);
             //if compiled as instanced drawing
             /* ze instancovane renderovanie mozem zatial preskocit, cize asi len else vetva ma momentalne zaujima */
-            if (options.instanceCount > 1) {
+            if (options.instanceCount > 1) { //options.instanceCount > 1)
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
                 gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileOpts.textureCoords);
@@ -726,8 +726,9 @@
                     gl.activeTexture(gl.TEXTURE0 + i);
                     gl.bindTexture(gl.TEXTURE_2D, texture[i]);
                 }
-
+                console.log('DRAWARRAYSINSTANCED');
                 gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, drawInstanceCount);
+
             } else {
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
                 gl.bufferData(gl.ARRAY_BUFFER, tileOpts.textureCoords, gl.STATIC_DRAW);

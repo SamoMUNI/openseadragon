@@ -58,9 +58,9 @@
    * @param {any} options.options - Optional
    */
 
-  OpenSeadragon.WebGLDrawer = class WebGLDrawer extends OpenSeadragon.DrawerBase {
+  OpenSeadragon.WebGLDrawerDOCs = class WebGLDrawer extends OpenSeadragon.DrawerBase {
     constructor(options) {
-      console.log('Robim novy modular webgldrawer');
+      console.log('Robim stary originalny webgldrawer');
       super(options);
 
       /**
@@ -130,8 +130,8 @@
         gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
       }
       gl.bindBuffer(gl.ARRAY_BUFFER, null);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
-      gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null); // unused
+      gl.bindRenderbuffer(gl.RENDERBUFFER, null); // unused
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
       let canvases = Array.from(this._TextureMap.keys());
@@ -322,7 +322,7 @@
 
         // iterate over tiles and add data for each one to the buffers
         /* tilesToDraw je zoznam Tile objektov */
-        console.log('pred forcyklo, maxTextures=', maxTextures, 'tiles to draw length =', tilesToDraw.length);
+        //console.log('pred forcyklo, maxTextures=', maxTextures, 'tiles to draw length =', tilesToDraw.length);
         for (let tileIndex = 0; tileIndex < tilesToDraw.length; tileIndex++) {
           let tile = tilesToDraw[tileIndex].tile;
           let indexInDrawArray = tileIndex % maxTextures;
@@ -334,13 +334,16 @@
             /* sets textureposition [12 elements, offset = index * 12] , texturedataarray + matrixarray + opacityarray [index] */
             this._getTileData(tile, tiledImage, textureInfo, overallMatrix, indexInDrawArray, texturePositionArray, textureDataArray, matrixArray, opacityArray);
           } else {
-            console.log('aj sem som zabludil ');
-            // console.log('No tile info', tile);
+            console.error('TOTO SA NEMALO STAT !!!');
           }
-          console.log('prechod for cykol cez tiles');
+          if (tile.flipped) {
+            //console.log('matrix', matrixArray[indexInDrawArray]);
+            //console.log('tile.cachceKey=', tile.cacheKey);
+          }
+          //console.log('prechod for cykol cez tiles');
           // We've filled up the buffers or reached the end: time to draw this set of tiles
           if ((numTilesToDraw === maxTextures) || (tileIndex === tilesToDraw.length - 1)) {
-            console.log('vykreslenie tiles');
+            //console.log('vykreslenie tiles');
 
             // set the buffer data for the texture coordinates to use for each tile
             gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPass.bufferTexturePosition);
@@ -373,10 +376,11 @@
             // Draw! 6 vertices per tile (2 triangles per rectangle)
             gl.drawArrays(gl.TRIANGLES, 0, 6 * numTilesToDraw);
           }
-        } // end iteration over tiles
+        } // endof FOREACH tiles
 
         if (useTwoPassRendering) {
-          // Second rendering pass: Render the tiled image from the framebuffer into the back buffer
+          console.log('TwoPassR3ndering being used');
+            // Second rendering pass: Render the tiled image from the framebuffer into the back buffer
           gl.useProgram(this._secondPass.shaderProgram);
 
           // set the rendering target to the back buffer (null)
@@ -419,7 +423,7 @@
       }); // end of tiledImages.forEach
 
       if (renderingBufferHasImageData) {
-        console.log('Sem som sa pravdepodobne dostal lebo nepouzivam context2dpipeline !');
+        //console.log('Sem som sa pravdepodobne dostal lebo nepouzivam context2dpipeline !');
         this._outputContext.drawImage(this._renderingCanvas, 0, 0);
       }
 
@@ -524,6 +528,7 @@
       ]);
 
       if (tile.flipped) {
+        console.log('Tile is flipped...');
         // flip the tile around the center of the unit quad
         let t1 = $.Mat3.makeTranslation(0.5, 0);
         let t2 = $.Mat3.makeTranslation(-0.5, 0);
@@ -534,7 +539,6 @@
       }
 
       let overallMatrix = viewMatrix.multiply(matrix);
-
       opacityArray[index] = tile.opacity;
       textureDataArray[index] = texture;
       matrixArray[index] = overallMatrix.values;
