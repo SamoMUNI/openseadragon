@@ -139,6 +139,7 @@ class CanvasDrawer extends OpenSeadragon.DrawerBase{
         this.canvas.height = 1;
         this.sketchCanvas = null;
         this.sketchContext = null;
+        this.container.removeChild(this.canvas);
     }
 
     /**
@@ -382,9 +383,9 @@ class CanvasDrawer extends OpenSeadragon.DrawerBase{
             }
             usedClip = true;
         }
-
+        tiledImage._hasOpaqueTile = false;
         if ( tiledImage.placeholderFillStyle && tiledImage._hasOpaqueTile === false ) {
-            var placeholderRect = this.viewportToDrawerRectangle(tiledImage.getBounds(true));
+            let placeholderRect = this.viewportToDrawerRectangle(tiledImage.getBoundsNoRotate(true));
             if (sketchScale) {
                 placeholderRect = placeholderRect.times(sketchScale);
             }
@@ -392,7 +393,7 @@ class CanvasDrawer extends OpenSeadragon.DrawerBase{
                 placeholderRect = placeholderRect.translate(sketchTranslate);
             }
 
-            var fillStyle = null;
+            let fillStyle = null;
             if ( typeof tiledImage.placeholderFillStyle === "function" ) {
                 fillStyle = tiledImage.placeholderFillStyle(tiledImage, this.context);
             }
