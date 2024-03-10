@@ -46,99 +46,68 @@
 
 
         /**
+         * @constructor
          * @param {object} incomingOptions
-         * @param {string} incomingOptions.htmlControlsId: where to render html controls,
-         * @param {string} incomingOptions.webGlPreferredVersion prefered WebGL version, for now "1.0" or "2.0"
+         * @param {string} incomingOptions.uniqueId
+         * @param {string} incomingOptions.webglPreferredVersion prefered WebGL version, for now "1.0" or "2.0"
+         * @param {object} incomingOptions.webglOptions
+         * @param {object} incomingOptions.canvasOptions
+         * @param {string} incomingOptions.htmlControlsId where to render html controls
          * @param {OpenSeadragon.WebGLModule.UIControlsRenderer} incomingOptions.htmlShaderPartHeader function that generates particular layer HTML
-         * @param {boolean} incomingOptions.debug debug mode default false
          * @param {function} incomingOptions.ready function called when ready
          * @param {function} incomingOptions.resetCallback function called when user input changed, e.g. changed output of the current rendering
          * signature f({WebGLModule.VisualizationConfig} oldVisualisation,{WebGLModule.VisualizationConfig} newVisualisation)
-         * @constructor
-         * @memberOf OpenSeadragon.WebGLModule
+         * @param {boolean} incomingOptions.debug debug mode default false
          */
         constructor(incomingOptions) {
-            // console.log("vytvaram renderer hihi");
             super();
+            console.log('Robim renderer, options=', incomingOptions);
 
-            /////////////////////////////////////////////////////////////////////////////////
-            ///////////// Default values overrideable from incomingOptions  /////////////////
-            /////////////////////////////////////////////////////////////////////////////////
-            this.uniqueId = "";
-
-            //todo events instead
-            this.ready = function() { };
-            this.htmlControlsId = null;
-            this.webGlPreferredVersion = "2.0";
-            this.htmlShaderPartHeader = function(html, dataId, isVisible, layer, isControllable = true) {
-                return `<div class="configurable-border"><div class="shader-part-name">${dataId}</div>${html}</div>`;
-            };
-            this.resetCallback = function() { };
-            //called once a visualisation is compiled and linked (might not happen)
-            this.visualisationReady = function(i, visualisation) { };
-
-            /**
-             * Debug mode.
-             * @member {boolean}
-             */
-            /* malo by byt pod incoming values inak sa moze prepisat z incomingOptions.debug */
-            this.debug = false;
-
-            /////////////////////////////////////////////////////////////////////////////////
-            ///////////// Incoming Values ///////////////////////////////////////////////////
-            /////////////////////////////////////////////////////////////////////////////////
-
-            // Assign from incoming terms
-            /* Creates parameters with the same name as keys and the same values as values in incomingOptions object
-             proste nasadzanie premennych ako v pythone ked v inite vsetky pacnes s rovnakym menom s self.blablabla */
-            for (let key in incomingOptions) {
-                if (incomingOptions[key]) {
-                    this[key] = incomingOptions[key];
-                }
+            if (!this.constructor.idPattern.test(incomingOptions.uniqueId)) {
+                throw "$.WebGLModule: invalid ID! Id can contain only letters, numbers and underscore. ID: " + incomingOptions.uniqueId;
             }
 
-            if (!this.constructor.idPattern.test(this.uniqueId)) {
-                throw "$.WebGLModule: invalid ID! Id can contain only letters, numbers and underscore. ID: " + this.uniqueId;
-            }
+            this.uniqueId = incomingOptions.uniqueId;
+            this.webglPreferredVersion = incomingOptions.webglPreferredVersion;
+            this.webglOptions = incomingOptions.webglOptions;
+            this.canvasOptions = incomingOptions.canvasOptions;
+            this.htmlControlsId = incomingOptions.htmlControlsId;
+            this.htmlShaderPartHeader = incomingOptions.htmlShaderPartHeader;
+            this.ready = incomingOptions.ready;
+            this.resetCallback = incomingOptions.resetCallback;
+            this.debug = incomingOptions.debug;
 
-            /**
-             * Current rendering context
-             * @member {OpenSeadragon.WebGLModule.WebGLImplementation}
-             */
-            this.webglContext = null;
+            this.visualisationReady = (i, visualisation) => { }; // called once a visualisation is compiled and linked (might not happen)
+            this.running = false;
 
-            /**
-             * WebGL context
-             * @member {WebGLRenderingContext|WebGL2RenderingContext}
-             */
-            this.gl = null;
+            this._initialized = false;
+            this._program = -1; // number, index of WebGLProgram currently being used
+            this._programs = {}; // {number: WebGLProgram}, WebGLPrograms indexed with numbers
+            this._programSpecifications = []; // [object], array of specification objects, index of specification corresponds to index of WebGLProgram created from that specification in _programs
 
-            /////////////////////////////////////////////////////////////////////////////////
-            ///////////// Internals /////////////////////////////////////////////////////////
-            /////////////////////////////////////////////////////////////////////////////////
+            this._dataSources = [];
+            this._origDataSources = [];
 
-            this.reset();
+            this.defaultRenderingSpecification = null; // object = set in buildProgram
+            this.buildOptions = null; // object, set in buildProgram
 
-            /* tomuto som teda moc nepochapal */
+            // set the webgl attributes
+            this.gl = null; // WebGLRenderingContext|WebGL2RenderingContext
+            this.webglContext = null; // OpenSeadragon.WebGLModule.WebGLImplementation
             try {
                 const canvas = document.createElement("canvas");
-                for (let version of [this.webGlPreferredVersion, "2.0", "1.0"]) {
-                    /* incomingOptions nemaju kluc version ??? */
-                    const contextOpts = incomingOptions[version] || {};
 
-                    /* ??? z kade ??? $.WebGLModule teraz konstruujes tak jak ho mozes volat a dalsia vec, nema ziadnu
-                    funkciu determineContext, ta je vo webGLContext.js */
-                    const Context = $.WebGLModule.determineContext(version);
-                    //todo documment this
-                    let glContext = Context && Context.create(canvas, contextOpts.canvasOptions || {});
+                const WebGLImplementation = this.determineContext(this.webglPreferredVersion);
 
-                    if (glContext) {
-                        this.gl = glContext;
+                const WebGLRenderingContext = WebGLImplementation && WebGLImplementation.create(canvas, this.canvasOptions);
 
-                        const readGlProp = function(prop, defaultValue) {
-                            return glContext[contextOpts[prop] || defaultValue] || glContext[defaultValue];
+                if (WebGLRenderingContext) {
+                    const readGlProp = (prop, defaultValue) => {
+                        if (this.webglOptions[prop] !== undefined) {
+                            return WebGLRenderingContext[this.webglContext[prop]] || WebGLRenderingContext[defaultValue];
+                        }
+                        return WebGLRenderingContext[defaultValue];
                         };
-
                         /**
                          * @param {object} options
                          * @param {string} options.wrap  texture wrap parameteri
@@ -147,15 +116,17 @@
                          */
                         const options = {
                             wrap: readGlProp("wrap", "MIRRORED_REPEAT"),
-                            magFilter: readGlProp("magFilter", "LINEAR"),
                             minFilter: readGlProp("minFilter", "LINEAR"),
-                        };
+                        magFilter: readGlProp("magFilter", "LINEAR"),
+                    };
 
-                        this.webglContext = new Context(this, glContext, options);
-                        break;
-                    }
+                    // set the attributes
+                    this.gl = WebGLRenderingContext;
+                    this.webglContext = new WebGLImplementation(this, WebGLRenderingContext, options);
+
+                } else {
+                    throw new Error("$.WebGLModule::constructor: Could not create WebGLRenderingContext!");
                 }
-
             } catch (e) {
                 /**
                  * @event fatal-error
@@ -163,9 +134,27 @@
                 this.raiseEvent('fatal-error', {message: "Unable to initialize the WebGL renderer.",
                     details: e});
                 $.console.error(e);
-                return;
             }
-            $.console.log(`WebGL ${this.webglContext.getVersion()} Rendering module (ID ${this.uniqueId || '<main>'})`);
+            //$.console.log(`WebGL ${this.webglContext.getVersion()} Rendering module (ID ${this.uniqueId || '<main>'})`); TODO put return to catch (e) when uncommenting
+        }
+
+        /**
+         * Search through all $.WebGLModule properties and find one that extends WebGLImplementation and it's getVersion() function returns "version" input parameter.
+         * @param {string} version webgl version, "1.0" or "2.0"
+         * @returns {null|WebGLImplementation}
+         */
+        determineContext(version) {
+            console.log("zistujem kontext, asi takym sposobom ze zas vsetko hladam hah ale z CLASSSSYYYYYYYYYY");
+            const namespace = OpenSeadragon.WebGLModule;
+            for (let property in namespace) {
+                const context = namespace[ property ],
+                    proto = context.prototype;
+                if (proto && proto instanceof namespace.WebGLImplementation &&
+                    $.isFunction( proto.getVersion ) && proto.getVersion.call( context ) === version) {
+                        return context;
+                }
+            }
+            return null;
         }
 
         /**
@@ -177,13 +166,14 @@
             if (this._programs) {
                 Object.values(this._programs).forEach(p => this._unloadProgram(p));
             }
+            this.running = false;
+            this._initialized = false;
+
+            this._program = -1;
+            this._programs = {};
             this._programSpecifications = [];
             this._dataSources = [];
             this._origDataSources = [];
-            this._programs = {};
-            this._program = -1;
-            this.running = false;
-            this._initialized = false;
         }
 
         /**
