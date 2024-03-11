@@ -57,9 +57,10 @@
     * @param {[String]} [options.debugGridColor] - See debugGridColor in {@link OpenSeadragon.Options} for details.
     */
 
-    OpenSeadragon.WebGLDrawer = class WebGLDrawer extends OpenSeadragon.DrawerBase{
+    OpenSeadragon.WebGLDrawerModular = class WebGLDrawer extends OpenSeadragon.DrawerBase{
         constructor(options){
-            console.log('Robim moju implementaciu');
+            console.log('Robim moju implementaciu, options =', options);
+            console.log('Robim moju implementaciu, extendnute options =', options);
             super(options);
 
             /**
@@ -88,18 +89,28 @@
             this._gl = null;
             this._renderingCanvasHasImageData = false;
 
+            this._backupCanvasDrawer = null;
             this.context = this._outputContext; // API required by tests
 
 
             /***** SETUP RENDERER *****/
-            this.renderer = new $.WebGLModule($.extend(this.options, {
+            const rendererOptions = {
                 uniqueId: "openseadragon", //todo OSD creates multiple drawers - navigator + main + possibly other - find way to differentiate
-                "2.0": {
-                    canvasOptions: {
-                        stencil: true
-                    }
-                }
-            }));
+                webglPreferredVersion: "2.0",
+                webglOptions: {},
+                canvasOptions: {
+                    stencil: true
+                },
+                htmlControlsId: null,
+                htmlShaderPartHeader: (html, dataId, isVisible, layer, isControllable = true) => {
+                    return `<div class="configurable-border"><div class="shader-part-name">${dataId}</div>${html}</div>`;
+                },
+                ready: () => { },
+                resetCallback: function() { },
+                debug: false
+            };
+            // OLD $.extend(this.options, rendererOptions) [this.options are options.options from DRAWERBASE]
+            this.renderer = new $.WebGLModule(rendererOptions);
 
             // this._setupRenderer(); TREBA CEKNUT CI SA NASTAVUJE RENDERER SAM ALE MYSLIM ZE HEJ...
             // spusta velky build rendereru s default specifikaciou
@@ -121,6 +132,10 @@
             this._renderOffScreenBuffer = null; // buffer to be used with any texture from _renderOffScreenTextures
 
             console.log('V konstruktori draweru, po inicializacii je renderer =', this.renderer);
+            // if (this._destroyed === false) {
+            //     throw (new Error("Ukoncujem inicializaciu rendera"));
+            // }
+
 
             /***** SETUP CANVASES *****/
             this._setupCanvases();
@@ -128,10 +143,12 @@
 
             /***** EVENT HANDLERS *****/
             // Add listeners for events that require modifying the scene or camera
-            this.viewer.addHandler("tile-ready", ev => this._tileReadyHandler(ev));
-            this.viewer.addHandler("image-unloaded", (e) => {
-                this._cleanupImageData(e.context2D.canvas);
-            });
+            this._boundToTileReady = ev => this._tileReadyHandler(ev);
+            this._boundToImageUnloaded = ev => {
+                this._cleanupImageData(ev.context2D.canvas);
+            };
+            this.viewer.addHandler("tile-ready", this._boundToTileReady);
+            this.viewer.addHandler("image-unloaded", this._boundToImageUnloaded);
 
             // Reject listening for the tile-drawing and tile-drawn events, which this drawer does not fire
             this.viewer.rejectEventHandler("tile-drawn", "The WebGLDrawer does not raise the tile-drawn event");
@@ -164,6 +181,7 @@
                 const tIndex = e.item.source.shader._programIndexTarget;
                 if (tIndex > 0) {
                     this.renderer.setRenderingSpecification(tIndex, null);
+                    this.renderer.deleteProgram(tIndex);
                 }
             });
         }//end of constructor
@@ -224,6 +242,20 @@
                 ext.loseContext();
             }
 
+            // unbind our event listeners from the viewer
+            this.viewer.removeHandler("tile-ready", this._boundToTileReady);
+            this.viewer.removeHandler("image-unloaded", this._boundToImageUnloaded);
+
+            if(this._backupCanvasDrawer){
+                this._backupCanvasDrawer.destroy();
+                this._backupCanvasDrawer = null;
+            }
+
+            this.container.removeChild(this.canvas);
+            if(this.viewer.drawer === this){
+                this.viewer.drawer = null;
+            }
+
             // set our webgl context reference to null to enable garbage collection
             this._gl = null;
             // set our destroyed flag to true
@@ -273,6 +305,21 @@
             canvas.width = viewportSize.x;
             canvas.height = viewportSize.y;
             return canvas;
+        }
+
+        /**
+         * Get the backup renderer (CanvasDrawer) to use if data cannot be used by webgl
+         * Lazy loaded
+         * @private
+         * @returns {CanvasDrawer}
+         */
+        _getBackupCanvasDrawer(){
+            if(!this._backupCanvasDrawer){
+                this._backupCanvasDrawer = this.viewer.requestDrawer('canvas', {mainDrawer: false});
+                this._backupCanvasDrawer.canvas.style.setProperty('visibility', 'hidden');
+            }
+
+            return this._backupCanvasDrawer;
         }
 
         /**
@@ -393,21 +440,41 @@
             }
         }
 
-        _setClip(rect) {
-            this._clippingContext.beginPath();
-            this._clippingContext.rect(rect.x, rect.y, rect.width, rect.height);
-            this._clippingContext.clip();
+        _setClip(){
+            // no-op: called by _renderToClippingCanvas when tiledImage._clip is truthy
+            // so that tests will pass.
         }
 
-        _renderToClippingCanvas(item) {
+        _renderToClippingCanvas(item){
 
             this._clippingContext.clearRect(0, 0, this._clippingCanvas.width, this._clippingCanvas.height);
             this._clippingContext.save();
+            if(this.viewer.viewport.getFlip()){
+                const point = new $.Point(this.canvas.width / 2, this.canvas.height / 2);
+                this._clippingContext.translate(point.x, 0);
+                this._clippingContext.scale(-1, 1);
+                this._clippingContext.translate(-point.x, 0);
+            }
 
             if(item._clip){
-                var box = item.imageToViewportRectangle(item._clip, true);
-                var rect = this.viewportToDrawerRectangle(box);
-                this._setClip(rect);
+                const polygon = [
+                    {x: item._clip.x, y: item._clip.y},
+                    {x: item._clip.x + item._clip.width, y: item._clip.y},
+                    {x: item._clip.x + item._clip.width, y: item._clip.y + item._clip.height},
+                    {x: item._clip.x, y: item._clip.y + item._clip.height},
+                ];
+                let clipPoints = polygon.map(coord => {
+                    let point = item.imageToViewportCoordinates(coord.x, coord.y, true)
+                        .rotate(this.viewer.viewport.getRotation(true), this.viewer.viewport.getCenter(true));
+                    let clipPoint = this.viewportCoordToDrawerCoord(point);
+                    return clipPoint;
+                });
+                this._clippingContext.beginPath();
+                clipPoints.forEach( (coord, i) => {
+                    this._clippingContext[i === 0 ? 'moveTo' : 'lineTo'](coord.x, coord.y);
+                });
+                this._clippingContext.clip();
+                this._setClip();
             }
             if(item._croppingPolygons){
                 let polygons = item._croppingPolygons.map(polygon => {
@@ -419,12 +486,19 @@
                     });
                 });
                 this._clippingContext.beginPath();
-                polygons.forEach(polygon => {
+                polygons.forEach((polygon) => {
                     polygon.forEach( (coord, i) => {
                         this._clippingContext[i === 0 ? 'moveTo' : 'lineTo'](coord.x, coord.y);
                     });
                 });
                 this._clippingContext.clip();
+            }
+
+            if(this.viewer.viewport.getFlip()){
+                const point = new $.Point(this.canvas.width / 2, this.canvas.height / 2);
+                this._clippingContext.translate(point.x, 0);
+                this._clippingContext.scale(-1, 1);
+                this._clippingContext.translate(-point.x, 0);
             }
 
             this._clippingContext.drawImage(this._renderingCanvas, 0, 0);
@@ -589,17 +663,80 @@
         _tileReadyHandler(event) {
             let tile = event.tile;
             let tiledImage = event.tiledImage;
+
+            // If a tiledImage is already known to be tainted, don't try to upload any
+            // textures to webgl, because they won't be used even if it succeeds
+            if(tiledImage.isTainted()){
+                return;
+            }
+
             let tileContext = tile.getCanvasContext();
-            let canvas = tileContext.canvas;
+            let canvas = tileContext && tileContext.canvas;
+            // if the tile doesn't provide a canvas, or is tainted by cross-origin
+            // data, marked the TiledImage as tainted so the canvas drawer can be
+            // used instead, and return immediately - tainted data cannot be uploaded to webgl
+            if(!canvas || $.isCanvasTainted(canvas)){
+                const wasTainted = tiledImage.isTainted();
+                if(!wasTainted){
+                    tiledImage.setTainted(true);
+                    $.console.warn('WebGL cannot be used to draw this TiledImage because it has tainted data. Does crossOriginPolicy need to be set?');
+                    this._raiseDrawerErrorEvent(tiledImage, 'Tainted data cannot be used by the WebGLDrawer. Falling back to CanvasDrawer for this TiledImage.');
+                }
+                return;
+            }
+
             let textureInfo = this._TextureMap.get(canvas);
 
             // if this is a new image for us, create a gl Texture for this tile and bind the canvas with the image data
             if(!textureInfo){
-                // set the texture
-                let gl = this._gl;
-                let options = this.renderer.webglContext.options;
-                let texture = gl.createTexture();
+                const gl = this._gl;
+                let position;
+                let overlap = tiledImage.source.tileOverlap;
 
+                // deal with tiles where there is padding, i.e. the pixel data doesn't take up the entire provided canvas
+                let sourceWidthFraction, sourceHeightFraction;
+                if (tile.sourceBounds) {
+                    sourceWidthFraction = Math.min(tile.sourceBounds.width, canvas.width) / canvas.width;
+                    sourceHeightFraction = Math.min(tile.sourceBounds.height, canvas.height) / canvas.height;
+                } else {
+                    sourceWidthFraction = 1;
+                    sourceHeightFraction = 1;
+                }
+
+                if( overlap > 0){
+                    // calculate the normalized position of the rect to actually draw
+                    // discarding overlap.
+                    let overlapFraction = this._calculateOverlapFraction(tile, tiledImage);
+
+                    let left = (tile.x === 0 ? 0 : overlapFraction.x) * sourceWidthFraction;
+                    let top = (tile.y === 0 ? 0 : overlapFraction.y) * sourceHeightFraction;
+                    let right = (tile.isRightMost ? 1 : 1 - overlapFraction.x) * sourceWidthFraction;
+                    let bottom = (tile.isBottomMost ? 1 : 1 - overlapFraction.y) * sourceHeightFraction;
+                    position = new Float32Array([
+                        left, bottom,
+                        left, top,
+                        right, bottom,
+                        right, top
+                    ]);
+                } else {
+                    position = new Float32Array([
+                        0, sourceHeightFraction,
+                        0, 0,
+                        sourceWidthFraction, sourceHeightFraction,
+                        sourceWidthFraction, 0
+                    ]);
+                }
+
+                let texture = gl.createTexture();
+                let textureInfo = {
+                    texture: texture,
+                    position: position,
+                };
+
+                // add it to our _TextureMap
+                this._TextureMap.set(canvas, textureInfo);
+
+                const options = this.renderer.webglContext.options;
                 gl.activeTexture(gl.TEXTURE0);
                 gl.bindTexture(gl.TEXTURE_2D, texture);
                 // Set the parameters so we can render any size image.
@@ -609,44 +746,6 @@
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, options.magFilter);
                 // Upload the image into the texture.
                 this._uploadImageData(tileContext);
-
-
-                // set the position
-                let position;
-                let overlap = tiledImage.source.tileOverlap;
-                if( overlap > 0){
-                    // calculate the normalized position of the rect to actually draw
-                    // discarding overlap.
-                    let overlapFraction = this._calculateOverlapFraction(tile, tiledImage);
-
-                    let left = tile.x === 0 ? 0 : overlapFraction.x;
-                    let top = tile.y === 0 ? 0 : overlapFraction.y;
-                    let right = tile.isRightMost ? 1 : 1 - overlapFraction.x;
-                    let bottom = tile.isBottomMost ? 1 : 1 - overlapFraction.y;
-                    position = new Float32Array([
-                        left, bottom,
-                        left, top,
-                        right, bottom,
-                        right, top
-                    ]);
-                } else {
-                    // no overlap: this texture can use the unit quad as its position data
-                    position = new Float32Array([
-                        0, 1,
-                        0, 0,
-                        1, 1,
-                        1, 0
-                    ]);
-                }
-
-
-                let textureInfo = {
-                    texture: texture,
-                    position: position,
-                };
-
-                // add it to our _TextureMap
-                this._TextureMap.set(canvas, textureInfo);
             }
         }
 
@@ -839,87 +938,130 @@
 
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 //console.log('Vo for cykli cez tiledImages, prechod cislo', tiledImageIndex);
-                let tilesToDraw = tiledImage.getTilesToDraw();
-                // nothing to draw or opacity is zero
-                if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
-                    //console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
-                    return;
-                }
 
-                //todo better access to the rendering context
-                /* plainshader je konkretna shader instancia (plain shader extends shaderLayer) */
-                const plainShader = this.renderer.specification(0).shaders.renderShader._renderContext;
-                /* bere parameter name, spravi renderer.BLEND_MODE[name], ak to nieje undefined tak nastavi shader.blendMode na to,
-                ak to je undefined tak nastavi shader.blendMode na renderer.BLEND_MODE["source-over"] */
-                plainShader.setBlendMode(tiledImage.index === 0 ?
-                    "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
-                //tile level opacity not supported with single pass rendering
-                /* opacity is an IControl instantion */
-                plainShader.opacity.set(tiledImage.opacity);
-
-                const specificationObject = tiledImage.source.shader;
-                /* this.renderer.getCompiled ti vytiahne z webglprogramu z jeho _osdOptions co je v "debug" parametri si myslim */
-                // if (tiledImage.debugMode !== this.renderer.getCompiled("debug", specificationObject._programIndexTarget)) {
-                //     this.renderer.buildOptions.debug = tiledImage.debugMode;
-                //     //todo per image-level debug info :/
-                //     this.renderer.buildProgram(specificationObject._programIndexTarget, null, true, this.renderer.buildOptions);
-                // } po vykomentovani tohto tu som vyriesil error s tym cervenym stvorcom ktory sa tam daval naviac pri zapnuti debugu... inak netusim co to robi :((
-                this.renderer.useProgram(specificationObject._programIndexTarget);
-                // gl.clear(gl.STENCIL_BUFFER_BIT); neviem naco to tu je, skusim som odkomentovat a nic sa nestalo...
-
-
-                /* to iste az na pixelSize ktory je tu navyse */
-                let overallMatrix = viewMatrix;
-                let imageRotation = tiledImage.getRotation(true);
-                // if needed, handle the tiledImage being rotated
-                if( imageRotation % 360 !== 0) {
-                    let imageRotationMatrix = $.Mat3.makeRotation(-imageRotation * Math.PI / 180);
-                    let imageCenter = tiledImage.getBoundsNoRotate(true).getCenter();
-                    let t1 = $.Mat3.makeTranslation(imageCenter.x, imageCenter.y);
-                    let t2 = $.Mat3.makeTranslation(-imageCenter.x, -imageCenter.y);
-
-                    // update the view matrix to account for this image's rotation
-                    let localMatrix = t1.multiply(imageRotationMatrix).multiply(t2);
-                    overallMatrix = viewMatrix.multiply(localMatrix);
-                }
-                let pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
-
-                //batch rendering (artifacts)
-                //let batchSize = 0;
-
-                // iterate over tiles and add data for each one to the buffers
-                for (let tileIndex = 0; tileIndex < tilesToDraw.length; ++tileIndex) {
-                    const tile = tilesToDraw[tileIndex].tile;
-
-                    const tileContext = tile.getCanvasContext();
-                    const tileData = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
-                    if (tileData === null) {
-                        throw Error("webgldrawer::drawSinglePass: tile has no context!");
+                /* If vetva pridana z merge-u, jemne upravena */
+                if(tiledImage.isTainted()){
+                    // first, draw any data left in the rendering buffer onto the output canvas
+                    if(this._renderingCanvasHasImageData){
+                        this._outputContext.drawImage(this._renderingCanvas, 0, 0);
+                        this._renderingCanvasHasImageData = false;
                     }
 
-                    const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
-                    if (tile.flipped) {
-                        //console.log('from my impl matrix =', matrix);
-                        //console.log('from my impl tile.cachceKey =', tile.cacheKey);
+                    // next, use the backup canvas drawer to draw this tainted image
+                    const canvasDrawer = this._getBackupCanvasDrawer();
+                    canvasDrawer.draw([tiledImage]);
+                    this._outputContext.drawImage(canvasDrawer.canvas, 0, 0);
+                } else {
+                    let tilesToDraw = tiledImage.getTilesToDraw();
+
+                    /* Pridane z merge-u */
+                    if ( tiledImage.placeholderFillStyle && tiledImage._hasOpaqueTile === false ) {
+                        this._drawPlaceholder(tiledImage);
                     }
 
-                    plainShader.opacity.set(tile.opacity * tiledImage.opacity);
+                    // nothing to draw or opacity is zero
+                    if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
+                        //console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
+                        return;
+                    }
 
-                    /* DRAW */
-                    this.renderer.processData(tileData.texture, {
-                        transform: matrix,
-                        zoom: viewport.zoom, //asi cislo
-                        pixelSize: pixelSize, //asi cislo
-                        textureCoords: tileData.position,
-                    });
+                    //todo better access to the rendering context
+                    /* plainshader je konkretna shader instancia (plain shader extends shaderLayer) */
+                    const plainShader = this.renderer.getSpecification(0).shaders.renderShader._renderContext;
+                    /* bere parameter name, spravi renderer.BLEND_MODE[name], ak to nieje undefined tak nastavi shader.blendMode na to,
+                    ak to je undefined tak nastavi shader.blendMode na renderer.BLEND_MODE["source-over"] */
+                    plainShader.setBlendMode(tiledImage.index === 0 ?
+                        "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
+                    //tile level opacity not supported with single pass rendering
+                    /* opacity is an IControl instantion */
+                    plainShader.opacity.set(tiledImage.opacity);
+
+                    const specificationObject = tiledImage.source.shader;
+                    /* this.renderer.getCompiled ti vytiahne z webglprogramu z jeho _osdOptions co je v "debug" parametri si myslim */
+                    // if (tiledImage.debugMode !== this.renderer.getCompiled("debug", specificationObject._programIndexTarget)) {
+                    //     this.renderer.buildOptions.debug = tiledImage.debugMode;
+                    //     //todo per image-level debug info :/
+                    //     this.renderer.buildProgram(specificationObject._programIndexTarget, null, true, this.renderer.buildOptions);
+                    // } po vykomentovani tohto tu som vyriesil error s tym cervenym stvorcom ktory sa tam daval naviac pri zapnuti debugu... inak netusim co to robi :((
+                    this.renderer.useProgram(specificationObject._programIndexTarget);
+                    // gl.clear(gl.STENCIL_BUFFER_BIT); neviem naco to tu je, skusim som odkomentovat a nic sa nestalo...
+
+
+                    /* to iste az na pixelSize ktory je tu navyse */
+                    let overallMatrix = viewMatrix;
+                    let imageRotation = tiledImage.getRotation(true);
+                    // if needed, handle the tiledImage being rotated
+                    if( imageRotation % 360 !== 0) {
+                        let imageRotationMatrix = $.Mat3.makeRotation(-imageRotation * Math.PI / 180);
+                        let imageCenter = tiledImage.getBoundsNoRotate(true).getCenter();
+                        let t1 = $.Mat3.makeTranslation(imageCenter.x, imageCenter.y);
+                        let t2 = $.Mat3.makeTranslation(-imageCenter.x, -imageCenter.y);
+
+                        // update the view matrix to account for this image's rotation
+                        let localMatrix = t1.multiply(imageRotationMatrix).multiply(t2);
+                        overallMatrix = viewMatrix.multiply(localMatrix);
+                    }
+                    let pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
                     //batch rendering (artifacts)
-                    // this._transformMatrices.set(matrix, batchSize * 9);
-                    // this._tileTexturePositions.set(tileData.position, batchSize * 8);
-                    // this._batchTextures[batchSize] = tileData.texture;
-                    // batchSize++;
-                    // if (batchSize === this.maxTextureUnits) {
-                    //     console.log("tiles inside", this._tileTexturePositions);
+                    //let batchSize = 0;
+
+                    // iterate over tiles and add data for each one to the buffers
+                    for (let tileIndex = 0; tileIndex < tilesToDraw.length; ++tileIndex) {
+                        const tile = tilesToDraw[tileIndex].tile;
+
+                        const tileContext = tile.getCanvasContext();
+                        let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
+                        if (tileInfo === null) {
+                            // tile was not processed in the tile-ready event (this can happen
+                            // if this drawer was created after the tile was downloaded)
+                            this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
+                            // retry getting textureInfo
+                            tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
+                        }
+                        if (tileInfo === null) {
+                            throw Error("webgldrawer::drawSinglePass: tile has no context!");
+                        }
+
+                        const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
+                        if (tile.flipped) {
+                            //console.log('from my impl matrix =', matrix);
+                            //console.log('from my impl tile.cachceKey =', tile.cacheKey);
+                        }
+
+                        plainShader.opacity.set(tile.opacity * tiledImage.opacity);
+
+                        /* DRAW */
+                        this.renderer.processData(tileInfo.texture, {
+                            transform: matrix,
+                            zoom: viewport.zoom, //asi cislo
+                            pixelSize: pixelSize, //asi cislo
+                            textureCoords: tileInfo.position,
+                        });
+
+                        //batch rendering (artifacts)
+                        // this._transformMatrices.set(matrix, batchSize * 9);
+                        // this._tileTexturePositions.set(tileData.position, batchSize * 8);
+                        // this._batchTextures[batchSize] = tileData.texture;
+                        // batchSize++;
+                        // if (batchSize === this.maxTextureUnits) {
+                        //     console.log("tiles inside", this._tileTexturePositions);
+                        //     this.renderer.processData(this._batchTextures, {
+                        //         transform: this._transformMatrices,
+                        //         zoom: viewport.zoom,
+                        //         pixelSize: pixelSize,
+                        //         textureCoords: this._tileTexturePositions,
+                        //         instanceCount: batchSize
+                        //     });
+                        //     batchSize = 0;
+                        // }
+                    }
+
+                    //batch rendering (artifacts)
+                    // if (batchSize > 0) {
+                    //     console.log("tiles outside", this._tileTexturePositions);
+                    //
+                    //     //todo possibly zero out unused, or limit drawing size
                     //     this.renderer.processData(this._batchTextures, {
                     //         transform: this._transformMatrices,
                     //         zoom: viewport.zoom,
@@ -927,59 +1069,44 @@
                     //         textureCoords: this._tileTexturePositions,
                     //         instanceCount: batchSize
                     //     });
-                    //     batchSize = 0;
                     // }
-                }
 
-                //batch rendering (artifacts)
-                // if (batchSize > 0) {
-                //     console.log("tiles outside", this._tileTexturePositions);
-                //
-                //     //todo possibly zero out unused, or limit drawing size
-                //     this.renderer.processData(this._batchTextures, {
-                //         transform: this._transformMatrices,
-                //         zoom: viewport.zoom,
-                //         pixelSize: pixelSize,
-                //         textureCoords: this._tileTexturePositions,
-                //         instanceCount: batchSize
-                //     });
-                // }
+                    /* pridane z webgldrawer */
+                    let useContext2dPipeline = (tiledImage.compositeOperation ||
+                        this.viewer.compositeOperation ||
+                        tiledImage._clip ||
+                        tiledImage._croppingPolygons ||
+                        tiledImage.debugMode
+                    );
+                    if (useContext2dPipeline) {
+                        // draw from the rendering canvas onto the output canvas, clipping/cropping if needed
+                        this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
+                        this._renderingCanvasHasImageData = false;
+                    } else {
+                        this._renderingCanvasHasImageData = true;
+                    }
 
-                /* pridane z webgldrawer */
-                let useContext2dPipeline = (tiledImage.compositeOperation ||
-                    this.viewer.compositeOperation ||
-                    tiledImage._clip ||
-                    tiledImage._croppingPolygons ||
-                    tiledImage.debugMode
-                );
-                if (useContext2dPipeline) {
-                    // draw from the rendering canvas onto the output canvas, clipping/cropping if needed
-                    this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
-                    this._renderingCanvasHasImageData = false;
-                } else {
-                    this._renderingCanvasHasImageData = true;
-                }
-
-                // Fire tiled-image-drawn event.
-                // TODO: the image data may not be on the output canvas yet!!
-                if( this.viewer ){
-                    /**
-                     * Raised when a tiled image is drawn to the canvas. Only valid
-                     * for webgl drawer.
-                     *
-                     * @event tiled-image-drawn
-                     * @memberof OpenSeadragon.Viewer
-                     * @type {object}
-                     * @property {OpenSeadragon.Viewer} eventSource - A reference to the Viewer which raised the event.
-                     * @property {OpenSeadragon.TiledImage} tiledImage - Which TiledImage is being drawn.
-                     * @property {Array} tiles - An array of Tile objects that were drawn.
-                     * @property {?Object} userData - Arbitrary subscriber-defined object.
-                     */
-                    this.viewer.raiseEvent( 'tiled-image-drawn', {
-                        tiledImage: tiledImage,
-                        tiles: tilesToDraw.map(info => info.tile),
-                    });
-                }
+                    // Fire tiled-image-drawn event.
+                    // TODO: the image data may not be on the output canvas yet!!
+                    if( this.viewer ){
+                        /**
+                         * Raised when a tiled image is drawn to the canvas. Only valid
+                         * for webgl drawer.
+                         *
+                         * @event tiled-image-drawn
+                         * @memberof OpenSeadragon.Viewer
+                         * @type {object}
+                         * @property {OpenSeadragon.Viewer} eventSource - A reference to the Viewer which raised the event.
+                         * @property {OpenSeadragon.TiledImage} tiledImage - Which TiledImage is being drawn.
+                         * @property {Array} tiles - An array of Tile objects that were drawn.
+                         * @property {?Object} userData - Arbitrary subscriber-defined object.
+                         */
+                        this.viewer.raiseEvent( 'tiled-image-drawn', {
+                            tiledImage: tiledImage,
+                            tiles: tilesToDraw.map(info => info.tile),
+                        });
+                    }
+                } //end of tiledImage.isTainted condition
             }); //end of for tiledImage of tiledImages
         }
 
@@ -1000,7 +1127,7 @@
 
                 //second pass first: check whether next render won't overflow batch size
                 //todo better access to the rendering context
-                const shader = this.renderer.specification(0).shaders.renderShader._renderContext;
+                const shader = this.renderer.getSpecification(0).shaders.renderShader._renderContext;
                 shader.setBlendMode(tiledImage.index === 0 ?
                     "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
                 // const willDraw = drawnItems + shader.dataReferences.length;
@@ -1112,6 +1239,30 @@
 
             let overallMatrix = viewMatrix.multiply(matrix);
             return overallMatrix.values;
+        }
+
+        /* Nove z merge-u */
+        _drawPlaceholder(tiledImage){
+            console.log('Volal sa _drawPlaceholder');
+            const bounds = tiledImage.getBounds(true);
+            const rect = this.viewportToDrawerRectangle(tiledImage.getBounds(true));
+            const context = this._outputContext;
+
+            let fillStyle;
+            if ( typeof tiledImage.placeholderFillStyle === "function" ) {
+                fillStyle = tiledImage.placeholderFillStyle(tiledImage, context);
+            }
+            else {
+                fillStyle = tiledImage.placeholderFillStyle;
+            }
+
+            this._offsetForRotation({degrees: this.viewer.viewport.getRotation(true)});
+            context.fillStyle = fillStyle;
+            context.translate(rect.x, rect.y);
+            context.rotate(Math.PI / 180 * bounds.degrees);
+            context.translate(-rect.x, -rect.y);
+            context.fillRect(rect.x, rect.y, rect.width, rect.height);
+            this._restoreRotationChanges();
         }
 
 

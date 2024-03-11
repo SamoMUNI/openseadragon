@@ -455,7 +455,9 @@ $.Viewer = function( options ) {
 
 
     this.drawer = null;
+    //console.log('Drawer Candidates ->', drawerCandidates);
     for (const drawerCandidate of drawerCandidates){
+        //console.log('drawercandidate=', drawerCandidate);
         let success = this.requestDrawer(drawerCandidate, {mainDrawer: true, redrawImmediately: false});
         if(success){
             break;
