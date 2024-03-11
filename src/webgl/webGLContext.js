@@ -16,7 +16,7 @@
     }
 
     /**
-     * @interface OpenSeadragon.WebGLModule.webglContext
+     * @interface OpenSeadragon.WebGLModule.WebGLImplementation
      * Interface for the visualisation rendering implementation which can run
      * on various GLSL versions
      */
@@ -26,7 +26,7 @@
          * Create a WebGL Renderer Context Implementation (version-dependent)
          * @param {WebGLModule} renderer
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl
-         * @param webglVersion
+         * @param {string} webglVersion "1.0" or "2.0"
          * @param {object} options
          * @param {GLuint} options.wrap  texture wrap parameteri
          * @param {GLuint} options.magFilter  texture filter parameteri
@@ -36,6 +36,7 @@
             //Set default blending to be MASK
             this.renderer = renderer;
             this.gl = gl;
+            this.webglVersion = webglVersion;
             this.options = options;
         }
 
@@ -43,10 +44,10 @@
          * Static context creation (to avoid class instantiation in case of missing support)
          * @param canvas
          * @param options desired options used in the canvas webgl context creation
-         * @return {WebGLRenderingContextBase} //todo base is not common to all, remove from docs
+         * @return {WebGLRenderingContext|WebGL2RenderingContext}
          */
         static create(canvas, options) {
-            throw("::create() must be implemented!");
+            throw("$.WebGLModule.WebGLImplementation::create() must be implemented!");
         }
 
         /**
@@ -65,7 +66,7 @@
         }
 
         getCompiled(program, name) {
-            throw("::getCompiled() must be implemented!");
+            throw("$.WebGLModule.WebGLImplementation::getCompiled() must be implemented!");
         }
 
         /**
@@ -81,7 +82,7 @@
          * @return {number} amount of usable shaders
          */
         compileSpecification(program, order, visualisation, options) {
-            throw("::compileSpecification() must be implemented!");
+            throw("$.WebGLModule.WebGLImplementation::compileSpecification() must be implemented!");
         }
 
         /**
@@ -90,7 +91,7 @@
          * @param {OpenSeadragon.WebGLModule.RenderingConfig?} currentConfig  JSON parameters used for this visualisation
          */
         programLoaded(program, currentConfig = null) {
-            throw("::programLoaded() must be implemented!");
+            throw("$.WebGLModule.WebGLImplementation::programLoaded() must be implemented!");
         }
 
         /**
@@ -106,11 +107,11 @@
          *   matrix or flat matrix array (instance drawing)
          */
         programUsed(program, currentConfig, texture, tileOpts = {}) {
-            throw("::programUsed() must be implemented!");
+            throw("$.WebGLModule.WebGLImplementation::programUsed() must be implemented!");
         }
 
         sampleTexture(index, vec2coords) {
-            throw("::sampleTexture() must be implemented!");
+            throw("$.WebGLModule.WebGLImplementation::sampleTexture() must be implemented!");
         }
 
         /**
@@ -123,7 +124,7 @@
          * @param {string} options.instanceCount number of instances to draw at once
          */
         compileFragmentShader(program, definition, execution, options) {
-            throw("::compileFragmentShader() must be implemented!");
+            throw("$.WebGLModule.WebGLImplementation::compileFragmentShader() must be implemented!");
         }
 
         /**
@@ -136,7 +137,7 @@
          * @param {string} options.instanceCount number of instances to draw at once
          */
         compileVertexShader(program, definition, execution, options) {
-            throw("::compileVertexShader() must be implemented!");
+            throw("$.WebGLModule.WebGLImplementation::compileVertexShader() must be implemented!");
         }
 
         /**
@@ -233,6 +234,7 @@
         }
     };
 
+
     $.WebGLModule.WebGL20 = class extends $.WebGLModule.WebGLImplementation {
         /**
          *
@@ -242,7 +244,7 @@
          */
         constructor(renderer, gl, options) {
             // console.log("konstruujem webgl20 implementaciu");
-            super(renderer, gl, "2.0", options);
+            super(renderer, gl, "2.0", options); // sets renderer, gl, webglVersion, options attributes
 
             // this.vao = gl.createVertexArray();
             this._bufferTexturePosition = gl.createBuffer();
@@ -273,30 +275,38 @@
             });
         }
 
-        getVersion() {
-            return "2.0";
-        }
-
-        /* Used to get WebGL2RenderingContext before instantiation of $.WebGLModule.WebGL20 */
+        /**
+         * Get WebGL2RenderingContext from "canvas" (static used to avoid class instantiation in case of missing support)
+         * @param canvas
+         * @param options desired options used in the canvas webgl context creation
+         * @return {WebGL2RenderingContext}
+         */
         static create(canvas, options) {
             /* a boolean value that indicates if the canvas contains an alpha buffer */
             options.alpha = true;
             /* a boolean value that indicates that the page compositor will assume the drawing buffer contains colors with pre-multiplied alpha */
             options.premultipliedAlpha = true;
-
             return canvas.getContext('webgl2', options);
         }
 
+        getVersion() {
+            return "2.0";
+        }
+
+        // tomuto nerozumiem celkom naco tu je, je volana z rendereru myslim
         getCompiled(program, name) {
             return program._osdOptions[name];
         }
 
-        /**
+        /** Dolezita flow funkcia, je volana pri buildeni specifikacie v rendereri. Prechadza cez shaders danej spec a robi podla nich podla mna glsl.
+         * Vola funkcie getFragmentShaderDefinition+Execution z shaderLayeru (to je ta komunikacia s konkretnymi shader instanciami uz).
+         * Vola funkcie compileVertex+FragmentShader z tadeto.
+         *
          * Tipujem ze bude mat vela byproductov, no idem nato asi :()
          * Generating HTML: html = getNewHtmlString() + html (reverse order append to show first the last drawn element (top))
          * @param {WebGLProgram} program webgl program corresponding to a specification
-         * @param {[string]} order array containing keys from specification.shaders
-         * @param {object} specification concrete specification from I guess this.renderer._programSpecifications
+         * @param {object} specification concrete specification from this.renderer._programSpecifications
+         * @param {[string]} specification.order array containing keys from specification.shaders
          * @param {object} options
          * @param {boolean} options.withHtml whether html should be also created (false if no UI controls are desired)
          * @param {string} options.textureType id of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
@@ -305,7 +315,7 @@
          * @returns {number} ??? asi vrati pocet pouzitelnych shaderov I guess
          */
         //todo try to implement on the global scope version-independntly
-        compileSpecification(program, order, specification, options) {
+        compileSpecification(program, specification, options) {
             // fragment shader's code placed outside of the main function
             var definition = "",
             // fragment shader's code placed inside the main function
@@ -316,7 +326,7 @@
                 dataCount = 0,
                 globalScopeCode = {};
 
-            order.forEach(shaderName => {
+            specification.order.forEach(shaderName => {
                 // layer = shaderObject
                 let layer = specification.shaders[shaderName];
                 layer.rendering = false;
@@ -601,7 +611,8 @@
             }
         }
 
-        /* toto robi dake webgl srandy, nastavuje dake buffre a tak ale co to ma ako znamenat fakt nevim */
+        /* toto robi dake webgl srandy, nastavuje dake buffre a tak ale co to ma ako znamenat fakt nevim
+            volane z forceswitchshader z rendereru alebo pri useProgram z rendereru */
         programLoaded(program, currentConfig = null) {
             if (!this.renderer.running) {
                 return;
