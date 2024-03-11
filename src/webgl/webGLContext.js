@@ -1,21 +1,11 @@
 // 700 riadkov
 
 (function($) {
-
-    $.WebGLModule.determineContext = function( version ) {
-        // console.log("zistujem kontext, asi takym sposobom ze zas vsetko hladam hah");
-        const namespace = OpenSeadragon.WebGLModule;
-        for (let property in namespace) {
-            const context = namespace[ property ],
-                proto = context.prototype;
-            if (proto && proto instanceof namespace.WebGLImplementation &&
-                $.isFunction( proto.getVersion ) && proto.getVersion.call( context ) === version) {
-                    return context;
-            }
-        }
-        return null;
-    };
-
+    /**
+     * Creates an array of size "n" that looks exactly like this -> [0, 1, 2, ... , n-1]
+     * @param {number} n
+     * @returns {[number]}
+     */
     function iterate(n) {
         let result = Array(n),
             it = 0;

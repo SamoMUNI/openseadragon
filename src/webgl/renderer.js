@@ -64,7 +64,7 @@
             console.log('Robim renderer, options=', incomingOptions);
 
             if (!this.constructor.idPattern.test(incomingOptions.uniqueId)) {
-                throw "$.WebGLModule: invalid ID! Id can contain only letters, numbers and underscore. ID: " + incomingOptions.uniqueId;
+                throw "$.WebGLModule::constructor: invalid ID! Id can contain only letters, numbers and underscore. ID: " + incomingOptions.uniqueId;
             }
 
             this.uniqueId = incomingOptions.uniqueId;
@@ -77,10 +77,10 @@
             this.resetCallback = incomingOptions.resetCallback;
             this.debug = incomingOptions.debug;
 
-            this.visualisationReady = (i, visualisation) => { }; // called once a visualisation is compiled and linked (might not happen)
-            this.running = false;
+            this.visualisationReady = (i, visualisation) => { }; // called once a visualisation is compiled and linked (might not happen) [spec + program + shaders ready I guess]
+            this.running = false; // correctly running using some valid specification
 
-            this._initialized = false;
+            this._initialized = false; // init was called
             this._program = -1; // number, index of WebGLProgram currently being used
             this._programs = {}; // {number: WebGLProgram}, WebGLPrograms indexed with numbers
             this._programSpecifications = []; // [object], array of specification objects, index of specification corresponds to index of WebGLProgram created from that specification in _programs
@@ -88,16 +88,16 @@
             this._dataSources = [];
             this._origDataSources = [];
 
-            this.defaultRenderingSpecification = null; // object = set in buildProgram
-            this.buildOptions = null; // object, set in buildProgram
+            this.defaultRenderingSpecification = null; // object = set in createSingePassShader
+            this.buildOptions = null; // object, set in createSingePassShader
 
             // set the webgl attributes
             this.gl = null; // WebGLRenderingContext|WebGL2RenderingContext
-            this.webglContext = null; // OpenSeadragon.WebGLModule.WebGLImplementation
+            this.webglContext = null; // $.WebGLModule.WebGLImplementation
             try {
                 const canvas = document.createElement("canvas");
 
-                const WebGLImplementation = this.determineContext(this.webglPreferredVersion);
+                const WebGLImplementation = this.constructor.determineContext(this.webglPreferredVersion);
 
                 const WebGLRenderingContext = WebGLImplementation && WebGLImplementation.create(canvas, this.canvasOptions);
 
@@ -107,16 +107,16 @@
                             return WebGLRenderingContext[this.webglContext[prop]] || WebGLRenderingContext[defaultValue];
                         }
                         return WebGLRenderingContext[defaultValue];
-                        };
-                        /**
-                         * @param {object} options
-                         * @param {string} options.wrap  texture wrap parameteri
-                         * @param {string} options.magFilter  texture filter parameteri
-                         * @param {string} options.minFilter  texture filter parameteri
-                         */
-                        const options = {
-                            wrap: readGlProp("wrap", "MIRRORED_REPEAT"),
-                            minFilter: readGlProp("minFilter", "LINEAR"),
+                    };
+                    /**
+                     * @param {object} options
+                     * @param {string} options.wrap  texture wrap parameteri
+                     * @param {string} options.magFilter  texture filter parameteri
+                     * @param {string} options.minFilter  texture filter parameteri
+                     */
+                    const options = {
+                        wrap: readGlProp("wrap", "MIRRORED_REPEAT"),
+                        minFilter: readGlProp("minFilter", "LINEAR"),
                         magFilter: readGlProp("magFilter", "LINEAR"),
                     };
 
@@ -143,7 +143,7 @@
          * @param {string} version webgl version, "1.0" or "2.0"
          * @returns {null|WebGLImplementation}
          */
-        determineContext(version) {
+        static determineContext(version) {
             console.log("zistujem kontext, asi takym sposobom ze zas vsetko hladam hah ale z CLASSSSYYYYYYYYYY");
             const namespace = OpenSeadragon.WebGLModule;
             for (let property in namespace) {
@@ -156,6 +156,94 @@
             }
             return null;
         }
+
+        /**
+         * Execute call on each visualization layer with no errors
+         * @param {object} spec current specification setup context
+         * @param {function} callback call to execute
+         * @param {function} onFail handle exception during execition
+         * @return {boolean} true if no exception occured
+         * @instance
+         * @memberOf WebGLModule
+         */
+        static eachValidShaderLayer(spec, callback,
+                                           onFail = (layer, e) => {
+                                               layer.error = e.message;
+                                               $.console.error(e);
+                                           }) {
+            let shaders = spec.shaders;
+            if (!shaders) {
+                return true;
+            }
+            let noError = true;
+            for (let key in shaders) {
+                let shader = shaders[key];
+
+                if (shader && !shader.error) {
+                    try {
+                        callback(shader);
+                    } catch (e) {
+                        if (!onFail) {
+                            throw e;
+                        }
+                        onFail(shader, e);
+                        noError = false;
+                    }
+                }
+            }
+            return noError;
+        }
+
+        /**
+         * Execute call on each _visible_ visualisation layer with no errors.
+         * // Execute call on each visualisation layer with rendering attribute set to true. ???
+         * Visible is subset of valid.
+         * @param {object} spec current specification setup context
+         * @param {function} callback call to execute
+         * @param {function} onFail handle exception during execution
+         * @return {boolean} true if no exception occured
+         * @instance
+         * @memberOf WebGLModule
+         */
+        static eachVisibleShaderLayer(spec, callback,
+                                                  onFail = (layer, e) => {
+                                                        layer.error = e.message;
+                                                        $.console.error(e);
+                                                  }) {
+
+            let shaders = spec.shaders;
+            if (!shaders) {
+                return true;
+            }
+            let noError = true;
+            for (let key in shaders) {
+                //rendering == true means no error
+                let shader = shaders[key];
+                if (shader && shader.rendering) {
+                    try {
+                        callback(shader);
+                    } catch (e) {
+                        if (!onFail) {
+                            throw e;
+                        }
+                        onFail(shader, e);
+                        noError = false;
+                    }
+                }
+            }
+            return noError;
+        }
+
+        /**
+         * Function to JSON.stringify replacer
+         * @param key key to the value
+         * @param value value to be exported
+         * @return {*} value if key passes exportable condition, undefined otherwise
+         */
+        static jsonReplacer(key, value) {
+            return key.startsWith("_") || ["eventSource"].includes(key) ? undefined : value;
+        }
+
 
         /**
          * Reset the engine to the initial state
@@ -174,6 +262,22 @@
             this._programSpecifications = [];
             this._dataSources = [];
             this._origDataSources = [];
+        }
+
+
+        /**
+         * Sets viewport dimensions.
+         * @instance
+         * @memberOf WebGLModule
+         */
+        setDimensions(x, y, width, height) {
+            //console.log('som v setDimensions, x,y,w,h:', x, y, width, height);
+            if (width === this.canvas.width && height === this.canvas.height) {
+                return;
+            }
+            this.canvas.width = width;
+            this.canvas.height = height;
+            this.gl.viewport(x, y, width, height);
         }
 
         /**
@@ -203,33 +307,35 @@
         }
 
         /**
-         * Sets viewport dimensions.
+         * Get a list of image pyramids used to compose the current active specification
          * @instance
          * @memberOf WebGLModule
          */
-        setDimensions(x, y, width, height) {
-            console.log('som v setDimensions, x,y,w,h:', x, y, width, height);
-            if (width === this.width && height === this.height) {
-                return;
-            }
-
-            this.width = width;
-            this.height = height;
-            this.gl.canvas.width = width;
-            this.gl.canvas.height = height;
-            this.gl.viewport(x, y, width, height);
+        getSources() {
+            return this._dataSources;
         }
 
-        /**
+         /**
+         * Vyznamu tejto funkcii nechapem
          * from webgl20 gets webglProgram._osdOptions[name]
          */
-        getCompiled(name, programIndex = this._program) {
+         getCompiled(name, programIndex = this._program) {
             return this.webglContext.getCompiled(this._programs[programIndex], name);
+        }
+
+
+        /* Specification functions ------------------------------------------------------------------------------------------------------------------ */
+        getSpecificationsCount() {
+            return this._programSpecifications.length;
+        }
+
+        getSpecification(index) {
+            return this._programSpecifications[index];
         }
 
         /**
          * Set program shaders. Vertex shader is set by default a square.
-         * @param {RenderingConfig} specifications - objects that define the what to render (see Readme)
+         * @param {[RenderingConfig]} specifications - objects that define the what to render (see Readme)
          * @return {boolean} true if loaded successfully
          * @instance
          * @memberOf OpenSeadragon.WebGLModule
@@ -250,11 +356,10 @@
          * For every shader specified defines params parameter if not already defined.
          */
         _parseSpec(specification) {
-            // ZBYTOCNE? - prebrat s Jirkom
-            // if (!specification.shaders) {
-            //     $.console.warn("Invalid visualization: no shaders defined", specification);
-            //     return undefined;
-            // }
+            if (!specification.shaders) {
+                $.console.warn("Invalid visualization: no shaders defined", specification);
+                return undefined;
+            }
 
             let count = 0;
             for (let shaderName in specification.shaders) {
@@ -273,23 +378,94 @@
         }
 
         setRenderingSpecification(i, spec) {
-            if (!spec) {
-                const program = this._programs[i];
-                if (program) {
-                    this._unloadProgram();
-                }
-                delete this._programs[i];
-                delete this._programSpecifications[i];
-                this.getCurrentProgramIndex();
+            const parsed = this._parseSpec(spec);
+            if (parsed) {
+                this._programSpecifications[i] = parsed;
                 return true;
-            } else {
-                const parsed = this._parseSpec(spec);
-                if (parsed) {
-                    this._programSpecifications[i] = parsed;
-                    return true;
-                }
             }
+
+            // not correct specification
             return false;
+        }
+
+        deleteRenderingSpecification(i) {
+            delete this._programSpecifications[i]; // sets _programSpecifications[i] to undefined
+        }
+
+
+        /* Program functions ------------------------------------------------------------------------------------------------------------------ */
+        /**
+         * Get current program index
+         * @return {number} program index
+         */
+        getCurrentProgramIndex() {
+            // if (this._program < 0 || this._program >= this._programSpecifications.length) {
+            //     this._program = 0;
+            // } OLD TOTO SOM VYKOMENTOVAL NEVIEM PRECO TO TU JE
+            return this._program;
+        }
+
+        deleteProgram(i) {
+            this._unloadProgram(this._programs[i]);
+            delete this._programs[i]; // deletes i:value pair from _programs
+        }
+
+        /**
+         * Detach fragment + vertex shader from <program>
+         * @param {WebGLProgram} program
+         */
+        _unloadProgram(program) {
+            if (program) {
+                //must remove before attaching new
+                this._detachShader(program, "VERTEX_SHADER");
+                this._detachShader(program, "FRAGMENT_SHADER");
+            }
+        }
+
+        /** Called only from _unloadProgram
+         * Deletes <shaderType> shader from <program>
+         * @param {WebGLProgram} program
+         * @param {string} shaderType
+         */
+        _detachShader(program, shaderType) {
+            let shader = program[shaderType];
+            if (shader) {
+                this.gl.detachShader(program, shader);
+                this.gl.deleteShader(shader);
+                program[shaderType] = null;
+            }
+        }
+
+        /**
+         * Switch to program at index: this is the index (order) in which
+         * setShaders(...) was called. If you want to switch to shader that
+         * has been set with second setShaders(...) call, pass i=1.
+         * @param {Number} i program index or null if you wish to re-initialize the current one
+         * @instance
+         * @memberOf OpenSeadragon.WebGLModule
+         */
+        useProgram(i) {
+            if (!this._initialized) {
+                $.console.warn("$.WebGLModule::useProgram(): renderer not initialized.");
+                return;
+            }
+            if (this._program === i) {
+                return;
+            }
+            this._forceSwitchProgram(i);
+        }
+
+        /**
+         * Use custom delivered WebGLProgram not originating from this._programs
+         * @param {WebGLProgram} program to use
+         */
+        useCustomProgram(program) {
+            if (!this._initialized) {
+                $.console.warn("$.WebGLModule::useCustomProgram(): renderer not initialized.");
+                return;
+            }
+            this._program = -1;
+            this.webglContext.programLoaded(program, null);
         }
 
         /**
@@ -299,16 +475,15 @@
          * @param {boolean} force ???
          * @param {object} options
          * @param {boolean} options.withHtml whether html should be also created (false if no UI controls are desired)
-         * @param {string} options.textureType id of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
+         * @param {string} options.textureType type of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
          * @param {string} options.instanceCount number of instances to draw at once
          * @param {boolean} options.debug draw debugging info
-         * @return {boolean}
+         * @return {boolean} true on success
          */
         buildProgram(i, order, force, options) {
             let specification = this._programSpecifications[i];
-
             if (!specification) {
-                $.console.error("Invalid rendering program target!", i);
+                $.console.error("$.WebGLModule::buildProgram: Invalid rendering specification index", i, "!");
                 return false;
             }
 
@@ -316,19 +491,18 @@
                 specification.order = order;
             }
 
-
+            /* program moze byt undefined */
             let program = this._programs && this._programs[i];
-            // force || missing vertex shader in program
+            // force or program exists but has missing vertex shader [do not know how this could happen tho]
             force = force || (program && !program['VERTEX_SHADER']);
-            console.log("Ak je true tak buildujem, ak false tak nie -> ", force);
             if (force) {
-                // detach old vertex + fragment shader
+                // detach old vertex + fragment shader (mozes poslat undefined, nic nespravi zle)
                 this._unloadProgram(program);
-                // ???
+                // BIG THING ! Create shaderObjects and their instantions, create glsl code of shaders which communicated with shaderObjects's instantions
                 this._specificationToProgram(specification, i, options);
 
                 if (i === this._program) {
-                    this._forceSwitchShader(this._program);
+                    this._forceSwitchProgram(this._program);
                 }
                 return true;
             }
@@ -345,81 +519,22 @@
         rebuildCurrentProgram(order = undefined) {
             const program = this._programs[this._program];
             if (this.buildProgram(this._program, order, true, program && program._osdOptions)) {
-                this._forceSwitchShader(this._program);
+                this._forceSwitchProgram(this._program);
             }
         }
 
-        /**
-         * Get currently used specification
-         * @return {object} current specification
-         * @instance
-         * @memberOf OpenSeadragon.WebGLModule
-         */
-        specification(index) {
-            return this._programSpecifications[index];
-        }
-
-        /**
-         * Get currently used specification ilayer.params,ndex
-         * @return {number} index of the current specification
-         * @instance
-         * @memberOf OpenSeadragon.WebGLModule
-         */
-        currentSpecificationIndex() {
-            return this._program;
-        }
-
-        /**
-         * Switch to program at index: this is the index (order) in which
-         * setShaders(...) was called. If you want to switch to shader that
-         * has been set with second setShaders(...) call, pass i=1.
-         * @param {Number} i program index or null if you wish to re-initialize the current one
-         * @instance
-         * @memberOf OpenSeadragon.WebGLModule
-         */
-        /* zly warning asi mal byt nazov funkcie */
-        useProgram(i) {
-            if (!this._initialized) {
-                $.console.warn("$.WebGLModule::useProgram(): renderer not initialized.");
-                return;
-            }
-
-            if (this._program === i) {
-                return;
-            }
-            this._forceSwitchShader(i);
-        }
-
-        useCustomProgram(program) {
-            this._program = -1;
-            this.webglContext.programLoaded(program, null);
-        }
-
-        getSpecificationsCount() {
-            return this._programSpecifications.length;
-        }
-
-        /**
-         * Get a list of image pyramids used to compose the current active specification
-         * @instance
-         * @memberOf WebGLModule
-         */
-        getSources() {
-            return this._dataSources;
-        }
 
         /**
          * Set data srouces
          */
-        /* naco je dane ze sources || [], malo by byt jasne ze neposlem undefined premennu */
-        /* nikde nieje volana */
         setSources(sources) {
             if (!this._initialized) {
                 $.console.warn("$.WebGLModule::setSources(): renderer not initialized.");
                 return;
             }
             this._origDataSources = sources || [];
-        }
+        } // unused
+
 
         /** DRAWING !
          * Renders data using WebGL
@@ -443,33 +558,16 @@
                 $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             } else {
                 this.webglContext.programUsed(this.program, spec, texture, tileOpts);
-                // if (this.debug) {
-                //     //todo
-                //     this._renderDebugIO(data, result);
-                // }
             }
         }
-
+        // CUSTOM program I guess DRAWING !
         processCustomData(texture, tileOpts) {
             this.webglContext.programUsed(this.program, null, texture, tileOpts);
-            // if (this.debug) {
-            //     //todo
-            //     this._renderDebugIO(data, result);
-            // }
-        }
-
-        /**
-         * Clear the output canvas
-         */
-        clear() {
-            //todo: necessary?
-            this.gl.clearColor(0, 0, 0, 0);
-            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         }
 
         /**
          * Whether the webgl module renders UI
-         * @return {boolean|boolean}
+         * @return {boolean}
          * @instance
          * @memberOf WebGLModule
          */
@@ -477,115 +575,17 @@
             return typeof this.htmlControlsId === "string" && this.htmlControlsId.length > 0;
         }
 
-        /**
-         * Execute call on each visualization layer with no errors
-         * @param {object} vis current specification setup context
-         * @param {function} callback call to execute
-         * @param {function} onFail handle exception during execition
-         * @return {boolean} true if no exception occured
-         * @instance
-         * @memberOf WebGLModule
-         */
-        static eachValidShaderLayer(vis, callback,
-                                           onFail = (layer, e) => {
-                                               layer.error = e.message;
-                                               $.console.error(e);
-                                           }) {
-            let shaders = vis.shaders;
-            if (!shaders) {
-                return true;
-            }
-            let noError = true;
-            for (let key in shaders) {
-                let shader = shaders[key];
-
-                if (shader && !shader.error) {
-                    try {
-                        callback(shader);
-                    } catch (e) {
-                        if (!onFail) {
-                            throw e;
-                        }
-                        onFail(shader, e);
-                        noError = false;
-                    }
-                }
-            }
-            return noError;
-        }
-
-        /**
-         * Execute call on each _visible_ specification layer with no errors.
-         * Visible is subset of valid.
-         * @param {object} vis current specification setup context
-         * @param {function} callback call to execute
-         * @param {function} onFail handle exception during execition
-         * @return {boolean} true if no exception occured
-         * @instance
-         * @memberOf WebGLModule
-         */
-        static eachVisibleShaderLayer(vis, callback,
-                                                  onFail = (layer, e) => {
-                                                        layer.error = e.message;
-                                                        $.console.error(e);
-                                                  }) {
-
-            let shaders = vis.shaders;
-            if (!shaders) {
-                return true;
-            }
-            let noError = true;
-            for (let key in shaders) {
-                //rendering == true means no error
-                let shader = shaders[key];
-                if (shader && shader.rendering) {
-                    try {
-                        callback(shader);
-                    } catch (e) {
-                        if (!onFail) {
-                            throw e;
-                        }
-                        onFail(shader, e);
-                        noError = false;
-                    }
-                }
-            }
-            return noError;
-        }
-
         /////////////////////////////////////////////////////////////////////////////////////
         //// YOU PROBABLY WANT TO READ FUNCTIONS BELOW SO YOU KNOW HOW TO SET UP YOUR SHADERS
         //// BUT YOU SHOULD NOT CALL THEM DIRECTLY
         /////////////////////////////////////////////////////////////////////////////////////
 
-        /**
-         * Get current program, reset if invalid
-         * @return {number} program index
-         */
-        /* preco je tu tato kontrola? */
-        getCurrentProgramIndex() {
-            if (this._program < 0 || this._program >= this._programSpecifications.length) {
-                this._program = 0;
-            }
-            return this._program;
-        }
-
-        /**
-         * Function to JSON.stringify replacer
-         * @param key key to the value
-         * @param value value to be exported
-         * @return {*} value if key passes exportable condition, undefined otherwise
-         */
-        static jsonReplacer(key, value) {
-            return key.startsWith("_") || ["eventSource"].includes(key) ? undefined : value;
-        }
-
-        /**
-         * Initialization. It is separated from preparation as this actually initiates the rendering,
+        /** Called during Drawer's constructor and from this._loadScript
+         * Initialization. It is separated from preparation (create Single pass shader) as this actually initiates the rendering,
          * sometimes this can happen only when other things are ready.
-         * @param {int} width width of the first tile going to be drawn
-         * @param {int} height height of the first tile going to be drawn
-         * @param firstProgram
+         * @param {number} width width of the first tile going to be drawn
+         * @param {number} height height of the first tile going to be drawn
+         * @param {number} firstProgram
          */
         init(width = 1, height = 1, firstProgram = 0) {
             console.log('V inite, width:height =', width, height);
@@ -599,11 +599,11 @@
                  * @event fatal-error
                  */
                 this.raiseEvent('fatal-error', {message: "No specification specified!",
-                    details: "renderer.js::init() called with no specification set."});
+                    details: "$.WebGLModule::init: Called with no specification set."});
                 return;
             }
             this._program = firstProgram;
-            this.getCurrentProgramIndex(); //validates index
+            this.getCurrentProgramIndex();
 
             this._initialized = true;
             this.setDimensions(0, 0, width, height); // pridal som dve nuly na zaciatok
@@ -612,49 +612,39 @@
             this.gl.enable(this.gl.CULL_FACE);
             this.gl.cullFace(this.gl.FRONT);
 
-            this.running = true;
+            //this.running = true; //podla mna to tu nema byt, _forceSwitchProgram nastavi spravne
 
-            this._forceSwitchShader(null);
+            this._forceSwitchProgram(this._program);
             this.ready();
-        }
-
-        setDataBlendingEnabled(enabled) {
-            if (enabled) {
-                // this.gl.enable(this.gl.BLEND);
-                // this.gl.blendEquation(this.gl.FUNC_ADD);
-                // this.gl.blendFuncSeparate(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA, this.gl.ONE, this.gl.ONE);
-                this.gl.enable(this.gl.BLEND);
-                this.gl.blendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
-            } else {
-                this.gl.disable(this.gl.BLEND);
-            }
         }
 
         //////////////////////////////////////////////////////////////////////////////
         ///////////// YOU PROBABLY DON'T WANT TO READ/CHANGE FUNCTIONS BELOW
         //////////////////////////////////////////////////////////////////////////////
 
-        /**
-         * Forward glLoaded event to the active layer
+        /** Called only from webGLContext
+         * Forward glLoaded event from webglContext to the all active shaders of current specification
          * @param gl
          * @param program
-         * @param vis
+         * @param spec
          */
-        glLoaded(gl, program, vis) {
-            $.WebGLModule.eachVisibleShaderLayer(vis, layer => layer._renderContext.glLoaded(program, gl));
+        glLoaded(gl, program, spec) {
+            $.WebGLModule.eachVisibleShaderLayer(spec, layer => layer._renderContext.glLoaded(program, gl));
         }
 
-        /**
-         * Forward glDrawing event to the active layer
+        /** Called only from webGLContext
+         * Forward glDrawing event from webglContext to the all active shaders of current specification
          * @param gl
          * @param program
-         * @param vis
+         * @param spec
          * @param bounds
          */
-        glDrawing(gl, program, vis, bounds) {
-            $.WebGLModule.eachVisibleShaderLayer(vis, layer => layer._renderContext.glDrawing(program, gl));
+        glDrawing(gl, program, spec, bounds) {
+            $.WebGLModule.eachVisibleShaderLayer(spec, layer => layer._renderContext.glDrawing(program, gl));
         }
 
+
+        /* _forceSwitchProgram functions ------------------------------------------------------------------------------------------------------------------ */
         /**
          * Force switch shader (program), will reset even if the specified
          * program is currently active, good if you need 'gl-loaded' to be
@@ -663,80 +653,73 @@
          * @param _reset
          * @private
          */
-        _forceSwitchShader(i, _reset = true) {
-            if (isNaN(i) || i === null || i === undefined) {
-                i = this._program;
-            }
-
-            let target = this._programSpecifications[i];
-            if (!target) {
-                $.console.error("Invalid rendering target index!", i);
+        _forceSwitchProgram(i, _reset = true) {
+            const specification = this._programSpecifications[i];
+            if (!specification) {
+                $.console.error(`$.WebGLModule::_forceSwitchProgram: Invalid rendering specification index ${i}!`);
                 return;
             }
 
             const program = this._programs[i];
             if (!program) {
-                this._specificationToProgram(target, i);
+                this._specificationToProgram(specification, i);
             } else if (i !== this._program) {
-                this._updateRequiredDataSources(target);
+                this._updateRequiredDataSources(specification);
             }
 
             this._program = i;
-            if (target.error) {
-                if (this.supportsHtmlControls()) {
-                    this._loadHtml(i, program);
-                }
-                this._loadScript(i);
+            if (specification.error) {
                 this.running = false;
-                if (this._programSpecifications.length < 2) {
+                if (this.supportsHtmlControls()) {
+                    this._loadHtml(program); //zrusil som prvy parameter i, bol to bug podla mna
+                }
+
+                this._loadScript(i); //checks whether all shaderObjects are initialized correctly
+                if (this._programSpecifications.length <= 1) {
                     /**
                      * @event fatal-error
                      */
-                    this.raiseEvent('fatal-error', {message: "The only rendering specification left is invalid!", target: target});
+                    this.raiseEvent('fatal-error', {message: "The only rendering specification left is invalid!", specification: specification});
                 } else {
                     /**
                      * @event error
                      */
-                    this.raiseEvent('error', {message: "Currently chosen rendering specification is not valid!", target: target});
+                    this.raiseEvent('error', {message: "Currently chosen rendering specification is invalid!", specification: specification});
                 }
             } else {
                 this.running = true;
                 if (this.supportsHtmlControls()) {
                     this._loadHtml(program);
                 }
-                this._loadDebugInfo();
-                if (!this._loadScript(i)) {
+
+                // this._loadDebugInfo(); este nerozumiem tomuto tak som vykomentoval
+                if (!this._loadScript(i)) { //if not all shaders are valid
                     if (!_reset) {
                         throw "Could not build visualization";
                     }
-                    this._forceSwitchShader(i, false); //force reset in errors
+                    this._forceSwitchProgram(i, false); //force reset in errors
                     return;
                 }
-                this.webglContext.programLoaded(program, target);
+                this.webglContext.programLoaded(program, specification);
             }
         }
 
-        /**
-         * Detach fragment + vertex shader from <program>
-         * @param {WebGLProgram} program
-         */
-        _unloadProgram(program) {
-            if (program) {
-                //must remove before attaching new
-                this._detachShader(program, "VERTEX_SHADER");
-                this._detachShader(program, "FRAGMENT_SHADER");
-            }
-        }
-
+        // called only from _forceSwitchProgram
         _loadHtml(program) {
             let htmlControls = document.getElementById(this.htmlControlsId);
             htmlControls.innerHTML = this.webglContext.getCompiled(program, "html") || "";
         }
 
-        _loadScript(visId) {
-            return $.WebGLModule.eachValidShaderLayer(this._programSpecifications[visId], layer => layer._renderContext.init());
+        /** Called only from _forceSwitchProgram
+         * Check whether all shaderObjects of specification with specId are correctly initialized.
+         * @param {number} specId id of specification
+         * @returns
+         */
+        _loadScript(specId) {
+            return $.WebGLModule.eachValidShaderLayer(this._programSpecifications[specId], layer => layer._renderContext.init());
         }
 
+        // called only from _loadDebugInfo
         _getDebugInfoPanel() {
             return `<div id="test-inner-${this.uniqueId}-webgl">
     <b>WebGL Processing I/O (debug mode)</b>
@@ -745,11 +728,14 @@
     Output:<br><div style="border: 1px solid;display: inline-block; overflow: auto;" id="test-${this.uniqueId}-webgl-output">No output.</div>`;
         }
 
+        // called only from _forceSwitchProgram
         _loadDebugInfo() {
-            console.log('renderer:_loadDebugInfo');
+            console.log('renderer::_loadDebugInfo');
             if (!this.debug) {
+                console.log('renderer::_loadDebugInfo: neni zapaty debug, uz aj sa vraciam hihi');
                 return;
             }
+            console.log('enderer::_loadDebugInfo: je zapaty debug asi mhgmmmm');
             if (!this.supportsHtmlControls()) {
                 console.warn(`WebGL Renderer ${this.uniqueId} does not support visual rendering without enabled HTML control!`);
                 return;
@@ -766,31 +752,9 @@
             }
         }
 
-        _renderDebugIO(inputData, outputData) {
-            if (!this.supportsHtmlControls()) {
-                return;
-            }
-            let input = document.getElementById(`test-${this.uniqueId}-webgl-input`);
-            let output = document.getElementById(`test-${this.uniqueId}-webgl-output`);
 
-            input.innerHTML = "";
-            input.append($.WebGLModule.Loaders.dataAsHtmlElement(inputData));
-
-            if (outputData) {
-                output.innerHTML = "";
-                if (!this._ocanvas) {
-                    this._ocanvas = document.createElement("canvas");
-                }
-                this._ocanvas.width = outputData.width;
-                this._ocanvas.height = outputData.height;
-                let octx = this._ocanvas.getContext('2d');
-                octx.drawImage(outputData, 0, 0);
-                output.append(this._ocanvas);
-            } else {
-                output.innerHTML = "No output!";
-            }
-        }
-
+        /* Important functions ------------------------------------------------------------------------------------------------------------------ */
+        // called only from _buildSpecification
         _buildFailed(specification, error) {
             $.console.error(error);
             specification.error = "Failed to compose this specification.";
@@ -798,7 +762,8 @@
         }
 
         /**
-         *
+         * Little correctness check, important is:
+         * compileSpec call to webGLContext, webglcontext iterates through shaders and communicates with their instantions (shaderObject._renderContext) I guess.
          * @param {WebGLProgram} program webgl program corresponding to a specification
          * @param {object} specification concrete specification from this._programSpecifications
          * @param {object} options
@@ -809,10 +774,13 @@
          */
         _buildSpecification(program, specification, options) {
             try {
-                // this.htmlControlsId is an not empty string
+                // this.htmlControlsId is an not an empty string
                 options.withHtml = this.supportsHtmlControls();
-                const usableShaderCount = this.webglContext.compileSpecification(
-                    program, specification.order, specification, options);
+                const usableShaderCount = this.webglContext.compileSpecification(program, specification, options);
+
+                //preventive
+                delete specification.error;
+                delete specification.desc;
 
                 if (usableShaderCount < 1) {
                     this._buildFailed(specification, `Empty specification: no valid specification has been specified.
@@ -820,35 +788,19 @@
     <br><b>Dynamic shader data:</b></br><code>${JSON.stringify(specification.data)}</code>`);
                     return;
                 }
-                //preventive
-                delete specification.error;
-                delete specification.desc;
             } catch (error) {
                 this._buildFailed(specification, error);
             }
         }
 
         /**
-         * Deletes <shaderType> shader from <program>
-         * @param {WebGLProgram} program
-         * @param {string} shaderType
-         */
-        _detachShader(program, shaderType) {
-            let shader = program[shaderType];
-            if (shader) {
-                this.gl.detachShader(program, shader);
-                this.gl.deleteShader(shader);
-                program[shaderType] = null;
-            }
-        }
-
-        /**
-         *
+         * Iterate through specification's shaderObjects and create their corresponding instantions.
+         * BuildSpec call begins creation of glsl code, webglcontext iterates through shaders and communicates with their instantions I guess.
          * @param {Object} spec specification to be used
          * @param {number} idx index of specification in this._programSpecifications
          * @param {object} options
          * @param {boolean} options.withHtml whether html should be also created (false if no UI controls are desired)
-         * @param {string} options.textureType id of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
+         * @param {string} options.textureType type of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
          * @param {string} options.instanceCount number of instances to draw at once
          * @param {boolean} options.debug draw debugging info
          * @returns
@@ -856,7 +808,7 @@
         _specificationToProgram(spec, idx, options) {
             // nastavi _dataSources na [__gdnu__ * pocet datareferenci v spec.shaders.ALL.datareferences]
             this._updateRequiredDataSources(spec);
-            let gl = this.gl;
+            const gl = this.gl;
             let program;
 
             let index = -1;
@@ -870,33 +822,51 @@
                     // invalid shader or type === "none", which means skip this layer
                     if (!shaderObject || shaderObject.type === "none") {
                         console.error(`Invalid shader object on index ${index} in specification:`, spec);
-                            continue;
-                        }
+                        continue;
+                    }
                     // create shader
                     let ShaderFactoryClass = $.WebGLModule.ShaderMediator.getClass(shaderObject.type); // get <shaderObject.type>(eg.: identity) shader class (extends OpenSeadragon.WebGLModule.ShaderLayer)
+                    if (!ShaderFactoryClass) {
+                        shaderObject.error = "Unknown shaderObject type.";
+                        shaderObject.desc = `The shaderObject type '${shaderObject.type}' has no associated factory.`;
+                        /* shaderObject.name je undefined, asi si chcel ze ako ja shaderObject nazvany v spec.shaders, ale neviem ako to ziskat */
+                        console.warn("Skipping shaderObject " + shaderObject.name);
+                        continue;
+                    }
                     this._initializeShaderFactory(spec, ShaderFactoryClass, shaderObject, index);
                     }
+
             } else { // program was already built
                 program = this._programs[idx];
                 for (let key in spec.shaders) {
                     index++;
                     let shaderObject = spec.shaders[key];
+
                     // invalid shader or type === "none", which means skip this layer
                     if (!shaderObject || shaderObject.type === "none") {
                         console.error(`Invalid shader object on index ${index} in specification:`, spec);
-                            continue;
-                        }
+                        continue;
+                    }
+
                     // shader is already built correctly
                     if (!shaderObject.error &&
                         shaderObject._renderContext &&
                         shaderObject._renderContext.constructor.type() === shaderObject.type &&
                         shaderObject._index === index) {
-                            continue;
-                        }
+                        continue;
+                    }
+
                     // recreate shader
                     delete shaderObject.error;
                     delete shaderObject.desc;
                     let ShaderFactoryClass = $.WebGLModule.ShaderMediator.getClass(shaderObject.type);
+                    if (!ShaderFactoryClass) {
+                        shaderObject.error = "Unknown shaderObject type.";
+                        shaderObject.desc = `The shaderObject type '${shaderObject.type}' has no associated factory.`;
+                        /* shaderObject.name je undefined, asi si chcel ze ako ja shaderObject nazvany v spec.shaders, ale neviem ako to ziskat */
+                        console.warn("Skipping shaderObject " + shaderObject.name);
+                        continue;
+                    }
                     this._initializeShaderFactory(spec, ShaderFactoryClass, shaderObject, index);
                 }
             }
@@ -907,25 +877,19 @@
             }
 
             this._buildSpecification(program, spec, options);
-            this.visualisationReady(idx, spec); // useless now
+            this.visualisationReady(idx, spec); // useless now, probably name should be something like specificationReady
             return idx;
         }
 
         /**
-         * Set shaderObject properties
-         * @param {Object} spec specification to be used
+         * Final initialization of shaderObject.
+         * Set properties, put concrete (plainShader) implementation into _renderContext property
+         * @param {Object} spec specification containing this shader
          * @param {function} ShaderFactoryClass shader class, extends OpenSeadragon.WebGLModule.ShaderLayer (asi zatial plainShader)
          * @param {Object} shaderObject concrete shader object definition from spec.shaders
          * @param {number} idx index of shaderObject in spec.shaders
          */
         _initializeShaderFactory(spec, ShaderFactoryClass, shaderObject, idx) {
-            if (!ShaderFactoryClass) {
-                shaderObject.error = "Unknown shaderObject type.";
-                shaderObject.desc = `The shaderObject type '${shaderObject.type}' has no associated factory.`;
-                /* shaderObject.name je undefined, asi si chcel ze ako ja shaderObject nazvany v spec.shaders, ale neviem ako to ziskat */
-                console.warn("Skipping shaderObject " + shaderObject.name);
-                return;
-            }
             const _this = this;
             shaderObject._index = idx;
             shaderObject.visible = shaderObject.visible === undefined ? true : shaderObject.visible;
@@ -935,7 +899,7 @@
             shaderObject._renderContext = new ShaderFactoryClass(`${this.uniqueId}${idx}`, {
                 // ma odkaz sam na seba vyssie
                 shaderObject: shaderObject,
-                webgl: this.webglContext,
+                webglContext: this.webglContext,
                 interactive: this.supportsHtmlControls(),
                 // dava sa UI controls nech to volaju ked sa zmeni ich hodnota (triggeruje prekreslenie viewportu)
                 invalidate: this.resetCallback,
@@ -953,10 +917,11 @@
             /* momentalne shaderObject.params = {}, shaderObject.dataReferences = [0] */
             shaderObject._renderContext.construct(shaderObject.params || {}, shaderObject.dataReferences);
             if (!shaderObject._renderContext.initialized()) {
-                console.error(`Invalid shader ${ShaderFactoryClass.name()}! Construct must call super implementation!`);
+                console.error(`Invalid shader -> ${ShaderFactoryClass.name()}! Construct must call super implementation!`);
             }
-            console.log('Shader hotofson, zacina dalsia era !', shaderObject._renderContext);
+            console.log('Shader implementacia hotofson, zacina dalsia era !', shaderObject._renderContext);
         }
+
 
         /**
          * Works on _origDataSources and _dataSources variables.
@@ -993,7 +958,8 @@
             }
         }
 
-        /* PRESUNUTE SEM Z DRAWERu */
+
+        /* Called only from drawer's functions ------------------------------------------------------------------------------------------------------------------ */
         /* Called only from drawer's constructor */
         //single pass shaders are built-in shaders compiled from JSON
         _createSinglePassShader(textureType) {
@@ -1023,8 +989,19 @@
             this.buildProgram(index, null, true, this.buildOptions);
         }
 
-    };
+        setDataBlendingEnabled(enabled) {
+            if (enabled) {
+                // this.gl.enable(this.gl.BLEND);
+                // this.gl.blendEquation(this.gl.FUNC_ADD);
+                // this.gl.blendFuncSeparate(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA, this.gl.ONE, this.gl.ONE);
+                this.gl.enable(this.gl.BLEND);
+                this.gl.blendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
+            } else {
+                this.gl.disable(this.gl.BLEND);
+            }
+        }
 
+    };
     /**
      * ID pattern allowed for module, ID's are used in GLSL
      * to distinguish uniquely between static generated code parts
