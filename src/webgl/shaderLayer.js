@@ -144,7 +144,7 @@
          * @param {string} id unique ID among all webgl instances and shaders
          * @param {object} privateOptions options that should not be touched, necessary for linking the layer to the core
          * @param {object} privateOptions.shaderObject concrete shader object definition from spec.shaders
-         * @param {WebGL2RenderingContext} privateOptions.webgl
+         * @param {WebGLImplementation} privateOptions.webglContext plainShader
          * @param {boolean} privateOptions.interactive
          * @param {function} privateOptions.invalidate
          * @param {function} privateOptions.rebuild
@@ -154,30 +154,30 @@
             // "rendererId" + <index of shader in spec.shaders>
             this.uid = id;
             if (!$.WebGLModule.idPattern.test(this.uid)) {
-                console.error("Invalid ID for the shader: id must match to the pattern", $.WebGLModule.idPattern, id);
+                console.error(`Invalid ID for the shader: ${id} does not match to the pattern`, $.WebGLModule.idPattern);
             }
 
             //todo custom control names share namespace with this API - unique names or controls in seperate object?
-            this.webglContext = privateOptions.webgl;
+
+            this.webglContext = privateOptions.webglContext;
+            this.__shaderObject = privateOptions.shaderObject;
+            if (!this.__shaderObject.cache) {
+                this.__shaderObject.cache = {};
+            }
+
+            this._hasInteractiveControls = privateOptions.interactive;
             this.invalidate = privateOptions.invalidate;
-            //use with care... todo document
             this._rebuild = privateOptions.rebuild;
             this._refetch = privateOptions.refetch;
-            this._hasInteractiveControls = privateOptions.interactive;
-
-            this.__visualisationLayer = privateOptions.shaderObject;
-            if (!this.__visualisationLayer.cache) {
-                this.__visualisationLayer.cache = {};
-            }
         }
 
         /**
          * Manual constructor, must call super.construct(...) if overridden, but unlike
          * constructor the call can be adjusted (e.g. adjust option values)
-         * @param {object} options this.__visualisationLayer.params
+         * @param {object} options this.__shaderObject.params
          * @param {string} options.use_channel[X]: "r", "g" or "b" channel to sample index X, default "r"
          * @param {string} options.use_mode: blending mode - default alpha ("show"), custom blending ("mask") and clipping mask blend ("mask_clip")
-         * @param {[number]} dataReferences indexes of data being requested for this shader (this.__visualisationLayer.dataReferences)
+         * @param {[number]} dataReferences indexes of data being requested for this shader (this.__shaderObject.dataReferences)
          */
         /* options = {}, dataReferences = [0] */
         construct(options, dataReferences) {
@@ -379,7 +379,7 @@
          *                  the reference is not valid
          */
         sampleChannel(textureCoords, otherDataIndex = 0, raw = false) {
-            let refs = this.__visualisationLayer.dataReferences;
+            let refs = this.__shaderObject.dataReferences;
             /* Array [ "rgba" ] */
             const chan = this.__channels[otherDataIndex];
 
@@ -404,7 +404,7 @@
          * @return {number} number of textures available
          */
         dataSourcesCount() {
-            return this.__visualisationLayer.dataReferences.length;
+            return this.__shaderObject.dataReferences.length;
         }
 
         /**
@@ -416,11 +416,11 @@
         /* Pozera do this.__visualizationLayer.cache ci tam je name, ak ano vrati ho, ak nie vrati defaultValue */
         loadProperty(name, defaultValue) {
             /* podla mna uplne zbytocny if */
-            if (!this.__visualisationLayer) {
+            if (!this.__shaderObject) {
                 return defaultValue;
             }
 
-            const value = this.__visualisationLayer.cache[name];
+            const value = this.__shaderObject.cache[name];
             return value === undefined ? defaultValue : value;
         }
 
@@ -430,7 +430,7 @@
          * @param {*} value value
          */
         storeProperty(name, value) {
-            this.__visualisationLayer.cache[name] = value;
+            this.__shaderObject.cache[name] = value;
         }
 
         /**
@@ -459,7 +459,7 @@
          * @return {number} number of textures available
          */
         get texturesCount() {
-            return this.__visualisationLayer.dataReferences.length;
+            return this.__shaderObject.dataReferences.length;
         }
 
         /**
@@ -477,7 +477,7 @@
                         teda channel = "rgba" */
                     let channel = predefined ? (predefined.required ? predefined.required : predefined.default) : undefined;
                     if (!channel) {
-                        /* pokial najde v this.__visualisationLayer.cache controlName tak to vrati,
+                        /* pokial najde v this.__shaderObject.cache controlName tak to vrati,
                             inak vrati options[controlName] ({}.controlName = undefined) */
                         channel = this.loadProperty(controlName, options[controlName]);
                     }
