@@ -88,7 +88,7 @@
             this._dataSources = [];
             this._origDataSources = [];
 
-            this.defaultRenderingSpecification = null; // object = set in createSingePassShader
+            this.defaultRenderingSpecification = null; // object, set in createSingePassShader
             this.buildOptions = null; // object, set in createSingePassShader
 
             // set the webgl attributes
@@ -553,6 +553,7 @@
          */
         processData(texture, tileOpts) {
             // console.log('v process data');
+            //console.log('Idem kreslit s maticou:', tileOpts.transform);
             const spec = this._programSpecifications[this._program];
             if (!spec) {
                 $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);

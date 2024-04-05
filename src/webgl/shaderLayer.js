@@ -41,7 +41,7 @@
         }
 
         /**
-         * Get the shader class by type id
+         * Get the shader implementation by type id
          * @param {string} id
          * @return {function} class extends OpenSeadragon.WebGLModule.ShaderLayer
          */
@@ -209,7 +209,7 @@
             this._blendUniform = `${this.uid}_blend`;
             this._clipUniform = `${this.uid}_clip`;
             let glsl = [`uniform int ${this._blendUniform};`, `uniform bool ${this._clipUniform};`];
-            console.log('shader controls', this._ownedControls);
+            //console.log('shader controls', this._ownedControls);
             /* only opacity in _ownedControls, dont know where is use_channel0 from plain shader ??? */
             for (let control of this._ownedControls) {
                 // `uniform controlGLtype controlGLname;`
@@ -243,10 +243,11 @@
             throw "ShaderLayer::getFragmentShaderExecution must be implemented!";
         }
 
-        /**
-         * Called when an image is rendered
+        /** Called when an image is rendered.
+         * Fill this shader's clip + blend glsl variables.
+         * For every control fill it's corresponding glsl variable.
          * @param {WebGLProgram} program WebglProgram instance
-         * @param {WebGLRenderingContextBase} gl
+         * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
         glDrawing(program, gl) {
             if (this._blendUniform) {
@@ -260,14 +261,15 @@
             }
         }
 
-        /**
-         * Called when associated webgl program is switched to
+        /** Called when associated webgl program is switched to.
+         * Set _clipLoc + _blendLoc to it's corresponding glsl variable name.
+         * For every control set control.glLocation attribute to it's corresponding glsl variable name.
          * @param {WebGLProgram} program WebglProgram instance
-         * @param {WebGLRenderingContextBase} gl WebGL Context
+         * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
         glLoaded(program, gl) {
             if (!this._blendUniform) {
-                $.console.warn("Shader layer has autoblending disabled: are you sure you call super.getFragmentShaderDefinition()?");
+                $.console.warn("Shader layer has autoblending disabled: are you sure you called super.getFragmentShaderDefinition()?");
             } else {
                 this._clipLoc = gl.getUniformLocation(program, this._clipUniform);
                 this._blendLoc = gl.getUniformLocation(program, this._blendUniform);
@@ -1203,8 +1205,8 @@
 
         /**
          * Called when an image is rendered
-         * @param program WebglProgram instance
-         * @param {WebGLRenderingContextBase} gl
+         * @param {WebGLProgram} program
+         * @param {WebGLRenderingContext|WebGL2RenderingContext} gl
          */
         glDrawing(program, gl) {
             //the control should send something to GPU
@@ -1213,8 +1215,8 @@
 
         /**
          * Called when associated webgl program is switched to
-         * @param program WebglProgram instance
-         * @param gl WebGL Context
+         * @param {WebGLProgram} program
+         * @param {WebGLRenderingContext|WebGL2RenderingContext} gl
          */
         glLoaded(program, gl) {
             //the control should send something to GPU

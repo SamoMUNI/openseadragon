@@ -527,8 +527,9 @@
         x, y, 1,
       ]);
 
+      //console.log('MATRIX:', matrix);
       if (tile.flipped) {
-        console.log('Tile is flipped...');
+        //console.log('Tile is flipped...');
         // flip the tile around the center of the unit quad
         let t1 = $.Mat3.makeTranslation(0.5, 0);
         let t2 = $.Mat3.makeTranslation(-0.5, 0);
@@ -537,6 +538,7 @@
         let localMatrix = t1.multiply($.Mat3.makeScaling(-1, 1)).multiply(t2);
         matrix = matrix.multiply(localMatrix);
       }
+      //console.log('MATRIX:', matrix);
 
       let overallMatrix = viewMatrix.multiply(matrix);
       opacityArray[index] = tile.opacity;
