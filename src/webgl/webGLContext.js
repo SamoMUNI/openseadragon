@@ -54,7 +54,7 @@
          * @return {string} WebGL version used
          */
         getVersion() {
-            return "undefined";
+            throw("$.WebGLModule.WebGLImplementation::getVersion() must be implemented!");
         }
 
         /**
@@ -141,10 +141,11 @@
         }
 
         /**
-         * Code to be included only once, required by given shader type (keys are considered global)
+         * Code to be included only once, required by given shader type (keys are considered global).
          * @param {string} type shader type
          * @returns {object} global-scope code used by the shader in <key: code> format
          */
+        /* Vracia pre konkretny zadany shader jeho __globalIncludes */
         globalCodeRequiredByShaderType(type) {
             return $.WebGLModule.ShaderMediator.getClass(type).__globalIncludes;
         }
@@ -183,10 +184,17 @@
             this.glslBlendCode = glslCode;
         }
 
-        /* preco je implementacia funkcia v rozhrani a nie uz konkretnej instancii? */
+        /** Taky ten boilerplate code na attachnutie shaderov a linknutie programu -> spojazdnenie WebGLProgram-u. + Vychytava chyby pri buildeni.
+         * Attach shaders and link WebGLProgram, catch errors.
+         * @param {WebGLProgram} program
+         * @param {function(error: string, description: string)} onError callback to call when error happens, sets corresponding
+         * specification.error = error;
+         * specification.desc = description;
+         */
         _compileProgram(program, onError) {
             const gl = this.gl;
-            function ok (kind, status, value, sh) {
+            /* Napriklad gl.getProgramParameter(program, gl.LINK_STATUS) pre kind = "Program", status = "LINK", value = program */
+            function ok(kind, status, value, sh) {
                 if (!gl['get' + kind + 'Parameter'](value, gl[status + '_STATUS'])) {
                     $.console.error((sh || 'LINK') + ':\n' + gl['get' + kind + 'InfoLog'](value));
                     return false;
@@ -194,6 +202,7 @@
                 return true;
             }
 
+            /* Attach shader to the WebGLProgram, return true if valid. */
             function useShader(gl, program, data, type) {
                 let shader = gl.createShader(gl[type]);
                 gl.shaderSource(shader, data);
@@ -204,7 +213,7 @@
             }
 
             function numberLines(str) {
-                //https://stackoverflow.com/questions/49714971/how-to-add-line-numbers-to-beginning-of-each-line-in-string-in-javascript
+                // from https://stackoverflow.com/questions/49714971/how-to-add-line-numbers-to-beginning-of-each-line-in-string-in-javascript
                 return str.split('\n').map((line, index) => `${index + 1} ${line}`).join('\n');
             }
 
@@ -215,17 +224,18 @@
                 return;
             }
 
+            // Attaching shaders to WebGLProgram failed
             if (!useShader(gl, program, opts.vs, 'VERTEX_SHADER') ||
                 !useShader(gl, program, opts.fs, 'FRAGMENT_SHADER')) {
                 onError("Unable to use this specification.",
-                    "Compilation of shader failed. For more information, see logs in the $.console.");
+                    "Attaching of shaders to WebGLProgram failed. For more information, see logs in the $.console.");
                 $.console.warn("VERTEX SHADER\n", numberLines( opts.vs ));
                 $.console.warn("FRAGMENT SHADER\n", numberLines( opts.fs ));
-            } else {
+            } else { // Shaders attached
                 gl.linkProgram(program);
                 if (!ok('Program', 'LINK', program)) {
                     onError("Unable to use this specification.",
-                        "Linking of shader failed. For more information, see logs in the $.console.");
+                        "Linking of WebGLProgram failed. For more information, see logs in the $.console.");
                 } else { //if (this.renderer.debug) { //todo uncomment in production
                     $.console.info("VERTEX SHADER\n", numberLines( opts.vs ));
                     $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs ));
@@ -233,7 +243,6 @@
             }
         }
     };
-
 
     $.WebGLModule.WebGL20 = class extends $.WebGLModule.WebGLImplementation {
         /**
@@ -244,10 +253,23 @@
          */
         constructor(renderer, gl, options) {
             // console.log("konstruujem webgl20 implementaciu");
-            super(renderer, gl, "2.0", options); // sets renderer, gl, webglVersion, options attributes
+            super(renderer, gl, "2.0", options); // sets this.renderer, this.gl, this.webglVersion, this.options
 
             // this.vao = gl.createVertexArray();
-            this._bufferTexturePosition = gl.createBuffer();
+
+            // attributes
+            this._bufferTexturePosition = gl.createBuffer(); // :glBuffer
+
+            this._locationPixelSize = null; // :glUniformLocation, odpoveda "pixel_size_in_fragments" v glsl //fragment shader uniform
+            this._locationZoomLevel = null; // :glUniformLocation, odpoveda "zoom_level" v glsl //fragment shader uniform
+
+            this._locationMatrices = null; // :glUniformLocation, odpoveda "osd_transform_matrix" v glsl //vertex shader uniform
+            this._locationTexturePosition = null; // :glAttribLocation, odpoveda "osd_tile_texture_position" v glsl //vertex shader attribute
+
+            // attributes for instanced rendering
+            this._bufferMatrices = gl.createBuffer(); // :glBuffer
+            this._locationMatrices = null; // :glAttribLocation, odpoveda "osd_transform_matrix" v glsl, vertex shader uniform
+            this._textureLoc = null; // :glUniformLocation = odpoveda "_vis_data_sampler" v glsl, fragment shader uniform sampler2D/.../...
 
 
             // Create a texture.
@@ -275,8 +297,7 @@
             });
         }
 
-        /**
-         * Get WebGL2RenderingContext from "canvas" (static used to avoid class instantiation in case of missing support)
+        /** Get WebGL2RenderingContext (static used to avoid instantiation of this class in case of missing support)
          * @param canvas
          * @param options desired options used in the canvas webgl context creation
          * @return {WebGL2RenderingContext}
@@ -298,26 +319,39 @@
             return program._osdOptions[name];
         }
 
-        /** Dolezita flow funkcia, je volana pri buildeni specifikacie v rendereri. Prechadza cez shaders danej spec a robi podla nich podla mna glsl.
-         * Vola funkcie getFragmentShaderDefinition+Execution z shaderLayeru (to je ta komunikacia s konkretnymi shader instanciami uz).
-         * Vola funkcie compileVertex+FragmentShader z tadeto.
+        /* ??? */
+        sampleTexture(index, vec2coords) {
+            return `osd_texture(${index}, ${vec2coords})`;
+        }
+
+        /** Dolezita flow funkcia, je volana pri buildeni specifikacie v rendereri.
+         * Prechadza cez shaders danej spec, komunikuje s ich instanciami
+         * a robi podla nich glsl kod pre fragment shader (vola ich funkcie getFragmentShaderDefinition/Execution).
+         * Natvrdo spravi glsl kod pre definition a execution pre vertex shader.
+         * Vola funkcie compileVertex/FragmentShader, ktorym predava odpovedajuce definition, execution a
+         * dostava full glsl kod pre vertex shader a fragment shader.
          *
-         * Tipujem ze bude mat vela byproductov, no idem nato asi :()
+         * Nastavuje program.osdOptions na options + .vs/.fs na glsl kod shaderov.
+         * Vola _compileProgram ktory pripravi cely WebGLProgram k pouzitiu.
+         *
+         * Nedoriesene:
          * Generating HTML: html = getNewHtmlString() + html (reverse order append to show first the last drawn element (top))
-         * @param {WebGLProgram} program webgl program corresponding to a specification
+         *
+         * @param {WebGLProgram} program program corresponding to a specification
          * @param {object} specification concrete specification from this.renderer._programSpecifications
+         * @param {object} specification.shaders object containing shaderObjects (here layers)
          * @param {[string]} specification.order array containing keys from specification.shaders
          * @param {object} options
          * @param {boolean} options.withHtml whether html should be also created (false if no UI controls are desired)
          * @param {string} options.textureType id of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
          * @param {string} options.instanceCount number of instances to draw at once
          * @param {boolean} options.debug draw debugging info
-         * @returns {number} ??? asi vrati pocet pouzitelnych shaderov I guess
+         * @returns {number} number of usable shaders
          */
         //todo try to implement on the global scope version-independntly
         compileSpecification(program, specification, options) {
             // fragment shader's code placed outside of the main function
-            var definition = "",
+            var definition = "\n",
             // fragment shader's code placed inside the main function
                 execution = "",
                 html = "",
@@ -347,37 +381,37 @@
                     //make visible textures if 'visible' flag set
                     //todo either allways visible or ensure textures do not get loaded
                     if (layer.visible) {
-                        let renderCtx = layer._renderContext;
+                        layer.rendering = true;
+
+                        let shader = layer._renderContext;
 
                         // returns array of strings where one element corresponds to one glsl code line
-                        let fsd = renderCtx.getFragmentShaderDefinition();
+                        let fsd = shader.getFragmentShaderDefinition();
+                        console.log('fsd ->', fsd);
 
                         /* map adds tabs to glsl code lines, join puts them all together separating them with newlines
                             (join used because we do not want to add newline to the last line of code) */
                         definition += fsd.map((glLine) => "    " + glLine).join("\n");
+
                         // getFSE `return ${this.sampleChannel("osd_texture_coords")};` (from plainShader)
                         // getFSE = osd_texture(0, osd_texture_coords).rgba
                         definition += `
     vec4 lid_${layer._index}_xo() {
-        ${renderCtx.getFragmentShaderExecution()}
+        ${shader.getFragmentShaderExecution()}
     }`;
-                        console.log('order.foreach, definition po pridani:', definition);
+                        console.log('order.foreach, definition po pridani:\n', definition);
 
-                        if (renderCtx.opacity) { // multiply alpha channel by opacity and than call blend function
+                        if (shader.opacity) { // multiply alpha channel by opacity and than call blend function
                             execution += `
         vec4 l${layer._index}_out = lid_${layer._index}_xo();
-        l${layer._index}_out.a *= ${renderCtx.opacity.sample()};
-        blend(l${layer._index}_out, ${renderCtx._blendUniform}, ${renderCtx._clipUniform});`;
+        l${layer._index}_out.a *= ${shader.opacity.sample()};
+        blend(l${layer._index}_out, ${shader._blendUniform}, ${shader._clipUniform});`;
                         } else { // immediately call blend function
                             execution += `
-        blend(lid_${layer._index}_xo(), ${renderCtx._blendUniform}, ${renderCtx._clipUniform});`; //todo remove ${renderCtx.__mode}
+        blend(lid_${layer._index}_xo(), ${shader._blendUniform}, ${shader._clipUniform});`;
                         }
 
-                        layer.rendering = true;
-
-                        // tu som skoncil a neni to to iste.. zaujimave
-                        console.log('abc', _this.globalCodeRequiredByShaderType(layer.type));
-                        console.log('asdasd', layer.__globalIncludes);
+                        // prida do globalScopeCode shader.__globalIncludes [globalScopeCode je v fragment shader's definition (code outside main)]
                         $.extend(globalScopeCode, _this.globalCodeRequiredByShaderType(layer.type));
                         dataCount += layer.dataReferences.length;
                     }
@@ -386,6 +420,7 @@
                         html = _this.renderer.htmlShaderPartHeader(layer._renderContext.htmlControls(),
                             shaderName, layer.visible, layer, true) + html;
                     }
+
                 } else { // layer not skipped, not with error, but still not correctly built
                     if (options.withHtml) {
                         html = _this.renderer.htmlShaderPartHeader(`The requested specification type does not work properly.`,
@@ -413,28 +448,37 @@
 
             const matrixType = options.instanceCount > 2 ? "in" : "uniform";
 
-            //hack use 'invalid' key to attach item
-            globalScopeCode[null] = definition;
-            this.compileVertexShader(
-                program, `
+            // glsl code placed outside the main function
+            const vertexShaderDefinition = `
     ${matrixType} mat3 osd_transform_matrix;
     const vec3 quad[4] = vec3[4] (
         vec3(0.0, 1.0, 1.0),
         vec3(0.0, 0.0, 1.0),
         vec3(1.0, 1.0, 1.0),
         vec3(1.0, 0.0, 1.0)
-    );`, `
-        gl_Position = vec4(osd_transform_matrix * quad[gl_VertexID], 1);`, options);
-            this.compileFragmentShader(
-                program,
-                Object.values(globalScopeCode).join("\n"),
-                execution,
-                options);
+    );`;
+            // glsl code placed inside the main function
+            const vertexShaderExecution = `
+        gl_Position = vec4(osd_transform_matrix * quad[gl_VertexID], 1);`;
+
+            const vertexShaderCode = this.compileVertexShader(vertexShaderDefinition, vertexShaderExecution, options);
+
+            //hack -> use 'invalid' key to attach item
+            globalScopeCode[null] = definition;
+            const fragmentShaderCode = this.compileFragmentShader(Object.values(globalScopeCode).join("\n"), execution, options);
+
+            program._osdOptions = options;
+            program._osdOptions.vs = vertexShaderCode;
+            program._osdOptions.fs = fragmentShaderCode;
+            this._compileProgram(program, options.onError || $.console.error);
 
             return usableShaders;
         }
 
-        /* podla parametru options vracia GLSL kod pre pouzitie textur myslim */
+        /** Get glsl code for texture sampling. Used in compileFragmentShader.
+         * @param {null|string} options.textureType WebGL's texture type -> TEXTURE_2D or TEXTURE_2D_ARRAY or TEXTURE_3D
+         * @returns {string} glsl code to texture sampling
+         */
         getTextureSampling(options) {
             const type = options.textureType;
             if (!type) { //no texture is also allowed option todo test if valid, defined since we read its location
@@ -448,6 +492,7 @@
       return vec(.0);
     }`;
             }
+
             const numOfTextures = options.instanceCount =
                 Math.max(options.instanceCount || 0, 1);
 
@@ -495,16 +540,17 @@
         ${samplingCode('vec3(coords, index)')}
     }`;
             }
+
             return 'Error: invalid texture: unsupported sampling type ' + type;
         }
 
-        /* podobne ako hore ale daka ez default textura */
-        sampleTexture(index, vec2coords) {
-            return `osd_texture(${index}, ${vec2coords})`;
-        }
-
-        /* nastavi options.fs na GLSL kod fragment shaderu, skompiluje program, vymaze options.fs AJ options.vs */
-        compileFragmentShader(program, definition, execution, options) {
+        /** Get fragment shader's glsl code.
+         * @param {string} definition glsl code outta main function
+         * @param {string} execution glsl code inside the main function
+         * @param {object} options
+         * @returns {string} fragment shader's glsl code
+         */
+        compileFragmentShader(definition, execution, options) {
             const debug = options.debug ? `
         float twoPixels = 1.0 / float(osd_texture_size().x) * 2.0;
         vec2 distance = abs(osd_texture_bounds - osd_texture_coords);
@@ -514,29 +560,30 @@
         }
     ` : "";
 
-            options.fs = `#version 300 es
+            const fragmentShaderCode = `#version 300 es
     precision mediump float;
-    precision mediump sampler2DArray;
     precision mediump sampler2D;
+    precision mediump sampler2DArray;
     precision mediump sampler3D;
 
     uniform float pixel_size_in_fragments;
     uniform float zoom_level;
 
-    in vec2 osd_texture_coords;
-    flat in vec2 osd_texture_bounds;
-    flat in int osd_texture_id;
-
-    ${this.getTextureSampling(options)}
-
-    out vec4 final_color;
-
-    vec4 _last_rendered_color = vec4(.0);
-
+    // utility function
     bool close(float value, float target) {
         return abs(target - value) < 0.001;
     }
 
+    // varyings from vertex shader
+    in vec2 osd_texture_coords;
+    flat in vec2 osd_texture_bounds;
+    flat in int osd_texture_id;
+
+    // texture sampling${this.getTextureSampling(options)}
+
+    // blending
+    out vec4 final_color;
+    vec4 _last_rendered_color = vec4(.0);
     int _last_mode = 0;
     bool _last_clip = false;
     void blend(vec4 color, int mode, bool clip) {
@@ -560,36 +607,37 @@
         _last_clip = clip;
     }
 
-    ${definition}
+    // definition${definition}
 
     void main() {
         ${debug}
 
-        ${execution}
+        // execution${execution}
 
         //blend last level
         blend(vec4(.0), 0, false);
     }`;
-            if (options.vs) {
-                program._osdOptions = options;
-                this._compileProgram(program, options.onError || $.console.error);
-                delete options.fs;
-                delete options.vs;
-            }
+
+            return fragmentShaderCode;
         }
 
-        /* nastavi options.vs na GLSL kod vertex shaderu, skompiluje program, vymaze options.vs AJ options.fs */
-        compileVertexShader(program, definition, execution, options) {
+        /** Get vertex shader's glsl code.
+         * @param {string} definition glsl code outta main function
+         * @param {string} execution glsl code inside the main function
+         * @param {object} options
+         * @returns {string} vertex shader's glsl code
+         */
+        compileVertexShader(definition, execution, options) {
             const textureId = options.instanceCount > 1 ? 'gl_InstanceID' : '0';
 
-            options.vs = `#version 300 es
+            const vertexShaderCode = `#version 300 es
     precision mediump float;
     in vec2 osd_tile_texture_position;
     flat out int osd_texture_id;
     out vec2 osd_texture_coords;
     flat out vec2 osd_texture_bounds;
 
-    ${definition}
+    // definition:${definition}
 
     void main() {
         osd_texture_id = ${textureId};
@@ -600,20 +648,23 @@
 
         osd_texture_coords = osd_tile_texture_position;
         osd_texture_bounds = osd_tile_texture_position;
-        ${execution}
+
+        // execution:${execution}
     }
     `;
-            if (options.fs) {
-                program._osdOptions = options;
-                this._compileProgram(program, options.onError || $.console.error);
-                delete options.fs;
-                delete options.vs;
-            }
+
+            return vertexShaderCode;
         }
 
-        /* toto robi dake webgl srandy, nastavuje dake buffre a tak ale co to ma ako znamenat fakt nevim
-            volane z forceswitchshader z rendereru alebo pri useProgram z rendereru */
-        programLoaded(program, currentConfig = null) {
+        /** Called when associated webgl program is switched to. Volane z forceswitchshader z rendereru alebo pri useCustomProgram z rendereru.
+         * Nastavuje vo velkom atributy(tuto, shaderom, ich controlom) aby odpovedali odpovedajucim glsl premennym.
+         * @param {WebGLProgram} program WebGLProgram to use
+         * @param {object|null} spec specification corresponding to program, null when using custom program not built on any specification
+         */
+        programLoaded(program, spec = null) {
+            // toto neviem ci je dobre lebo running hovori o tom ze renderer bezi s nejakou validnou specifikaciou...
+            // ked chcem pouzit customprogram tak ale nebude bezat podla nijakej specifikacie => ajtak sa zapne running?
+            // co ked este nebezal renderer a na supu chcem pouzit customprogram co potom ?
             if (!this.renderer.running) {
                 return;
             }
@@ -621,8 +672,9 @@
             const gl = this.gl;
             // Allow for custom loading
             gl.useProgram(program);
-            if (currentConfig) {
-                this.renderer.glLoaded(gl, program, currentConfig);
+            if (spec) {
+                // for every shader and it's controls set theirs attributes to it's corresponding glsl variable names
+                this.renderer.glLoaded(gl, program, spec);
             }
 
             // gl.bindVertexArray(this.vao);
@@ -630,22 +682,24 @@
             this._locationPixelSize = gl.getUniformLocation(program, "pixel_size_in_fragments");
             this._locationZoomLevel = gl.getUniformLocation(program, "zoom_level");
 
-            const options = program._osdOptions;
-            if (options.instanceCount > 1) {
+            const instanceCount = program._osdOptions.instanceCount;
+            if (instanceCount > 1) {
+                console.error("POZOR IDEM CEZ INSTANCE COUNT > 1");
+
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
                 this._locationTexturePosition = gl.getAttribLocation(program, 'osd_tile_texture_position');
                 //vec2 * 4 bytes per element
                 const vertexSizeByte = 2 * 4;
-                gl.bufferData(gl.ARRAY_BUFFER, options.instanceCount * 4 * vertexSizeByte, gl.STREAM_DRAW);
+                gl.bufferData(gl.ARRAY_BUFFER, instanceCount * 4 * vertexSizeByte, gl.STREAM_DRAW);
                 gl.enableVertexAttribArray(this._locationTexturePosition);
                 gl.vertexAttribPointer(this._locationTexturePosition, 2, gl.FLOAT, false, 0, 0);
-                /* asi nic nerobi specialne ? */
-                gl.vertexAttribDivisor(this._locationTexturePosition, 0);
+                gl.vertexAttribDivisor(this._locationTexturePosition, 0); // nic specialne nerobi?
 
-                this._bufferMatrices = this._bufferMatrices || gl.createBuffer();
+                //this._bufferMatrices = this._bufferMatrices || gl.createBuffer(); presunul som do konstruktoru
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferMatrices);
+
                 this._locationMatrices = gl.getAttribLocation(program, "osd_transform_matrix");
-                gl.bufferData(gl.ARRAY_BUFFER, 4 * 9 * options.instanceCount, gl.STREAM_DRAW);
+                gl.bufferData(gl.ARRAY_BUFFER, 4 * 9 * instanceCount, gl.STREAM_DRAW);
                 //matrix 3x3 (9) * 4 bytes per element
                 const bytesPerMatrix = 4 * 9;
                 for (let i = 0; i < 3; ++i) {
@@ -666,54 +720,49 @@
                 }
 
                 this._textureLoc = gl.getUniformLocation(program, "_vis_data_sampler");
-                gl.uniform1iv(this._textureLoc, iterate(options.instanceCount));
+                gl.uniform1iv(this._textureLoc, iterate(instanceCount));
 
-            } else {
+            } else { // draw one instance at the time
+                this._locationMatrices = gl.getUniformLocation(program, "osd_transform_matrix");
+
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                this._locationTexturePosition = gl.getAttribLocation(program, 'osd_tile_texture_position');
+                this._locationTexturePosition = gl.getAttribLocation(program, "osd_tile_texture_position");
                 gl.enableVertexAttribArray(this._locationTexturePosition);
                 gl.vertexAttribPointer(this._locationTexturePosition, 2, gl.FLOAT, false, 0, 0);
-
-                this._locationMatrices = gl.getUniformLocation(program, "osd_transform_matrix");
             }
         }
 
-        /**
-         * This is were drawing really happens...
+        /** This is were drawing really happens...
          * Why is this named programUsed?
+         * Fill the glsl variables and draw.
          * @param {WebGLProgram} program currently being used with renderer
-         * @param {Object} currentConfig specification corresponding to program (from renderer._programSpecifications)
+         * @param {object} spec specification corresponding to program (from renderer._programSpecifications)
          * @param {WebGLTexture} texture to use
-         * @param {Object} tileOpts texture settings
-         * @param {OpenSeadragon.Mat3} tileOpts.transform matrix
-         * @param {number} tileOpts.zoom
+         * @param {object} tileOpts texture settings
+         * @param {OpenSeadragon.Mat3} tileOpts.transform 3*3 matrix
          * @param {number} tileOpts.pixelSize
+         * @param {number} tileOpts.zoom
          * @param {[8 Numbers]} tileOpts.textureCoords pri old to bolo 12 numbers(dva trojuholniky, tu si myslim ze 8 lebo pouziva triangle strip)
          */
-        /* zas nejake webgl srandy, ktorym som  moc nepochapal ... */
-        programUsed(program, currentConfig, texture, tileOpts = {}) {
+        programUsed(program, spec, texture, tileOpts) {
             if (!this.renderer.running) {
                 return;
             }
-            // Allow for custom drawing in webGL and possibly avoid using webGL at all
 
-            let context = this.renderer,
-                gl = this.gl;
-
-            if (currentConfig) {
-                context.glDrawing(gl, program, currentConfig, tileOpts);
+            const gl = this.gl;
+            if (spec) {
+                // for every shader and it's controls fill their corresponding glsl variables
+                this.renderer.glDrawing(gl, program, spec);
             }
 
-            // Set Attributes for GLSL
+            // fill glsl variables
             gl.uniform1f(this._locationPixelSize, tileOpts.pixelSize || 1);
             gl.uniform1f(this._locationZoomLevel, tileOpts.zoom || 1);
 
-            const options = program._osdOptions;
-            // console.log('options z webglContext: programused = ', options);
-            //if compiled as instanced drawing
-            /* ze instancovane renderovanie mozem zatial preskocit, cize asi len else vetva ma momentalne zaujima */
-            if (options.instanceCount > 1) { //options.instanceCount > 1)
 
+            const instanceCount = program._osdOptions.instanceCount;
+            const textureType = program._osdOptions.textureType;
+            if (instanceCount > 1) { // instancovane renderovanie mozem zatial preskocit, cize asi len else vetva ma momentalne zaujima
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
                 gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileOpts.textureCoords);
 
@@ -721,16 +770,16 @@
                 gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileOpts.transform);
 
                 let drawInstanceCount = tileOpts.instanceCount || Infinity;
-                drawInstanceCount = Math.min(drawInstanceCount, options.instanceCount);
+                drawInstanceCount = Math.min(drawInstanceCount, instanceCount);
 
                 for (let i = 0; i <= drawInstanceCount; i++) {
                     gl.activeTexture(gl.TEXTURE0 + i);
-                    gl.bindTexture(gl.TEXTURE_2D, texture[i]);
+                    gl.bindTexture(gl.TEXTURE_2D, texture[i]); //tomuto nerozumiem ako indexovat texturu?
                 }
-                console.log('DRAWARRAYSINSTANCED');
+                console.error('DRAWARRAYSINSTANCED');
                 gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, drawInstanceCount);
 
-            } else {
+            } else { // draw one instance at the time
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
                 gl.bufferData(gl.ARRAY_BUFFER, tileOpts.textureCoords, gl.STATIC_DRAW);
 
@@ -739,7 +788,7 @@
                 // Upload texture, only one texture active, no preparation
                 gl.activeTexture(gl.TEXTURE0);
                 // gl.TEXTURE_2D or gl.TEXTURE_2D_ARRAY
-                gl.bindTexture(gl[options.textureType], texture);
+                gl.bindTexture(gl[textureType], texture);
 
                 // Draw triangle strip (two triangles) from a static array defined in the vertex shader
                 gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
