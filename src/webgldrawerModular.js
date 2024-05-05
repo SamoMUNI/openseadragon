@@ -937,7 +937,7 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
-                //console.log('Vo for cykli cez tiledImages, prechod cislo', tiledImageIndex);
+                console.log('Vo for cykli cez tiledImages, prechod cislo', tiledImageIndex);
 
                 /* If vetva pridana z merge-u, jemne upravena */
                 if(tiledImage.isTainted()){
@@ -1020,12 +1020,12 @@
                             tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         }
                         if (tileInfo === null) {
-                            throw Error("webgldrawer::drawSinglePass: tile has no context!");
+                            throw Error("webgldrawerModular::drawSinglePass: tile has no context!");
                         }
 
                         const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
                         if (tile.flipped) {
-                            //console.log('from my impl matrix =', matrix);
+                            console.log('from my impl, texture = ', tileInfo.texture);
                             //console.log('from my impl tile.cachceKey =', tile.cacheKey);
                         }
 

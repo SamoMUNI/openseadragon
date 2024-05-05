@@ -615,7 +615,8 @@
         // execution${execution}
 
         //blend last level
-        blend(vec4(.0), 0, false);
+        //blend(vec4(.0), 0, false);
+        final_color = vec4(1.0, 0.0, 0.0, 1.0);
     }`;
 
             return fragmentShaderCode;

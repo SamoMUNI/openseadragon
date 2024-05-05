@@ -337,7 +337,7 @@
             console.error('TOTO SA NEMALO STAT !!!');
           }
           if (tile.flipped) {
-            //console.log('matrix', matrixArray[indexInDrawArray]);
+            console.log('from original, texture = ', textureDataArray[indexInDrawArray]);
             //console.log('tile.cachceKey=', tile.cacheKey);
           }
           //console.log('prechod for cykol cez tiles');
