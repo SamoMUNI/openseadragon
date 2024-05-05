@@ -1082,6 +1082,7 @@
                         // draw from the rendering canvas onto the output canvas, clipping/cropping if needed
                         this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
                         this._renderingCanvasHasImageData = false;
+                        gl.clear(gl.COLOR_BUFFER_BIT);
                     } else {
                         this._renderingCanvasHasImageData = true;
                     }
