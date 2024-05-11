@@ -552,9 +552,10 @@
          * @memberOf WebGLModule
          */
         processData(texture, tileOpts) {
-            // console.log('v process data');
-            //console.log('Idem kreslit s maticou:', tileOpts.transform);
+            //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
             const spec = this._programSpecifications[this._program];
+            //console.log('processData: spec=', spec);
+
             if (!spec) {
                 $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             } else {
@@ -987,7 +988,7 @@
             this.addRenderingSpecifications(this.defaultRenderingSpecification);
             // index of defaultRenderingSpecification in _programSpecifications, order??, force??,
             // options.withHtml, options.textureType, options.instanceCount, options.debug
-            this.buildProgram(index, null, true, this.buildOptions);
+            this.buildProgram(index, "TEXTURE_2D", true, this.buildOptions); // pridal som "TEXTURE_2D" namiesto null pri debuggovani flipped
         }
 
         setDataBlendingEnabled(enabled) {

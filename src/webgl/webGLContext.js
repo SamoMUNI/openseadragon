@@ -258,15 +258,21 @@
             // this.vao = gl.createVertexArray();
 
             // attributes
-            this._bufferTexturePosition = gl.createBuffer(); // :glBuffer
+            this._bufferTexturePosition = gl.createBuffer(); // :glBuffer, pre kazdu tile-u sa sem nahraju data jej textureCoords
+            this._locationTexturePosition = null; // :glAttribLocation, atribut na previazanie s buffrom hore, nahra sa skrze neho do glsl
+                // odpoveda "osd_tile_texture_position" v glsl
+                // nakopiruje sa vo vertex shaderi do "out osd_texture_coords" a "flat out osd_texture_bounds"
 
-            this._locationPixelSize = null; // :glUniformLocation, odpoveda "pixel_size_in_fragments" v glsl //fragment shader uniform
-            this._locationZoomLevel = null; // :glUniformLocation, odpoveda "zoom_level" v glsl //fragment shader uniform
+            this._locationMatrices = null; // :glUniformLocation, pre kazdu tile-u sa sem nahra matica ktora udava jej poziciu
+                // odpoveda "uniform mat3 osd_transform_matrix" v glsl
 
-            this._locationMatrices = null; // :glUniformLocation, odpoveda "osd_transform_matrix" v glsl //vertex shader uniform
-            this._locationTexturePosition = null; // :glAttribLocation, odpoveda "osd_tile_texture_position" v glsl //vertex shader attribute
+            this._locationPixelSize = null; // :glUniformLocation, nepouzite
+                // odpoveda "uniform float pixel_size_in_fragments" v glsl
+            this._locationZoomLevel = null; // :glUniformLocation, nepouzite
+                // odpoveda "uniform float zoom_level" v glsl
 
-            // attributes for instanced rendering
+
+            // attributes for instanced rendering, unused
             this._bufferMatrices = gl.createBuffer(); // :glBuffer
             this._locationMatrices = null; // :glAttribLocation, odpoveda "osd_transform_matrix" v glsl, vertex shader uniform
             this._textureLoc = null; // :glUniformLocation = odpoveda "_vis_data_sampler" v glsl, fragment shader uniform sampler2D/.../...
@@ -615,8 +621,7 @@
         // execution${execution}
 
         //blend last level
-        //blend(vec4(.0), 0, false);
-        final_color = vec4(1.0, 0.0, 0.0, 1.0);
+        blend(vec4(.0), 0, false);
     }`;
 
             return fragmentShaderCode;
@@ -633,6 +638,7 @@
 
             const vertexShaderCode = `#version 300 es
     precision mediump float;
+
     in vec2 osd_tile_texture_position;
     flat out int osd_texture_id;
     out vec2 osd_texture_coords;
@@ -658,7 +664,7 @@
         }
 
         /** Called when associated webgl program is switched to. Volane z forceswitchshader z rendereru alebo pri useCustomProgram z rendereru.
-         * Nastavuje vo velkom atributy(tuto, shaderom, ich controlom) aby odpovedali odpovedajucim glsl premennym.
+         * Prepaja atributy (definove touto classou) a atributy (definovane shaderami a ich controls) s ich odpovedajucimi glsl premennymi.
          * @param {WebGLProgram} program WebGLProgram to use
          * @param {object|null} spec specification corresponding to program, null when using custom program not built on any specification
          */
@@ -666,6 +672,7 @@
             // toto neviem ci je dobre lebo running hovori o tom ze renderer bezi s nejakou validnou specifikaciou...
             // ked chcem pouzit customprogram tak ale nebude bezat podla nijakej specifikacie => ajtak sa zapne running?
             // co ked este nebezal renderer a na supu chcem pouzit customprogram co potom ?
+            console.log('PROGRAMLOADED called!');
             if (!this.renderer.running) {
                 return;
             }
@@ -674,7 +681,7 @@
             // Allow for custom loading
             gl.useProgram(program);
             if (spec) {
-                // for every shader and it's controls set theirs attributes to it's corresponding glsl variable names
+                // for every shader and it's controls connect their attributes to their corresponding glsl variables
                 this.renderer.glLoaded(gl, program, spec);
             }
 
@@ -685,50 +692,53 @@
 
             const instanceCount = program._osdOptions.instanceCount;
             if (instanceCount > 1) {
-                console.error("POZOR IDEM CEZ INSTANCE COUNT > 1");
+                throw new Error("Instanced rendering not supported!");
+                /* gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
+                // this._locationTexturePosition = gl.getAttribLocation(program, 'osd_tile_texture_position');
+                // //vec2 * 4 bytes per element
+                // const vertexSizeByte = 2 * 4;
+                // gl.bufferData(gl.ARRAY_BUFFER, instanceCount * 4 * vertexSizeByte, gl.STREAM_DRAW);
+                // gl.enableVertexAttribArray(this._locationTexturePosition);
+                // gl.vertexAttribPointer(this._locationTexturePosition, 2, gl.FLOAT, false, 0, 0);
+                // gl.vertexAttribDivisor(this._locationTexturePosition, 0); // nic specialne nerobi?
 
-                gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                this._locationTexturePosition = gl.getAttribLocation(program, 'osd_tile_texture_position');
-                //vec2 * 4 bytes per element
-                const vertexSizeByte = 2 * 4;
-                gl.bufferData(gl.ARRAY_BUFFER, instanceCount * 4 * vertexSizeByte, gl.STREAM_DRAW);
-                gl.enableVertexAttribArray(this._locationTexturePosition);
-                gl.vertexAttribPointer(this._locationTexturePosition, 2, gl.FLOAT, false, 0, 0);
-                gl.vertexAttribDivisor(this._locationTexturePosition, 0); // nic specialne nerobi?
+                // //this._bufferMatrices = this._bufferMatrices || gl.createBuffer(); presunul som do konstruktoru
+                // gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferMatrices);
 
-                //this._bufferMatrices = this._bufferMatrices || gl.createBuffer(); presunul som do konstruktoru
-                gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferMatrices);
+                // this._locationMatrices = gl.getAttribLocation(program, "osd_transform_matrix");
+                // gl.bufferData(gl.ARRAY_BUFFER, 4 * 9 * instanceCount, gl.STREAM_DRAW);
+                // //matrix 3x3 (9) * 4 bytes per element
+                // const bytesPerMatrix = 4 * 9;
+                // for (let i = 0; i < 3; ++i) {
+                //     const loc = this._locationMatrices + i;
+                //     gl.enableVertexAttribArray(loc);
+                //     // note the stride and offset
+                //     const offset = i * 12;  // 3 floats per row, 4 bytes per float
+                //     gl.vertexAttribPointer(
+                //         loc,              // location
+                //         3,                // size (num values to pull from buffer per iteration)
+                //         gl.FLOAT,         // type of data in buffer
+                //         false,            // normalize
+                //         bytesPerMatrix,   // stride, num bytes to advance to get to next set of values
+                //         offset
+                //     );
+                //     // this line says this attribute only changes for each 1 instance
+                //     gl.vertexAttribDivisor(loc, 1);
+                // }
 
-                this._locationMatrices = gl.getAttribLocation(program, "osd_transform_matrix");
-                gl.bufferData(gl.ARRAY_BUFFER, 4 * 9 * instanceCount, gl.STREAM_DRAW);
-                //matrix 3x3 (9) * 4 bytes per element
-                const bytesPerMatrix = 4 * 9;
-                for (let i = 0; i < 3; ++i) {
-                    const loc = this._locationMatrices + i;
-                    gl.enableVertexAttribArray(loc);
-                    // note the stride and offset
-                    const offset = i * 12;  // 3 floats per row, 4 bytes per float
-                    gl.vertexAttribPointer(
-                        loc,              // location
-                        3,                // size (num values to pull from buffer per iteration)
-                        gl.FLOAT,         // type of data in buffer
-                        false,            // normalize
-                        bytesPerMatrix,   // stride, num bytes to advance to get to next set of values
-                        offset
-                    );
-                    // this line says this attribute only changes for each 1 instance
-                    gl.vertexAttribDivisor(loc, 1);
-                }
-
-                this._textureLoc = gl.getUniformLocation(program, "_vis_data_sampler");
-                gl.uniform1iv(this._textureLoc, iterate(instanceCount));
+                // this._textureLoc = gl.getUniformLocation(program, "_vis_data_sampler");
+                // gl.uniform1iv(this._textureLoc, iterate(instanceCount));
+                */
 
             } else { // draw one instance at the time
+                // uniform mat3 osd_transform_matrix;
                 this._locationMatrices = gl.getUniformLocation(program, "osd_transform_matrix");
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
+                // in vec2 osd_tile_texture_position;
                 this._locationTexturePosition = gl.getAttribLocation(program, "osd_tile_texture_position");
                 gl.enableVertexAttribArray(this._locationTexturePosition);
+                // connect _bufferTexturePosition with _locationTexturePosition that points to osd_tile_texture_position
                 gl.vertexAttribPointer(this._locationTexturePosition, 2, gl.FLOAT, false, 0, 0);
             }
         }
@@ -740,58 +750,65 @@
          * @param {object} spec specification corresponding to program (from renderer._programSpecifications)
          * @param {WebGLTexture} texture to use
          * @param {object} tileOpts texture settings
-         * @param {OpenSeadragon.Mat3} tileOpts.transform 3*3 matrix
+         * @param {OpenSeadragon.Mat3} tileOpts.transform 3*3 matrix that should be applied to tile vertices
          * @param {number} tileOpts.pixelSize
          * @param {number} tileOpts.zoom
          * @param {[8 Numbers]} tileOpts.textureCoords pri old to bolo 12 numbers(dva trojuholniky, tu si myslim ze 8 lebo pouziva triangle strip)
          */
         programUsed(program, spec, texture, tileOpts) {
             if (!this.renderer.running) {
-                return;
+                throw new Error("webGLContext::programUsed: Renderer not running!");
             }
 
             const gl = this.gl;
+
             if (spec) {
                 // for every shader and it's controls fill their corresponding glsl variables
                 this.renderer.glDrawing(gl, program, spec);
             }
 
-            // fill glsl variables
             gl.uniform1f(this._locationPixelSize, tileOpts.pixelSize || 1);
             gl.uniform1f(this._locationZoomLevel, tileOpts.zoom || 1);
 
-
-            const instanceCount = program._osdOptions.instanceCount;
             const textureType = program._osdOptions.textureType;
+            const instanceCount = program._osdOptions.instanceCount;
             if (instanceCount > 1) { // instancovane renderovanie mozem zatial preskocit, cize asi len else vetva ma momentalne zaujima
-                gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileOpts.textureCoords);
+                throw new Error("Instanced rendering not supported!");
+                // gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
+                // gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileOpts.textureCoords);
 
-                gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferMatrices);
-                gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileOpts.transform);
+                // gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferMatrices);
+                // gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileOpts.transform);
 
-                let drawInstanceCount = tileOpts.instanceCount || Infinity;
-                drawInstanceCount = Math.min(drawInstanceCount, instanceCount);
+                // let drawInstanceCount = tileOpts.instanceCount || Infinity;
+                // drawInstanceCount = Math.min(drawInstanceCount, instanceCount);
 
-                for (let i = 0; i <= drawInstanceCount; i++) {
-                    gl.activeTexture(gl.TEXTURE0 + i);
-                    gl.bindTexture(gl.TEXTURE_2D, texture[i]); //tomuto nerozumiem ako indexovat texturu?
-                }
-                console.error('DRAWARRAYSINSTANCED');
-                gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, drawInstanceCount);
+                // for (let i = 0; i <= drawInstanceCount; i++) {
+                //     gl.activeTexture(gl.TEXTURE0 + i);
+                //     gl.bindTexture(gl.TEXTURE_2D, texture[i]); //tomuto nerozumiem ako indexovat texturu?
+                // }
+
+                // gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, drawInstanceCount);
 
             } else { // draw one instance at the time
+                //gl.clear(gl.COLOR_BUFFER_BIT); //-> vzdy uvidim len poslednu vec co som drawoval potom hihi
+
+                // nahravam textureCoords data
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
                 gl.bufferData(gl.ARRAY_BUFFER, tileOpts.textureCoords, gl.STATIC_DRAW);
 
-                gl.uniformMatrix3fv(this._locationMatrices, false, tileOpts.transform || $.Mat3.makeIdentity());
+                // nahravam transform maticu
+                gl.uniformMatrix3fv(this._locationMatrices, false, tileOpts.transform);
 
                 // Upload texture, only one texture active, no preparation
                 gl.activeTexture(gl.TEXTURE0);
-                // gl.TEXTURE_2D or gl.TEXTURE_2D_ARRAY
+                if (textureType !== "TEXTURE_2D" && textureType !== "TEXTURE_2D_ARRAY") {
+                    throw new Error("webGLContext::programUsed: Not supported texture type!");
+                }
                 gl.bindTexture(gl[textureType], texture);
 
                 // Draw triangle strip (two triangles) from a static array defined in the vertex shader
+                console.log('Drawujem jjupi');
                 gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
             }
         }

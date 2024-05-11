@@ -261,9 +261,9 @@
             }
         }
 
-        /** Called when associated webgl program is switched to.
-         * Set _clipLoc + _blendLoc to it's corresponding glsl variable name.
-         * For every control set control.glLocation attribute to it's corresponding glsl variable name.
+        /** Called when loading webgl program.
+         * Connect _clipLoc + _blendLoc with their corresponding glsl variables.
+         * For every control owned by this shader connect control.glLocation attribute to it's corresponding glsl variable.
          * @param {WebGLProgram} program WebglProgram instance
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
@@ -276,6 +276,7 @@
             }
 
             for (let control of this._ownedControls) {
+                console.log(`Loadujem ${control}`);
                 this[control].glLoaded(program, gl);
             }
         }
@@ -1483,10 +1484,12 @@
 
         glDrawing(program, gl) {
             gl[this.component.glUniformFunName()](this.glLocation, this.value);
+            console.log('Settujem', this.component.glUniformFunName(), this.glLocation, 'na', this.value);
         }
 
         glLoaded(program, gl) {
             this.glLocation = gl.getUniformLocation(program, this.webGLVariableName);
+            console.log(`glLocation = ${this.glLocation}, webGLVariableName = ${this.webGLVariableName}`);
         }
 
         toHtml(breakLine = true, controlCss = "") {

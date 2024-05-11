@@ -140,6 +140,8 @@
             /***** SETUP CANVASES *****/
             this._setupCanvases();
 
+            // disable cull face, this solved flipping error
+            this._gl.disable(this._gl.CULL_FACE);
 
             /***** EVENT HANDLERS *****/
             // Add listeners for events that require modifying the scene or camera
@@ -345,7 +347,6 @@
             let viewMatrix = scaleMatrix.multiply(rotMatrix).multiply(posMatrix);
 
             let twoPassRendering = false;
-
             if (twoPassRendering) {
                 this.enableStencilTest(true);
                 this._resizeOffScreenTextures(0);
@@ -703,7 +704,7 @@
                     sourceHeightFraction = 1;
                 }
 
-                if( overlap > 0){
+                if(overlap > 0){
                     // calculate the normalized position of the rect to actually draw
                     // discarding overlap.
                     let overlapFraction = this._calculateOverlapFraction(tile, tiledImage);
@@ -740,6 +741,7 @@
                 gl.activeTexture(gl.TEXTURE0);
                 gl.bindTexture(gl.TEXTURE_2D, texture);
                 // Set the parameters so we can render any size image.
+                // options.wrap -> gl.MIRRORED_REPEAT
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, options.wrap);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, options.wrap);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, options.minFilter);
@@ -937,7 +939,7 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
-                console.log('Vo for cykli cez tiledImages, prechod cislo', tiledImageIndex);
+                // console.log('Vo for cykli cez tiledImages, prechod cislo', tiledImageIndex);
 
                 /* If vetva pridana z merge-u, jemne upravena */
                 if(tiledImage.isTainted()){
@@ -961,7 +963,7 @@
 
                     // nothing to draw or opacity is zero
                     if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
-                        //console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
+                        // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
                         return;
                     }
 
@@ -1024,12 +1026,10 @@
                         }
 
                         const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
-                        if (tile.flipped) {
-                            console.log('from my impl, texture = ', tileInfo.texture);
-                            //console.log('from my impl tile.cachceKey =', tile.cacheKey);
-                        }
 
                         plainShader.opacity.set(tile.opacity * tiledImage.opacity);
+                        //console.log('opacita pre plainshader =', tile.opacity * tiledImage.opacity);
+
 
                         /* DRAW */
                         this.renderer.processData(tileInfo.texture, {
@@ -1038,7 +1038,6 @@
                             pixelSize: pixelSize, //asi cislo
                             textureCoords: tileInfo.position,
                         });
-
                         //batch rendering (artifacts)
                         // this._transformMatrices.set(matrix, batchSize * 9);
                         // this._tileTexturePositions.set(tileData.position, batchSize * 8);
@@ -1228,14 +1227,9 @@
             ]);
 
             if (tile.flipped) {
-                //console.log('Tile is flipped from myimp');
-                // flip the tile around the center of the unit quad
-                let t1 = $.Mat3.makeTranslation(0.5, 0);
-                let t2 = $.Mat3.makeTranslation(-0.5, 0);
-
-                // update the view matrix to account for this image's rotation
-                let localMatrix = t1.multiply($.Mat3.makeScaling(-1, 1)).multiply(t2);
-                matrix = matrix.multiply(localMatrix);
+                const flipLeftAroundTileOrigin = $.Mat3.makeScaling(-1, 1);
+                const moveRightAfterScaling = $.Mat3.makeTranslation(-1, 0);
+                matrix = matrix.multiply(flipLeftAroundTileOrigin).multiply(moveRightAfterScaling);
             }
 
             let overallMatrix = viewMatrix.multiply(matrix);

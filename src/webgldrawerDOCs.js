@@ -60,7 +60,7 @@
 
   OpenSeadragon.WebGLDrawerDOCs = class WebGLDrawer extends OpenSeadragon.DrawerBase {
     constructor(options) {
-      console.log('Robim stary originalny webgldrawer');
+      console.log('Robim STARY originalny webgldrawer');
       super(options);
 
       /**
@@ -337,10 +337,11 @@
             console.error('TOTO SA NEMALO STAT !!!');
           }
           if (tile.flipped) {
-            console.log('from original, texture = ', textureDataArray[indexInDrawArray]);
+            //console.log('from original, tile = ', tile);
             //console.log('tile.cachceKey=', tile.cacheKey);
           }
           //console.log('prechod for cykol cez tiles');
+
           // We've filled up the buffers or reached the end: time to draw this set of tiles
           if ((numTilesToDraw === maxTextures) || (tileIndex === tilesToDraw.length - 1)) {
             //console.log('vykreslenie tiles');
@@ -504,6 +505,7 @@
 
       let texture = textureInfo.texture;
       let textureQuad = textureInfo.position;
+      //console.log('textureQuad =', textureQuad);
 
       // set the position of this texture
       texturePositionArray.set(textureQuad, index * 12);
@@ -526,25 +528,70 @@
         0, h, 0,
         x, y, 1,
       ]);
+      //console.log('x, y, w, h:', x, y, w, h);
 
-      //console.log('MATRIX:', matrix);
       if (tile.flipped) {
-        //console.log('Tile is flipped...');
-        // flip the tile around the center of the unit quad
-        let t1 = $.Mat3.makeTranslation(0.5, 0);
-        let t2 = $.Mat3.makeTranslation(-0.5, 0);
 
-        // update the view matrix to account for this image's rotation
-        let localMatrix = t1.multiply($.Mat3.makeScaling(-1, 1)).multiply(t2);
+        let t1 = $.Mat3.makeTranslation(0.5, 0);
+        t1 = new $.Mat3([
+            1, 0, 0,
+            0, 1, 0,
+            0.5, 0, 1
+        ]);
+
+        let t2 = $.Mat3.makeTranslation(-0.5, 0);
+        t2 = new $.Mat3([
+            1, 0, 0,
+            0, 1, 0,
+            -0.5, 0, 1
+        ]);
+
+        let scaling = $.Mat3.makeScaling(-1, 1);
+        scaling = new $.Mat3([
+            -1, 0, 0,
+            0, 1, 0,
+            0, 0, 1,
+        ]);
+
+        let localMatrix = t1.multiply(scaling).multiply(t2);
+
+        // moj sposob zlahceny
+        //let localMatrix = scaling.multiply($.Mat3.makeTranslation(-1, 0));
+
+        // funguje, ale su dogabane trocha tie tile-y pri rotovani
+        //localMatrix = $.Mat3.makeRotation(-Math.PI / 2).multiply($.Mat3.makeTranslation(0, -1));
+
         matrix = matrix.multiply(localMatrix);
       }
-      //console.log('MATRIX:', matrix);
+
+        // Funguje, otaca okolo ORIGINU (lavy horny roh kazdej tile-y)
+        //   if (tile.flipped) {
+        //     let t1 = $.Mat3.makeTranslation(0, 0);
+        //     let scaling = $.Mat3.makeScaling(1, 1);
+        //     let rotation = $.Mat3.makeRotation(-Math.PI);
+        //     let localMatrix = t1.multiply(scaling).multiply(rotation);
+        //     matrix = matrix.multiply(localMatrix);
+        //   }
+
+        // moj pokus o dostanie tile do originu, ktory som si myslel ze je v [0,0]
+        // if (tile.flipped) {
+        //     console.log(`matrix pred translaciou (x=${x}, y=${y}, w=${w}, h=${h}) :`, matrix);
+        //     // netusim preco to takto je, robil by som to presne naopak nechapem preco to je vynasobene 2, -x - w/2
+        //     // no dostal som to snad do originu, ale rotovat to neslo...
+        //     let t1 = $.Mat3.makeTranslation(-x * 2 - w, -y * 2 - h);
+        //     let t2 = $.Mat3.makeTranslation(x * 2 + w, y * 2 + h);
+        //     let t3 = $.Mat3.makeRotation(-Math.PI / 2);
+        //     //let t4 = $.Mat3.makeScaling(-1, 1);
+
+        //     // update the view matrix to account for this image's rotation
+        //     matrix = matrix.multiply(t1).multiply(t3).multiply(t2);
+        //     //console.log('matrix po translacii = ', matrix);
+        // }
 
       let overallMatrix = viewMatrix.multiply(matrix);
       opacityArray[index] = tile.opacity;
       textureDataArray[index] = texture;
       matrixArray[index] = overallMatrix.values;
-
     }
 
     /* Called only from constructor (initialization function) */
@@ -1008,6 +1055,7 @@
 
       context.translate(point.x, point.y);
       if (this.viewport.flipped) {
+        console.log('VIEWPORT JE FLIPPED');
         context.rotate(Math.PI / 180 * -options.degrees);
         context.scale(-1, 1);
       } else {
