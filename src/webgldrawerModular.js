@@ -290,7 +290,7 @@
 
         /**
          * Drawer type.
-         * @returns 'webgl' [should return]
+         * @returns 'webgl' [should return at least]
          */
         getType() {
             return 'myImplementation';
@@ -939,7 +939,7 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
-                // console.log('Vo for cykli cez tiledImages, prechod cislo', tiledImageIndex);
+                console.log('Vo for cykli cez tiledImages, TiledImage cislo', tiledImageIndex);
 
                 /* If vetva pridana z merge-u, jemne upravena */
                 if(tiledImage.isTainted()){

@@ -808,7 +808,7 @@
                 gl.bindTexture(gl[textureType], texture);
 
                 // Draw triangle strip (two triangles) from a static array defined in the vertex shader
-                console.log('Drawujem jjupi');
+                //console.log('Drawujem jjupi');
                 gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
             }
         }

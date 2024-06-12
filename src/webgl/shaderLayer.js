@@ -1484,12 +1484,12 @@
 
         glDrawing(program, gl) {
             gl[this.component.glUniformFunName()](this.glLocation, this.value);
-            console.log('Settujem', this.component.glUniformFunName(), this.glLocation, 'na', this.value);
+            //console.log('Settujem', this.component.glUniformFunName(), this.glLocation, 'na', this.value);
         }
 
         glLoaded(program, gl) {
             this.glLocation = gl.getUniformLocation(program, this.webGLVariableName);
-            console.log(`glLocation = ${this.glLocation}, webGLVariableName = ${this.webGLVariableName}`);
+            //console.log(`glLocation = ${this.glLocation}, webGLVariableName = ${this.webGLVariableName}`);
         }
 
         toHtml(breakLine = true, controlCss = "") {
