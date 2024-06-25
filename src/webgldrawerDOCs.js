@@ -348,6 +348,7 @@
 
             // set the buffer data for the texture coordinates to use for each tile
             gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPass.bufferTexturePosition);
+            // console.log('FROM OLD: texture cordinates for tile:', texturePositionArray);
             gl.bufferData(gl.ARRAY_BUFFER, texturePositionArray, gl.DYNAMIC_DRAW);
 
             // bind each tile's texture to the appropriate gl.TEXTURE#
@@ -378,6 +379,8 @@
             gl.drawArrays(gl.TRIANGLES, 0, 6 * numTilesToDraw);
           }
         } // endof FOREACH tiles
+
+        //console.log('Dokreslene do textury');
 
         if (useTwoPassRendering) {
           console.log('TwoPassR3ndering being used');
@@ -505,7 +508,7 @@
 
       let texture = textureInfo.texture;
       let textureQuad = textureInfo.position;
-      //console.log('textureQuad =', textureQuad);
+      console.log('textureQuad =', textureQuad);
 
       // set the position of this texture
       texturePositionArray.set(textureQuad, index * 12);
@@ -795,7 +798,7 @@
       gl.bufferData(gl.ARRAY_BUFFER, this._unitQuad, gl.STATIC_DRAW); // bind data statically here since it's unchanging
       gl.enableVertexAttribArray(this._secondPass.aOutputPosition);
 
-      // provide texture coordinates for the rectangle in image (texture) space.
+      // provide texture coordinates for the rectangle in image (texture) space, just 12 numbers representing two triangles over whole viewport
       gl.bindBuffer(gl.ARRAY_BUFFER, this._secondPass.bufferTexturePosition);
       gl.bufferData(gl.ARRAY_BUFFER, this._unitQuad, gl.DYNAMIC_DRAW); // bind data statically here since it's unchanging
       gl.enableVertexAttribArray(this._secondPass.aTexturePosition);

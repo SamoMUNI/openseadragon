@@ -92,7 +92,6 @@
             this._backupCanvasDrawer = null;
             this.context = this._outputContext; // API required by tests
 
-
             /***** SETUP RENDERER *****/
             const rendererOptions = {
                 uniqueId: "openseadragon", //todo OSD creates multiple drawers - navigator + main + possibly other - find way to differentiate
@@ -120,25 +119,23 @@
             // const size = this._calculateCanvasSize();
             console.log('Som v konstruktori draweru, renderer canvasu a this._size nastavujem na', this.canvas.width, this.canvas.height);
             this.renderer.init(this.canvas.width, this.canvas.height);
-            this._size = new $.Point(this.canvas.width, this.canvas.height);
+            this._size = new $.Point(this.canvas.width, this.canvas.height); // current viewport size, changed during resize event
 
             this.renderer.setDataBlendingEnabled(true); // enable blending
+
+
+            /***** SETUP CANVASES *****/
+            this._setupCanvases();
 
             this._renderOffScreenTextures = []; // textures to render into instead of canvas
             this._offScreenTexturesInfo = { // how many textures in _renderOffScreenTextures have correctly set their size to textureSize
                 initialized: 0,
                 textureSize: new $.Point(0, 0)
             };
-            this._renderOffScreenBuffer = null; // buffer to be used with any texture from _renderOffScreenTextures
+            this._renderOffScreenBuffer = this._gl.createFramebuffer(); // buffer to be used with any texture from _renderOffScreenTextures
 
             console.log('V konstruktori draweru, po inicializacii je renderer =', this.renderer);
-            // if (this._destroyed === false) {
-            //     throw (new Error("Ukoncujem inicializaciu rendera"));
-            // }
 
-
-            /***** SETUP CANVASES *****/
-            this._setupCanvases();
 
             // disable cull face, this solved flipping error
             this._gl.disable(this._gl.CULL_FACE);
@@ -186,6 +183,91 @@
                     this.renderer.deleteProgram(tIndex);
                 }
             });
+
+
+            /** Skusam firstPass program spravit **/
+            const vertexShaderSourceFirstPass = `
+    precision mediump float;
+
+    attribute vec2 a_position;
+    attribute vec2 a_texCoord;
+    varying vec2 v_texCoord;
+
+    uniform mat3 u_transform_matrix;
+
+    void main() {
+        v_texCoord = a_texCoord;
+        gl_Position = vec4(u_transform_matrix * vec3(a_position, 1), 1);
+    }
+`;
+            const fragmentShaderSourceFirstPass = `
+    precision mediump float;
+    precision mediump sampler2D;
+
+    varying vec2 v_texCoord;
+    uniform sampler2D u_texture;
+
+    void main() {
+        gl_FragColor = texture2D(u_texture, v_texCoord);
+    }
+`;
+            this.vertexShaderFirstPass = this.__createShader(this._gl, this._gl.VERTEX_SHADER, vertexShaderSourceFirstPass);
+            if (!this.vertexShaderFirstPass) {
+                alert("Creation of first pass vertex shader failed");
+            }
+            this.fragmentShaderFirstPass = this.__createShader(this._gl, this._gl.FRAGMENT_SHADER, fragmentShaderSourceFirstPass);
+            if (!this.fragmentShaderFirstPass) {
+                alert("Creation of first pass fragment shader failed");
+            }
+            this.programFirstPass = this.__createProgram(this._gl, this.vertexShaderFirstPass, this.fragmentShaderFirstPass);
+            if (!this.programFirstPass) {
+                alert("Creation of first pass program failed");
+            }
+
+            /** Skusam secondPass program spravit **/
+            const vertexShaderSourceSecondPass = `
+    attribute vec2 a_texCoords;
+    attribute vec2 a_position;
+    varying vec2 v_texcoord;
+
+    void main() {
+        // convert from 0->1 to 0->2
+        vec2 zeroToTwo = a_position * 2.0;
+
+        // convert from 0->2 to -1->+1 (clipspace)
+        vec2 clipSpace = zeroToTwo - 1.0;
+
+        // original was gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+        // but because texture from first pass comes flipped over x-axis I use this:
+        gl_Position = vec4(clipSpace * vec2(1, 1), 0, 1);
+
+        v_texcoord = a_texCoords;
+    }
+`;
+            const fragmentShaderSourceSecondPass = `
+    precision mediump float;
+
+    varying vec2 v_texcoord;
+    uniform sampler2D u_texture;
+
+    void main() {
+        //gl_FragColor = texture2D(u_texture, v_texcoord);
+        gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
+    }
+`;
+            this.vertexShaderSecondPass = this.__createShader(this._gl, this._gl.VERTEX_SHADER, vertexShaderSourceSecondPass);
+            if (!this.vertexShaderSecondPass) {
+                alert("Creation of vertex shader failed");
+            }
+            this.fragmentShaderSecondPass = this.__createShader(this._gl, this._gl.FRAGMENT_SHADER, fragmentShaderSourceSecondPass);
+            if (!this.fragmentShaderSecondPass) {
+                alert("Creation of fragment shader failed");
+            }
+            this.programSecondPass = this.__createProgram(this._gl, this.vertexShaderSecondPass, this.fragmentShaderSecondPass);
+            if (!this.programSecondPass) {
+                alert("Creation of program failed");
+            }
+
         }//end of constructor
 
 
@@ -346,15 +428,20 @@
             let rotMatrix = $.Mat3.makeRotation(-view.rotation);
             let viewMatrix = scaleMatrix.multiply(rotMatrix).multiply(posMatrix);
 
-            let twoPassRendering = false;
+            const gl = this._gl;
+            let twoPassRendering = true;
+            // skusit proste premazat cervenou
             if (twoPassRendering) {
-                this.enableStencilTest(true);
-                this._resizeOffScreenTextures(0);
-                this._drawTwoPass(tiledImages, view, viewMatrix);
+                this.enableStencilTest(false);
+                this._resizeOffScreenTextures(tiledImages.length);
+                this._drawTwoPassEasy(tiledImages, view, viewMatrix);
             } else {
                 this.enableStencilTest(false);
                 // this._resizeOffScreenTextures(tiledImages.length); podla mna to je zbytocne, naco su mi offscreentextury vo first passe?
                 this._drawSinglePass(tiledImages, view, viewMatrix);
+                console.log(gl.getParameter(gl.VIEWPORT));
+                gl.clearColor(1, 1, 0, 1);
+                gl.clear(gl.COLOR_BUFFER_BIT);
             }
 
             /* context2dPipeline was not used, data are still in _renderingCanvas */
@@ -877,10 +964,10 @@
             return ratio * viewportZoom;
         }
 
-        /**
-         * Iba pre draw funkciu,
-         * Initialize Min(count, gl.maxTextureImageUnits) textures in this._renderOffScreenTextures
-         * @param {number} count number of textures to initialize
+        /** Called only before drawTwoPass() call in draw() function, reinitialize
+         * count offScreenTextures to be used as first pass rendering target during
+         * twoPass render.
+         * @param {number} count number of textures to reinitialize
          */
         _resizeOffScreenTextures(count) {
             if (count < 1) {
@@ -893,6 +980,7 @@
             //const rebuildStartIndex = (this._offScreenTexturesInfo.size !== this._size) ? this._renderOffScreenTextures.length : 0;
             //let i = rebuildStartIndex;
             for (let i = 0; i < count; ++i) {
+                console.log('Pripravujem offscreen texturu cislo', i);
                 let texture = this._renderOffScreenTextures[i];
                 if (!texture) {
                     this._renderOffScreenTextures[i] = texture = gl.createTexture();
@@ -919,7 +1007,7 @@
          * Binds _renderOffScreenBuffer to i-th texture from _renderOffScreenTextures
          * @param {number} i index to texture in this._renderOffScreenTextures
          */
-        _bindOffScreenTexture(i) {
+        _bindFrameBufferToOffScreenTexture(i) {
             const gl = this._gl;
             let texture = this._renderOffScreenTextures[i];
             gl.bindFramebuffer(gl.FRAMEBUFFER, this._renderOffScreenBuffer);
@@ -1110,6 +1198,413 @@
             }); //end of for tiledImage of tiledImages
         }
 
+        /**
+         * Iba pre draw funkciu
+         * @param {[TiledImage]} tiledImages Array of tiledImage objects to draw
+         * @param {Object} viewport has bounds, center, rotation, zoom
+         * @param {OpenSeadragon.Mat3} viewMatrix to apply
+         */
+        _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
+            // console.log('TWO PASS r3nd3r1ng being used');
+            const gl = this._gl;
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            tiledImages.forEach((tiledImage, tiledImageIndex) => {
+                if (tiledImage.isTainted()) {
+                    throw new Error("TiledImage.isTainted during two pass! -> not implemented!");
+                } else {
+                    let tilesToDraw = tiledImage.getTilesToDraw();
+
+                    // pridane z merge-u
+                    if ( tiledImage.placeholderFillStyle && tiledImage._hasOpaqueTile === false ) {
+                        throw new Error("Drawtwopass: placeholderfillstyle not implemented!");
+                    }
+                    // nothing to draw or opacity is zero
+                    if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
+                        return; // return or continue?
+                    }
+
+                    const plainShader = this.renderer.getSpecification(0).shaders.renderShader._renderContext;
+                    plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
+                    plainShader.opacity.set(tiledImage.opacity);
+
+                    const specificationObject = tiledImage.source.shader;
+                    this.renderer.useProgram(specificationObject._programIndexTarget);
+
+                    this._bindFrameBufferToOffScreenTexture(tiledImageIndex);
+
+                    // MATRIX
+                    let overallMatrix = viewMatrix;
+                    let imageRotation = tiledImage.getRotation(true);
+                    // if needed, handle the tiledImage being rotated
+                    if( imageRotation % 360 !== 0) {
+                        let imageRotationMatrix = $.Mat3.makeRotation(-imageRotation * Math.PI / 180);
+                        let imageCenter = tiledImage.getBoundsNoRotate(true).getCenter();
+                        let t1 = $.Mat3.makeTranslation(imageCenter.x, imageCenter.y);
+                        let t2 = $.Mat3.makeTranslation(-imageCenter.x, -imageCenter.y);
+
+                        // update the view matrix to account for this image's rotation
+                        let localMatrix = t1.multiply(imageRotationMatrix).multiply(t2);
+                        overallMatrix = viewMatrix.multiply(localMatrix);
+                    }
+                    let pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
+
+                    // ITERATE over TILES and render data into offScreenTexture
+                    for (let tileIndex = 0; tileIndex < tilesToDraw.length; ++tileIndex) {
+                        //console.log('Kreslim tile cislo', tileIndex);
+                        const tile = tilesToDraw[tileIndex].tile;
+
+                        const tileContext = tile.getCanvasContext();
+                        let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
+                        if (tileInfo === null) {
+                            // tile was not processed in the tile-ready event (this can happen
+                            // if this drawer was created after the tile was downloaded)
+                            this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
+                            // retry getting textureInfo
+                            tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
+                        }
+                        if (tileInfo === null) {
+                            throw Error("webgldrawerModular::drawTwoPass: tile has no context!");
+                        }
+
+                        const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
+                        plainShader.opacity.set(tile.opacity * tiledImage.opacity);
+
+                        // console.log('Pred processData callom, textureCoords =', tileInfo.position);
+                        /* DRAW */
+                        this.renderer.processData(tileInfo.texture, {
+                            transform: matrix,
+                            zoom: viewport.zoom, //asi cislo
+                            pixelSize: pixelSize, //asi cislo
+                            textureCoords: tileInfo.position,
+                        });
+                    } // end of TILES iteration
+
+
+
+                    //---------------------------------------------------------------
+                    // render from texture to canvas
+                    console.log('Dokreslene to textury, mal by som tam mat cely tiledImage');
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                    gl.useProgram(this.program);
+                    gl.clearColor(1, 0, 0, 1); // canvas should've been red if rendering from texture will not be successfull
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+
+
+                    const texture = this._renderOffScreenTextures[tiledImageIndex];
+                    gl.bindTexture(gl.TEXTURE_2D, texture);
+
+
+                    var positionBuffer = gl.createBuffer();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                    this.__setRectangle(gl, 0, 0, 1, 1);
+
+                    var positionLocation = gl.getAttribLocation(this.program, "a_position");
+                    if (positionLocation === -1) {
+                        throw new Error("Nenasiel som v akutalnom programe a_position!");
+                    } else {
+                        console.log('a_position je v poriadku v tomto programe!');
+                    }
+                    gl.enableVertexAttribArray(positionLocation);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+
+                    var texcoordBuffer = gl.createBuffer();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+                    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                        0.0, 0.0,
+                        1.0, 0.0,
+                        0.0, 1.0,
+                        0.0, 1.0,
+                        1.0, 0.0,
+                        1.0, 1.0,
+                    ]), gl.STATIC_DRAW);
+
+                    var texcoordLocation = gl.getAttribLocation(this.program, "a_texCoords");
+                    if (texcoordLocation === -1) {
+                        throw new Error("Nenasiel som v akutalnom programe a_texCoords!");
+                    } else {
+                        console.log('a_texCoords je v poriadku v tomto programe!');
+                    }
+                    gl.enableVertexAttribArray(texcoordLocation);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+                    gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+
+                    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+                    //gl.clear(gl.COLOR_BUFFER_BIT);
+
+                    // this.renderer.processData(this._renderOffScreenTextures[tiledImageIndex], {
+                    //     transform: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+                    //     zoom: 1,
+                    //     pixelSize: 1,
+                    //     textureCoords: [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]
+                    // });
+                    console.log('po second passe');
+
+
+                    // Apply context2DPipeline or tick the flag that data are in rendering canvas and need to be copied to output canvas
+                    let useContext2dPipeline = (tiledImage.compositeOperation ||
+                        this.viewer.compositeOperation ||
+                        tiledImage._clip ||
+                        tiledImage._croppingPolygons ||
+                        tiledImage.debugMode
+                    );
+                    if (useContext2dPipeline) {
+                        // draw from the rendering canvas onto the output canvas, clipping/cropping if needed
+                        this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
+                        gl.clear(gl.COLOR_BUFFER_BIT);
+                        this._renderingCanvasHasImageData = false;
+                    } else {
+                        this._renderingCanvasHasImageData = true;
+                    }
+
+                }
+            }); //end of for tiledImage of tiledImages
+        } // end of new two pass
+
+
+        _drawTwoPassEasy(tiledImages, viewport, viewMatrix) {
+            const gl = this._gl;
+            gl.useProgram(this.programFirstPass);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.clearColor(0, 1, 0, 0.5);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            tiledImages.forEach((tiledImage, tiledImageIndex) => {
+                if (tiledImage.isTainted()) {
+                    throw new Error("TiledImage.isTainted during two pass! -> not implemented!");
+                } else {
+                    let tilesToDraw = tiledImage.getTilesToDraw();
+
+                    // pridane z merge-u
+                    if ( tiledImage.placeholderFillStyle && tiledImage._hasOpaqueTile === false ) {
+                        throw new Error("Drawtwopass: placeholderfillstyle not implemented!");
+                    }
+                    // nothing to draw or opacity is zero
+                    if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
+                        return; // return or continue?
+                    }
+
+
+                    // MATRIX
+                    let overallMatrix = viewMatrix;
+                    let imageRotation = tiledImage.getRotation(true);
+                    // if needed, handle the tiledImage being rotated
+                    if( imageRotation % 360 !== 0) {
+                        let imageRotationMatrix = $.Mat3.makeRotation(-imageRotation * Math.PI / 180);
+                        let imageCenter = tiledImage.getBoundsNoRotate(true).getCenter();
+                        let t1 = $.Mat3.makeTranslation(imageCenter.x, imageCenter.y);
+                        let t2 = $.Mat3.makeTranslation(-imageCenter.x, -imageCenter.y);
+
+                        // update the view matrix to account for this image's rotation
+                        let localMatrix = t1.multiply(imageRotationMatrix).multiply(t2);
+                        overallMatrix = viewMatrix.multiply(localMatrix);
+                    }
+                    // let pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
+
+
+                    // ITERATE over TILES
+                    for (let tileIndex = 0; tileIndex < tilesToDraw.length; ++tileIndex) {
+                        //console.log('Kreslim tile cislo', tileIndex);
+                        const tile = tilesToDraw[tileIndex].tile;
+
+                        const tileContext = tile.getCanvasContext();
+                        let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
+                        if (tileInfo === null) {
+                            // tile was not processed in the tile-ready event (this can happen
+                            // if this drawer was created after the tile was downloaded)
+                            this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
+                            // retry getting textureInfo
+                            tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
+                        }
+                        if (tileInfo === null) {
+                            throw Error("webgldrawerModular::drawTwoPass: tile has no context!");
+                        }
+
+                        const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
+
+
+                        // SUPPLY data to webgl
+                        gl.useProgram(this.programFirstPass);
+                        this._bindFrameBufferToOffScreenTexture(tiledImageIndex);
+
+                        // fill the position buffer with 6 (x,y) points representing two triangles over viewport
+                        const positionBuffer = gl.createBuffer();
+                        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                        this.__setRectangleStrip(gl, 0, 0, 1, 1);
+                        const positionLocation = gl.getAttribLocation(this.programFirstPass, "a_position");
+                        gl.enableVertexAttribArray(positionLocation);
+                        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+                        // fill the texture coordinates
+                        const texCoordBuffer = gl.createBuffer();
+                        gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+                        console.log('tileinfo poisiton:', tileInfo.position);
+                        gl.bufferData(gl.ARRAY_BUFFER, tileInfo.position, gl.STATIC_DRAW);
+                        const texCoordLocation = gl.getAttribLocation(this.programFirstPass, "a_texCoord");
+                        gl.enableVertexAttribArray(texCoordLocation);
+                        gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+                        // fill the transform matrix
+                        const matrixLocation = gl.getUniformLocation(this.programFirstPass, "u_transform_matrix");
+                        gl.uniformMatrix3fv(matrixLocation, false, matrix);
+
+                        // fill the texture
+                        const textureLocation = gl.getUniformLocation(this.programFirstPass, "u_texture");
+                        gl.uniform1i(textureLocation, 0);
+                        gl.activeTexture(gl.TEXTURE0);
+                        gl.bindTexture(gl.TEXTURE_2D, tileInfo.texture);
+
+                        // draw
+                        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+                        // /* DRAW */
+                        // this.renderer.processData(tileInfo.texture, {
+                        //     transform: matrix,
+                        //     zoom: viewport.zoom, //asi cislo
+                        //     pixelSize: pixelSize, //asi cislo
+                        //     textureCoords: tileInfo.position,
+                        // });
+                    } // end of TILES iteration
+
+
+                    //---------------------------------------------------------------
+                    // render from texture to canvas
+                    let temp = 3;
+                    if (1 + 2 === temp) {
+                        console.warn('Preskakujem second pass!');
+                    } else {
+                        console.log('Dokreslene do textury, mal by som tam mat cely tiledImage');
+                        gl.useProgram(this.programSecondPass);
+                        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+
+                        const texture = this._renderOffScreenTextures[tiledImageIndex];
+                        gl.bindTexture(gl.TEXTURE_2D, texture);
+
+
+                        const positionBuffer = gl.createBuffer();
+                        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                        this.__setRectangleStrip(gl, 0, 0, 1, 1);
+                        const positionLocation = gl.getAttribLocation(this.programSecondPass, "a_position");
+                        if (positionLocation === -1) {
+                            throw new Error("Nenasiel som v akutalnom programe a_position!");
+                        } else {
+                            console.log('a_position je v poriadku v tomto programe!');
+                        }
+                        gl.enableVertexAttribArray(positionLocation);
+                        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+
+                        const texcoordBuffer = gl.createBuffer();
+                        gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                            0.0, 0.0,
+                            1.0, 0.0,
+                            0.0, 1.0,
+                            1.0, 1.0,
+                        ]), gl.STATIC_DRAW);
+                        const texcoordLocation = gl.getAttribLocation(this.programSecondPass, "a_texCoords");
+                        if (texcoordLocation === -1) {
+                            throw new Error("Nenasiel som v akutalnom programe a_texCoords!");
+                        } else {
+                            console.log('a_texCoords je v poriadku v tomto programe!');
+                        }
+                        gl.enableVertexAttribArray(texcoordLocation);
+                        gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+
+                        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+                        //gl.clear(gl.COLOR_BUFFER_BIT);
+
+                        // this.renderer.processData(this._renderOffScreenTextures[tiledImageIndex], {
+                        //     transform: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+                        //     zoom: 1,
+                        //     pixelSize: 1,
+                        //     textureCoords: [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]
+                        // });
+                        console.log('po second passe');
+                    }
+
+
+                    // Apply context2DPipeline or tick the flag that data are in rendering canvas and need to be copied to output canvas
+                    let useContext2dPipeline = (tiledImage.compositeOperation ||
+                        this.viewer.compositeOperation ||
+                        tiledImage._clip ||
+                        tiledImage._croppingPolygons ||
+                        tiledImage.debugMode
+                    );
+                    if (useContext2dPipeline) {
+                        // draw from the rendering canvas onto the output canvas, clipping/cropping if needed
+                        this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
+                        gl.clear(gl.COLOR_BUFFER_BIT);
+                        this._renderingCanvasHasImageData = false;
+                    } else {
+                        this._renderingCanvasHasImageData = true;
+                    }
+
+                }
+            }); //end of for tiledImage of tiledImages
+        } // end of new two pass easy
+
+        __setRectangle(gl, x, y, width, height) {
+            // Fills the ARRAY_BUFFER with two triangles representing a rectangle
+            var x1 = x;
+            var x2 = x + width;
+            var y1 = y;
+            var y2 = y + height;
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                x1, y1,
+                x2, y1,
+                x1, y2,
+                x1, y2,
+                x2, y1,
+                x2, y2,
+            ]), gl.STATIC_DRAW);
+        }
+
+        __setRectangleStrip(gl, x, y, width, height) {
+            // Fills the ARRAY_BUFFER with triangle strip representing a rectangle
+            var x1 = x;
+            var x2 = x + width;
+            var y1 = y;
+            var y2 = y + height;
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                x1, y1,
+                x2, y1,
+                x1, y2,
+                x2, y2,
+            ]), gl.STATIC_DRAW);
+        }
+
+        __createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            // console.log(source);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+              console.error("Shader compilation error:", gl.getShaderInfoLog(shader));
+              return null;
+            }
+            return shader;
+        }
+
+        __createProgram(gl, vertexShader, fragmentShader) {
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+              console.error("Program linking error:", gl.getProgramInfoLog(program));
+              return null;
+            }
+            return program;
+        }
+
         /* iba pre draw funkciu, ani nepouzite zatial lebo cez if nejdem tymto */
         _drawTwoPass(tiledImages, viewport, viewMatrix) {
             console.log('Idem drawovat two pass');
@@ -1117,7 +1612,6 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             let drawnItems = 0;
-
             for (const tiledImage of tiledImages) {
                 let tilesToDraw = tiledImage.getTilesToDraw();
 
@@ -1133,7 +1627,7 @@
                 // const willDraw = drawnItems + shader.dataReferences.length;
                 // if (willDraw > this.maxTextureUnits) {
                 //     //merge to the output screen
-                //     this._bindOffScreenTexture(-1);
+                //     this._bindFrameBufferToOffScreenTexture(-1);
                 //
                 //     //todo
                 //
@@ -1141,10 +1635,7 @@
                 // }
 
                 this.renderer.useProgram(0); //todo use program based on texture used, e.g. drawing multi output
-
-
-
-                this._bindOffScreenTexture(drawnItems);
+                this._bindFrameBufferToOffScreenTexture(drawnItems);
 
                 let overallMatrix = viewMatrix;
                 let imageRotation = tiledImage.getRotation(true);
@@ -1179,6 +1670,8 @@
                         textureCoords: tileData.position
                     });
                 }
+
+                ++drawnItems;
 
                 // Fire tiled-image-drawn event.
                 // TODO: the image data may not be on the output canvas yet!!
