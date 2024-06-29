@@ -276,7 +276,7 @@
             }
 
             for (let control of this._ownedControls) {
-                console.log(`Loadujem ${control}`);
+                // console.log(`Loadujem ${control}`); HINT
                 this[control].glLoaded(program, gl);
             }
         }
@@ -1162,8 +1162,8 @@
                 }
             }
 
-            //todo test
-            console.debug("Failed to load safe param -> new feature, debugging! ", value, defaultValue, paramName);
+            // HINT was uncommented by Jirka, este som sa sem nedostal aby som vedel co to ma robit
+            //console.debug("Failed to load safe param -> new feature, debugging! ", value, defaultValue, paramName);
             return defaultValue;
         }
 

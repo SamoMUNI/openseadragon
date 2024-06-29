@@ -449,9 +449,10 @@
                 $.console.warn("$.WebGLModule::useProgram(): renderer not initialized.");
                 return;
             }
-            if (this._program === i) {
-                return;
-            }
+            //Mazem lebo pouzivam vlastny program mimo rendereru ktory nezmeni this._program
+            // if (this._program === i) {
+            //     return;
+            // }
             this._forceSwitchProgram(i);
         }
 
@@ -702,6 +703,8 @@
                     this._forceSwitchProgram(i, false); //force reset in errors
                     return;
                 }
+
+                // NAJDOLEZITEJSI riadok v tejto funkcii, vola pripravu WebGL programu
                 this.webglContext.programLoaded(program, specification);
             }
         }

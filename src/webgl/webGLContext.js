@@ -263,7 +263,7 @@
                 // odpoveda "osd_tile_texture_position" v glsl
                 // nakopiruje sa vo vertex shaderi do "out osd_texture_coords" a "flat out osd_texture_bounds"
 
-            this._locationMatrices = null; // :glUniformLocation, pre kazdu tile-u sa sem nahra matica ktora udava jej poziciu
+            this._locationMatrix = null; // :glUniformLocation, pre kazdu tile-u sa sem nahra matica ktora udava jej poziciu
                 // odpoveda "uniform mat3 osd_transform_matrix" v glsl
 
             this._locationPixelSize = null; // :glUniformLocation, nepouzite
@@ -274,7 +274,7 @@
 
             // attributes for instanced rendering, unused
             this._bufferMatrices = gl.createBuffer(); // :glBuffer
-            this._locationMatrices = null; // :glAttribLocation, odpoveda "osd_transform_matrix" v glsl, vertex shader uniform
+            this._locationMatrix = null; // :glAttribLocation, odpoveda "osd_transform_matrix" v glsl, vertex shader uniform
             this._textureLoc = null; // :glUniformLocation = odpoveda "_vis_data_sampler" v glsl, fragment shader uniform sampler2D/.../...
 
 
@@ -672,7 +672,7 @@
             // toto neviem ci je dobre lebo running hovori o tom ze renderer bezi s nejakou validnou specifikaciou...
             // ked chcem pouzit customprogram tak ale nebude bezat podla nijakej specifikacie => ajtak sa zapne running?
             // co ked este nebezal renderer a na supu chcem pouzit customprogram co potom ?
-            console.log('PROGRAMLOADED called!');
+            //console.log('PROGRAMLOADED called!');
             if (!this.renderer.running) {
                 return;
             }
@@ -688,7 +688,13 @@
             // gl.bindVertexArray(this.vao);
 
             this._locationPixelSize = gl.getUniformLocation(program, "pixel_size_in_fragments");
+            if (this._locationPixelSize === -1) {
+                throw new Error("webGLContext.js::programLoaded: uniform pixel_size not found in current program!");
+            }
             this._locationZoomLevel = gl.getUniformLocation(program, "zoom_level");
+            if (this._locationZoomLevel === -1) {
+                throw new Error("webGLContext.js::programLoaded: uniform zoom_level not found in current program!");
+            }
 
             const instanceCount = program._osdOptions.instanceCount;
             if (instanceCount > 1) {
@@ -705,12 +711,12 @@
                 // //this._bufferMatrices = this._bufferMatrices || gl.createBuffer(); presunul som do konstruktoru
                 // gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferMatrices);
 
-                // this._locationMatrices = gl.getAttribLocation(program, "osd_transform_matrix");
+                // this._locationMatrix = gl.getAttribLocation(program, "osd_transform_matrix");
                 // gl.bufferData(gl.ARRAY_BUFFER, 4 * 9 * instanceCount, gl.STREAM_DRAW);
                 // //matrix 3x3 (9) * 4 bytes per element
                 // const bytesPerMatrix = 4 * 9;
                 // for (let i = 0; i < 3; ++i) {
-                //     const loc = this._locationMatrices + i;
+                //     const loc = this._locationMatrix + i;
                 //     gl.enableVertexAttribArray(loc);
                 //     // note the stride and offset
                 //     const offset = i * 12;  // 3 floats per row, 4 bytes per float
@@ -732,7 +738,7 @@
 
             } else { // draw one instance at the time
                 // uniform mat3 osd_transform_matrix;
-                this._locationMatrices = gl.getUniformLocation(program, "osd_transform_matrix");
+                this._locationMatrix = gl.getUniformLocation(program, "osd_transform_matrix");
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
                 // in vec2 osd_tile_texture_position;
@@ -748,14 +754,14 @@
          * Fill the glsl variables and draw.
          * @param {WebGLProgram} program currently being used with renderer
          * @param {object} spec specification corresponding to program (from renderer._programSpecifications)
-         * @param {WebGLTexture} texture to use
-         * @param {object} tileOpts texture settings
-         * @param {OpenSeadragon.Mat3} tileOpts.transform 3*3 matrix that should be applied to tile vertices
-         * @param {number} tileOpts.pixelSize
-         * @param {number} tileOpts.zoom
-         * @param {[8 Numbers]} tileOpts.textureCoords pri old to bolo 12 numbers(dva trojuholniky, tu si myslim ze 8 lebo pouziva triangle strip)
+         * @param {WebGLTexture} texture to draw from
+         * @param {object} tileInfo
+         * @param {OpenSeadragon.Mat3} tileInfo.transform 3*3 matrix that should be applied to tile vertices
+         * @param {number} tileInfo.pixelSize
+         * @param {number} tileInfo.zoom
+         * @param {[8 Numbers]} tileInfo.textureCoords pri old to bolo 12 numbers(dva trojuholniky, tu si myslim ze 8 lebo pouziva triangle strip)
          */
-        programUsed(program, spec, texture, tileOpts) {
+        programUsed(program, spec, texture, tileInfo) {
             if (!this.renderer.running) {
                 throw new Error("webGLContext::programUsed: Renderer not running!");
             }
@@ -767,20 +773,20 @@
                 this.renderer.glDrawing(gl, program, spec);
             }
 
-            gl.uniform1f(this._locationPixelSize, tileOpts.pixelSize || 1);
-            gl.uniform1f(this._locationZoomLevel, tileOpts.zoom || 1);
+            gl.uniform1f(this._locationPixelSize, tileInfo.pixelSize || 1);
+            gl.uniform1f(this._locationZoomLevel, tileInfo.zoom || 1);
 
             const textureType = program._osdOptions.textureType;
             const instanceCount = program._osdOptions.instanceCount;
             if (instanceCount > 1) { // instancovane renderovanie mozem zatial preskocit, cize asi len else vetva ma momentalne zaujima
                 throw new Error("Instanced rendering not supported!");
                 // gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                // gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileOpts.textureCoords);
+                // gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileInfo.textureCoords);
 
                 // gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferMatrices);
-                // gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileOpts.transform);
+                // gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileInfo.transform);
 
-                // let drawInstanceCount = tileOpts.instanceCount || Infinity;
+                // let drawInstanceCount = tileInfo.instanceCount || Infinity;
                 // drawInstanceCount = Math.min(drawInstanceCount, instanceCount);
 
                 // for (let i = 0; i <= drawInstanceCount; i++) {
@@ -795,10 +801,10 @@
 
                 // nahravam textureCoords data
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                gl.bufferData(gl.ARRAY_BUFFER, tileOpts.textureCoords, gl.STATIC_DRAW);
+                gl.bufferData(gl.ARRAY_BUFFER, tileInfo.textureCoords, gl.STATIC_DRAW);
 
                 // nahravam transform maticu
-                gl.uniformMatrix3fv(this._locationMatrices, false, tileOpts.transform);
+                gl.uniformMatrix3fv(this._locationMatrix, false, tileInfo.transform);
 
                 // Upload texture, only one texture active, no preparation
                 gl.activeTexture(gl.TEXTURE0);

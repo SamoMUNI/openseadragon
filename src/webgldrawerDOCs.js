@@ -508,7 +508,7 @@
 
       let texture = textureInfo.texture;
       let textureQuad = textureInfo.position;
-      console.log('textureQuad =', textureQuad);
+      //console.log('textureQuad =', textureQuad);
 
       // set the position of this texture
       texturePositionArray.set(textureQuad, index * 12);
