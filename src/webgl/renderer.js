@@ -556,7 +556,7 @@
             //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
             const spec = this._programSpecifications[this._program];
             //console.log('processData: spec=', spec);
-
+            // console.log('processData, tileOpts =', tileOpts);
             if (!spec) {
                 $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             } else {
@@ -706,6 +706,18 @@
 
                 // NAJDOLEZITEJSI riadok v tejto funkcii, vola pripravu WebGL programu
                 this.webglContext.programLoaded(program, specification);
+            }
+        }
+
+        /**
+         * Switch between firstPass or secondPass rendering.
+         * @param {number} pass 1 or 2
+         */
+        switchToRenderingPass(pass) {
+            if (pass === 1) {
+                this.webglContext.switchToFirstPass();
+            } else {
+                this.webglContext.switchToSecondPass();
             }
         }
 

@@ -557,71 +557,38 @@
          * @returns {string} fragment shader's glsl code
          */
         compileFragmentShader(definition, execution, options) {
-            const debug = options.debug ? `
-        float twoPixels = 1.0 / float(osd_texture_size().x) * 2.0;
-        vec2 distance = abs(osd_texture_bounds - osd_texture_coords);
-        if (distance.x <= twoPixels || distance.y <= twoPixels) {
-            final_color = vec4(1.0, .0, .0, 1.0);
-            return;
-        }
-    ` : "";
+    //         const debug = options.debug ? `
+    //     float twoPixels = 1.0 / float(osd_texture_size().x) * 2.0;
+    //     vec2 distance = abs(osd_texture_bounds - osd_texture_coords);
+    //     if (distance.x <= twoPixels || distance.y <= twoPixels) {
+    //         final_color = vec4(1.0, .0, .0, 1.0);
+    //         return;
+    //     }
+    // ` : "";
 
             const fragmentShaderCode = `#version 300 es
     precision mediump float;
     precision mediump sampler2D;
     precision mediump sampler2DArray;
-    precision mediump sampler3D;
 
+    uniform bool u_first_pass_fragment;
     uniform float pixel_size_in_fragments;
     uniform float zoom_level;
 
-    // utility function
-    bool close(float value, float target) {
-        return abs(target - value) < 0.001;
-    }
-
     // varyings from vertex shader
-    in vec2 osd_texture_coords;
-    flat in vec2 osd_texture_bounds;
-    flat in int osd_texture_id;
+    flat in int v_texture_id;
+    in vec2 v_texture_coords;
 
-    // texture sampling${this.getTextureSampling(options)}
-
-    // blending
+    uniform sampler2D u_texture;
     out vec4 final_color;
-    vec4 _last_rendered_color = vec4(.0);
-    int _last_mode = 0;
-    bool _last_clip = false;
-    void blend(vec4 color, int mode, bool clip) {
-        //premultiplied alpha blending
-        //if (_last_clip) {
-        //  todo
-        //} else {
-            vec4 fg = _last_rendered_color;
-            vec4 pre_fg = vec4(fg.rgb * fg.a, fg.a);
-
-            if (_last_mode == 0) {
-                final_color = pre_fg + (1.0-fg.a)*final_color;
-            } else if (_last_mode == 1) {
-                final_color = vec4(pre_fg.rgb * final_color.rgb, pre_fg.a + final_color.a);
-            } else {
-                final_color = vec4(.0, .0, 1.0, 1.0);
-            }
-        //}
-        _last_rendered_color = color;
-        _last_mode = mode;
-        _last_clip = clip;
-    }
-
-    // definition${definition}
 
     void main() {
-        ${debug}
-
-        // execution${execution}
-
-        //blend last level
-        blend(vec4(.0), 0, false);
+        //if (u_first_pass_fragment) {
+            final_color = texture(u_texture, v_texture_coords);
+        // } else {
+        //     //final_color = osd_texture(v_texture_id, v_texture_coords);
+            // final_color = vec4(1, 0, 0, 0.5);
+        // }
     }`;
 
             return fragmentShaderCode;
@@ -639,28 +606,50 @@
             const vertexShaderCode = `#version 300 es
     precision mediump float;
 
-    in vec2 osd_tile_texture_position;
-    flat out int osd_texture_id;
-    out vec2 osd_texture_coords;
-    flat out vec2 osd_texture_bounds;
+    uniform bool u_first_pass_vertex; // if true than firstPass else secondPass
+
+    in vec2 a_texture_coords;
+    out vec2 v_texture_coords;
+
+    flat out int v_texture_id;
+
 
     // definition:${definition}
 
-    void main() {
-        osd_texture_id = ${textureId};
-        // vec3 vertex = quad[gl_VertexID];
-        // vec2 texCoords = vec2(vertex.x, -vertex.y);
-        // osd_texture_coords = texCoords;
-        // osd_texture_bounds = texCoords;
+    // second pass definition:
+    // const vec3 viewport[4] = vec3[4] (
+    //     vec3(0.0, 0.0, 1.0),
+    //     vec3(0.0, 1.0, 1.0),
+    //     vec3(1.0, 0.0, 1.0),
+    //     vec3(1.0, 1.0, 1.0)
+    // );
 
-        osd_texture_coords = osd_tile_texture_position;
-        osd_texture_bounds = osd_tile_texture_position;
+    void main() {
+        v_texture_id = ${textureId};
+        v_texture_coords = a_texture_coords;
+
 
         // execution:${execution}
+
+
+        //gl_Position = vec4(osd_transform_matrix * viewport[gl_VertexID], 1);
+
     }
+
+    // The only thing that this vertex shader does is that it draws over the whole viewport and send texture information to fragment shader.
     `;
 
             return vertexShaderCode;
+        }
+
+        switchToFirstPass() {
+            this.gl.uniform1i(this._locationPassVertexFlag, 1);
+            this.gl.uniform1i(this._locationPassFragmentFlag, 1);
+        }
+
+        switchToSecondPass() {
+            this.gl.uniform1i(this._locationPassVertexFlag, 0);
+            this.gl.uniform1i(this._locationPassFragmentFlag, 0);
         }
 
         /** Called when associated webgl program is switched to. Volane z forceswitchshader z rendereru alebo pri useCustomProgram z rendereru.
@@ -687,6 +676,7 @@
 
             // gl.bindVertexArray(this.vao);
 
+            // FRAGMENT shader's uniforms locations
             this._locationPixelSize = gl.getUniformLocation(program, "pixel_size_in_fragments");
             if (this._locationPixelSize === -1) {
                 throw new Error("webGLContext.js::programLoaded: uniform pixel_size not found in current program!");
@@ -737,14 +727,17 @@
                 */
 
             } else { // draw one instance at the time
+                // uniform bool u_first_pass_*;
+                this._locationPassVertexFlag = gl.getUniformLocation(program, "u_first_pass_vertex");
+                this._locationPassFragmentFlag = gl.getUniformLocation(program, "u_first_pass_fragment");
+
                 // uniform mat3 osd_transform_matrix;
                 this._locationMatrix = gl.getUniformLocation(program, "osd_transform_matrix");
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                // in vec2 osd_tile_texture_position;
-                this._locationTexturePosition = gl.getAttribLocation(program, "osd_tile_texture_position");
+                this._locationTexturePosition = gl.getAttribLocation(program, "a_texture_coords");
                 gl.enableVertexAttribArray(this._locationTexturePosition);
-                // connect _bufferTexturePosition with _locationTexturePosition that points to osd_tile_texture_position
+                // connect _bufferTexturePosition with _locationTexturePosition that points to a_texture_coords
                 gl.vertexAttribPointer(this._locationTexturePosition, 2, gl.FLOAT, false, 0, 0);
             }
         }
@@ -773,6 +766,7 @@
                 this.renderer.glDrawing(gl, program, spec);
             }
 
+            // fill FRAGMENT shader's uniforms (that are unused)
             gl.uniform1f(this._locationPixelSize, tileInfo.pixelSize || 1);
             gl.uniform1f(this._locationZoomLevel, tileInfo.zoom || 1);
 
@@ -799,11 +793,13 @@
             } else { // draw one instance at the time
                 //gl.clear(gl.COLOR_BUFFER_BIT); //-> vzdy uvidim len poslednu vec co som drawoval potom hihi
 
-                // nahravam textureCoords data
+                // nahravam textureCoords dat
                 gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
+                console.log('texrutecoddd:', tileInfo.textureCoords);
                 gl.bufferData(gl.ARRAY_BUFFER, tileInfo.textureCoords, gl.STATIC_DRAW);
 
                 // nahravam transform maticu
+                console.log('transofrm:', tileInfo.transform);
                 gl.uniformMatrix3fv(this._locationMatrix, false, tileInfo.transform);
 
                 // Upload texture, only one texture active, no preparation
@@ -811,7 +807,7 @@
                 if (textureType !== "TEXTURE_2D" && textureType !== "TEXTURE_2D_ARRAY") {
                     throw new Error("webGLContext::programUsed: Not supported texture type!");
                 }
-                gl.bindTexture(gl[textureType], texture);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
 
                 // Draw triangle strip (two triangles) from a static array defined in the vertex shader
                 //console.log('Drawujem jjupi');
