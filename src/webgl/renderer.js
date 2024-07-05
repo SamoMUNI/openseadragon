@@ -710,15 +710,11 @@
         }
 
         /**
-         * Switch between firstPass or secondPass rendering.
-         * @param {number} pass 1 or 2
+         * Switch to first or second rendering pass.
+         * @param {number} pass 1 = first pass, 2 = second pass
          */
         switchToRenderingPass(pass) {
-            if (pass === 1) {
-                this.webglContext.switchToFirstPass();
-            } else {
-                this.webglContext.switchToSecondPass();
-            }
+            this.webglContext.switchToRenderingPass(pass);
         }
 
         // called only from _forceSwitchProgram

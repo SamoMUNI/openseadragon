@@ -100,8 +100,8 @@
          * @param {OpenSeadragon.WebGLModule.RenderingConfig?} currentConfig  JSON parameters used for this visualisation
          * @param {GLuint} texture
          * @param {object} tileOpts
-         * @param {number} tileOpts.zoom value passed to the shaders as zoom_level
-         * @param {number} tileOpts.pixelSize value passed to the shaders as pixel_size_in_fragments
+         * @param {number} tileOpts.zoom value passed to the shaders as u_zoom_level
+         * @param {number} tileOpts.pixelSize value passed to the shaders as u_pixel_size_in_fragments
          * @param {OpenSeadragon.Mat3|[OpenSeadragon.Mat3]} tileOpts.transform position transform
          * @param {number?} tileOpts.instanceCount how many instances to draw in case instanced drawing is enabled
          *   matrix or flat matrix array (instance drawing)
@@ -255,52 +255,15 @@
             // console.log("konstruujem webgl20 implementaciu");
             super(renderer, gl, "2.0", options); // sets this.renderer, this.gl, this.webglVersion, this.options
 
-            // this.vao = gl.createVertexArray();
+            // attributes that will be filled with glsl buffers and locations during programLoaded() call
+            this._bufferTextureCoords = null; // :glBuffer, pre kazdu tile-u sa sem nahraju data jej textureCoords
+            this._locationTextureCoords = null; // :glAttribLocation, atribut na previazanie s buffrom hore, nahra sa skrze neho do glsl
+            this._locationPassFlag = null;
+            this._locationTransformMatrix = null;
 
-            // attributes
-            this._bufferTexturePosition = gl.createBuffer(); // :glBuffer, pre kazdu tile-u sa sem nahraju data jej textureCoords
-            this._locationTexturePosition = null; // :glAttribLocation, atribut na previazanie s buffrom hore, nahra sa skrze neho do glsl
-                // odpoveda "osd_tile_texture_position" v glsl
-                // nakopiruje sa vo vertex shaderi do "out osd_texture_coords" a "flat out osd_texture_bounds"
-
-            this._locationMatrix = null; // :glUniformLocation, pre kazdu tile-u sa sem nahra matica ktora udava jej poziciu
-                // odpoveda "uniform mat3 osd_transform_matrix" v glsl
-
-            this._locationPixelSize = null; // :glUniformLocation, nepouzite
-                // odpoveda "uniform float pixel_size_in_fragments" v glsl
-            this._locationZoomLevel = null; // :glUniformLocation, nepouzite
-                // odpoveda "uniform float zoom_level" v glsl
-
-
-            // attributes for instanced rendering, unused
-            this._bufferMatrices = gl.createBuffer(); // :glBuffer
-            this._locationMatrix = null; // :glAttribLocation, odpoveda "osd_transform_matrix" v glsl, vertex shader uniform
-            this._textureLoc = null; // :glUniformLocation = odpoveda "_vis_data_sampler" v glsl, fragment shader uniform sampler2D/.../...
-
-
-            // Create a texture.
-            this.glyphTex = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, this.glyphTex);
-            // Fill the texture with a 1x1 blue pixel.
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
-                new Uint8Array([0, 0, 255, 255]));
-            // Asynchronously load an image
-            var image = new Image();
-            image.src = "8x8-font.png";
-
-            const _this = this;
-            image.addEventListener('load', function() {
-                // Now that the image has loaded make copy it to the texture.
-                gl.bindTexture(gl.TEXTURE_2D, _this.glyphTex);
-                /* Multiplies the alpha channel into the other color channels */
-                gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-                // Put the picture into the texture
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-            });
+            this._locationPixelSize = null;
+            this._locationZoomLevel = null;
+            this._locationTexture = null;
         }
 
         /** Get WebGL2RenderingContext (static used to avoid instantiation of this class in case of missing support)
@@ -452,22 +415,8 @@
                 specification.desc = description;
             };
 
-            const matrixType = options.instanceCount > 2 ? "in" : "uniform";
 
-            // glsl code placed outside the main function
-            const vertexShaderDefinition = `
-    ${matrixType} mat3 osd_transform_matrix;
-    const vec3 quad[4] = vec3[4] (
-        vec3(0.0, 1.0, 1.0),
-        vec3(0.0, 0.0, 1.0),
-        vec3(1.0, 1.0, 1.0),
-        vec3(1.0, 0.0, 1.0)
-    );`;
-            // glsl code placed inside the main function
-            const vertexShaderExecution = `
-        gl_Position = vec4(osd_transform_matrix * quad[gl_VertexID], 1);`;
-
-            const vertexShaderCode = this.compileVertexShader(vertexShaderDefinition, vertexShaderExecution, options);
+            const vertexShaderCode = this.compileVertexShader(options);
 
             //hack -> use 'invalid' key to attach item
             globalScopeCode[null] = definition;
@@ -571,11 +520,11 @@
     precision mediump sampler2D;
     precision mediump sampler2DArray;
 
-    uniform bool u_first_pass_fragment;
-    uniform float pixel_size_in_fragments;
-    uniform float zoom_level;
+    uniform float u_pixel_size_in_fragments;
+    uniform float u_zoom_level;
 
-    // varyings from vertex shader
+    flat in int pass_flag; // 1. pass or 2. pass
+
     flat in int v_texture_id;
     in vec2 v_texture_coords;
 
@@ -583,74 +532,78 @@
     out vec4 final_color;
 
     void main() {
-        //if (u_first_pass_fragment) {
-            final_color = texture(u_texture, v_texture_coords);
-        // } else {
-        //     //final_color = osd_texture(v_texture_id, v_texture_coords);
-            // final_color = vec4(1, 0, 0, 0.5);
-        // }
+        final_color = texture(u_texture, v_texture_coords);
     }`;
 
             return fragmentShaderCode;
         }
 
         /** Get vertex shader's glsl code.
-         * @param {string} definition glsl code outta main function
-         * @param {string} execution glsl code inside the main function
          * @param {object} options
          * @returns {string} vertex shader's glsl code
          */
-        compileVertexShader(definition, execution, options) {
+        compileVertexShader(options) {
             const textureId = options.instanceCount > 1 ? 'gl_InstanceID' : '0';
 
             const vertexShaderCode = `#version 300 es
     precision mediump float;
 
-    uniform bool u_first_pass_vertex; // if true than firstPass else secondPass
+    uniform int u_pass_flag; // 1. pass or 2. pass
+    flat out int pass_flag;
 
+    flat out int v_texture_id;
     in vec2 a_texture_coords;
     out vec2 v_texture_coords;
 
-    flat out int v_texture_id;
+    uniform mat3 u_transform_matrix;
 
+    const vec3 first_pass_viewport[4] = vec3[4] (
+        vec3(0.0, 1.0, 1.0),
+        vec3(0.0, 0.0, 1.0),
+        vec3(1.0, 1.0, 1.0),
+        vec3(1.0, 0.0, 1.0)
+    );
 
-    // definition:${definition}
-
-    // second pass definition:
-    // const vec3 viewport[4] = vec3[4] (
-    //     vec3(0.0, 0.0, 1.0),
-    //     vec3(0.0, 1.0, 1.0),
-    //     vec3(1.0, 0.0, 1.0),
-    //     vec3(1.0, 1.0, 1.0)
-    // );
+    const vec3 second_pass_viewport[4] = vec3[4] (
+        vec3(0.0, 0.0, 1.0),
+        vec3(0.0, 1.0, 1.0),
+        vec3(1.0, 0.0, 1.0),
+        vec3(1.0, 1.0, 1.0)
+    );
 
     void main() {
+        pass_flag = u_pass_flag;
         v_texture_id = ${textureId};
         v_texture_coords = a_texture_coords;
 
+        if (u_pass_flag == 1) {
+            gl_Position = vec4(u_transform_matrix * first_pass_viewport[gl_VertexID], 1);
+        } else {
+            // convert from 0->1 to 0->2
+            vec3 oneToTwo = second_pass_viewport[gl_VertexID] * 2.0;
 
-        // execution:${execution}
+            // convert from 0->2 to -1->+1 (clipSpace coordinates)
+            vec3 clipSpace = oneToTwo - 1.0;
 
-
-        //gl_Position = vec4(osd_transform_matrix * viewport[gl_VertexID], 1);
+            gl_Position = vec4(clipSpace, 1);
+        }
 
     }
 
-    // The only thing that this vertex shader does is that it draws over the whole viewport and send texture information to fragment shader.
+    // The only thing that this vertex shader does is that it draws over the whole viewport and send texture coordinates to fragment shader.
     `;
 
             return vertexShaderCode;
         }
 
-        switchToFirstPass() {
-            this.gl.uniform1i(this._locationPassVertexFlag, 1);
-            this.gl.uniform1i(this._locationPassFragmentFlag, 1);
+        /**
+         * Switch to first or second rendering pass.
+         * @param {number} pass 1 = first pass, 2 = second pass
+         */
+        switchToRenderingPass(pass) {
+            this.gl.uniform1i(this._locationPassFlag, pass);
         }
 
-        switchToSecondPass() {
-            this.gl.uniform1i(this._locationPassVertexFlag, 0);
-            this.gl.uniform1i(this._locationPassFragmentFlag, 0);
-        }
 
         /** Called when associated webgl program is switched to. Volane z forceswitchshader z rendereru alebo pri useCustomProgram z rendereru.
          * Prepaja atributy (definove touto classou) a atributy (definovane shaderami a ich controls) s ich odpovedajucimi glsl premennymi.
@@ -661,7 +614,7 @@
             // toto neviem ci je dobre lebo running hovori o tom ze renderer bezi s nejakou validnou specifikaciou...
             // ked chcem pouzit customprogram tak ale nebude bezat podla nijakej specifikacie => ajtak sa zapne running?
             // co ked este nebezal renderer a na supu chcem pouzit customprogram co potom ?
-            //console.log('PROGRAMLOADED called!');
+            console.log('PROGRAMLOADED called!');
             if (!this.renderer.running) {
                 return;
             }
@@ -674,73 +627,28 @@
                 this.renderer.glLoaded(gl, program, spec);
             }
 
-            // gl.bindVertexArray(this.vao);
+            // VERTEX shader's locations
+            this._locationTextureCoords = gl.getAttribLocation(program, "a_texture_coords");
+            this._locationPassFlag = gl.getUniformLocation(program, "u_pass_flag");
+            this._locationTransformMatrix = gl.getUniformLocation(program, "u_transform_matrix");
 
-            // FRAGMENT shader's uniforms locations
-            this._locationPixelSize = gl.getUniformLocation(program, "pixel_size_in_fragments");
-            if (this._locationPixelSize === -1) {
-                throw new Error("webGLContext.js::programLoaded: uniform pixel_size not found in current program!");
-            }
-            this._locationZoomLevel = gl.getUniformLocation(program, "zoom_level");
-            if (this._locationZoomLevel === -1) {
-                throw new Error("webGLContext.js::programLoaded: uniform zoom_level not found in current program!");
-            }
+            // FRAGMENT shader's locations
+            this._locationPixelSize = gl.getUniformLocation(program, "u_pixel_size_in_fragments");
+            this._locationZoomLevel = gl.getUniformLocation(program, "u_zoom_level");
+            this._locationTexture = gl.getUniformLocation(program, "u_texture");
 
-            const instanceCount = program._osdOptions.instanceCount;
-            if (instanceCount > 1) {
-                throw new Error("Instanced rendering not supported!");
-                /* gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                // this._locationTexturePosition = gl.getAttribLocation(program, 'osd_tile_texture_position');
-                // //vec2 * 4 bytes per element
-                // const vertexSizeByte = 2 * 4;
-                // gl.bufferData(gl.ARRAY_BUFFER, instanceCount * 4 * vertexSizeByte, gl.STREAM_DRAW);
-                // gl.enableVertexAttribArray(this._locationTexturePosition);
-                // gl.vertexAttribPointer(this._locationTexturePosition, 2, gl.FLOAT, false, 0, 0);
-                // gl.vertexAttribDivisor(this._locationTexturePosition, 0); // nic specialne nerobi?
+            // Initialize texture coords attribute
+            this._bufferTextureCoords = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(this._locationTextureCoords);
+            gl.vertexAttribPointer(this._locationTextureCoords, 2, gl.FLOAT, false, 0, 0);
 
-                // //this._bufferMatrices = this._bufferMatrices || gl.createBuffer(); presunul som do konstruktoru
-                // gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferMatrices);
-
-                // this._locationMatrix = gl.getAttribLocation(program, "osd_transform_matrix");
-                // gl.bufferData(gl.ARRAY_BUFFER, 4 * 9 * instanceCount, gl.STREAM_DRAW);
-                // //matrix 3x3 (9) * 4 bytes per element
-                // const bytesPerMatrix = 4 * 9;
-                // for (let i = 0; i < 3; ++i) {
-                //     const loc = this._locationMatrix + i;
-                //     gl.enableVertexAttribArray(loc);
-                //     // note the stride and offset
-                //     const offset = i * 12;  // 3 floats per row, 4 bytes per float
-                //     gl.vertexAttribPointer(
-                //         loc,              // location
-                //         3,                // size (num values to pull from buffer per iteration)
-                //         gl.FLOAT,         // type of data in buffer
-                //         false,            // normalize
-                //         bytesPerMatrix,   // stride, num bytes to advance to get to next set of values
-                //         offset
-                //     );
-                //     // this line says this attribute only changes for each 1 instance
-                //     gl.vertexAttribDivisor(loc, 1);
-                // }
-
-                // this._textureLoc = gl.getUniformLocation(program, "_vis_data_sampler");
-                // gl.uniform1iv(this._textureLoc, iterate(instanceCount));
-                */
-
-            } else { // draw one instance at the time
-                // uniform bool u_first_pass_*;
-                this._locationPassVertexFlag = gl.getUniformLocation(program, "u_first_pass_vertex");
-                this._locationPassFragmentFlag = gl.getUniformLocation(program, "u_first_pass_fragment");
-
-                // uniform mat3 osd_transform_matrix;
-                this._locationMatrix = gl.getUniformLocation(program, "osd_transform_matrix");
-
-                gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                this._locationTexturePosition = gl.getAttribLocation(program, "a_texture_coords");
-                gl.enableVertexAttribArray(this._locationTexturePosition);
-                // connect _bufferTexturePosition with _locationTexturePosition that points to a_texture_coords
-                gl.vertexAttribPointer(this._locationTexturePosition, 2, gl.FLOAT, false, 0, 0);
-            }
+            // Initialize texture
+            gl.uniform1i(this._locationTexture, 0);
+            gl.activeTexture(gl.TEXTURE0);
         }
+
 
         /** This is were drawing really happens...
          * Why is this named programUsed?
@@ -749,10 +657,10 @@
          * @param {object} spec specification corresponding to program (from renderer._programSpecifications)
          * @param {WebGLTexture} texture to draw from
          * @param {object} tileInfo
-         * @param {OpenSeadragon.Mat3} tileInfo.transform 3*3 matrix that should be applied to tile vertices
-         * @param {number} tileInfo.pixelSize
+         * @param {[Float]} tileInfo.transform 3*3 matrix that should be applied to tile vertices
          * @param {number} tileInfo.zoom
-         * @param {[8 Numbers]} tileInfo.textureCoords pri old to bolo 12 numbers(dva trojuholniky, tu si myslim ze 8 lebo pouziva triangle strip)
+         * @param {number} tileInfo.pixelSize
+         * @param {Float32Array} tileInfo.textureCoords 8 suradnic, (2 pre kazdy vrchol triangle stripu)
          */
         programUsed(program, spec, texture, tileInfo) {
             if (!this.renderer.running) {
@@ -760,7 +668,6 @@
             }
 
             const gl = this.gl;
-
             if (spec) {
                 // for every shader and it's controls fill their corresponding glsl variables
                 this.renderer.glDrawing(gl, program, spec);
@@ -770,49 +677,22 @@
             gl.uniform1f(this._locationPixelSize, tileInfo.pixelSize || 1);
             gl.uniform1f(this._locationZoomLevel, tileInfo.zoom || 1);
 
-            const textureType = program._osdOptions.textureType;
-            const instanceCount = program._osdOptions.instanceCount;
-            if (instanceCount > 1) { // instancovane renderovanie mozem zatial preskocit, cize asi len else vetva ma momentalne zaujima
-                throw new Error("Instanced rendering not supported!");
-                // gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                // gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileInfo.textureCoords);
+            // const textureType = program._osdOptions.textureType; // nechal som aby som videl ze existuju nejake _osdOptions a v nich shity
+            // const instanceCount = program._osdOptions.instanceCount;
+            // gl.clear(gl.COLOR_BUFFER_BIT); //-> vzdy uvidim len poslednu vec co som drawoval potom hihi
 
-                // gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferMatrices);
-                // gl.bufferSubData(gl.ARRAY_BUFFER, 0, tileInfo.transform);
+            // texture coords
+            gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
+            gl.bufferData(gl.ARRAY_BUFFER, tileInfo.textureCoords, gl.STATIC_DRAW);
 
-                // let drawInstanceCount = tileInfo.instanceCount || Infinity;
-                // drawInstanceCount = Math.min(drawInstanceCount, instanceCount);
+            // transform matrix
+            gl.uniformMatrix3fv(this._locationTransformMatrix, false, tileInfo.transform);
 
-                // for (let i = 0; i <= drawInstanceCount; i++) {
-                //     gl.activeTexture(gl.TEXTURE0 + i);
-                //     gl.bindTexture(gl.TEXTURE_2D, texture[i]); //tomuto nerozumiem ako indexovat texturu?
-                // }
+            // texture
+            gl.bindTexture(gl.TEXTURE_2D, texture);
 
-                // gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, drawInstanceCount);
-
-            } else { // draw one instance at the time
-                //gl.clear(gl.COLOR_BUFFER_BIT); //-> vzdy uvidim len poslednu vec co som drawoval potom hihi
-
-                // nahravam textureCoords dat
-                gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTexturePosition);
-                console.log('texrutecoddd:', tileInfo.textureCoords);
-                gl.bufferData(gl.ARRAY_BUFFER, tileInfo.textureCoords, gl.STATIC_DRAW);
-
-                // nahravam transform maticu
-                console.log('transofrm:', tileInfo.transform);
-                gl.uniformMatrix3fv(this._locationMatrix, false, tileInfo.transform);
-
-                // Upload texture, only one texture active, no preparation
-                gl.activeTexture(gl.TEXTURE0);
-                if (textureType !== "TEXTURE_2D" && textureType !== "TEXTURE_2D_ARRAY") {
-                    throw new Error("webGLContext::programUsed: Not supported texture type!");
-                }
-                gl.bindTexture(gl.TEXTURE_2D, texture);
-
-                // Draw triangle strip (two triangles) from a static array defined in the vertex shader
-                //console.log('Drawujem jjupi');
-                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            }
+            // draw triangle strip (two triangles) from a static array defined in the vertex shader
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
     };
 

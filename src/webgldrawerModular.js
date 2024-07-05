@@ -127,12 +127,12 @@
             /***** SETUP CANVASES *****/
             this._setupCanvases();
 
-            this._renderOffScreenTextures = []; // textures to render into instead of canvas
-            this._offScreenTexturesInfo = { // how many textures in _renderOffScreenTextures have correctly set their size to textureSize
+            this._offScreenTextures = []; // textures to render into instead of canvas
+            this._offScreenTexturesInfo = { // how many textures in _offScreenTextures are initialized to "textureSize"
                 initialized: 0,
                 textureSize: new $.Point(0, 0)
             };
-            this._renderOffScreenBuffer = this._gl.createFramebuffer(); // buffer to be used with any texture from _renderOffScreenTextures
+            this._offScreenBuffer = this._gl.createFramebuffer(); // buffer to be used with any texture from _offScreenTextures
 
             console.log('V konstruktori draweru, po inicializacii je renderer =', this.renderer);
 
@@ -330,7 +330,6 @@
                 passLocation: gl.getUniformLocation(this.programEZ, "u_pass"),
                 textureLocation: gl.getUniformLocation(this.programEZ, "u_texture")
             };
-            gl.enableVertexAttribArray(this.programEZData.texCoordLocation);
 
             // OPTIMALIZATION - fill buffer with initial thrash and call vertexAttribPointer to tell WebGL how to read from the buffer,
             //                  later there's no need to call vertexAttribPointer repeatedly during drawing
@@ -349,7 +348,6 @@
             gl.uniform1i(this.programEZData.textureLocation, 0);
             // This line activates texture unit 0. WebGL supports multiple texture units (e.g., gl.TEXTURE0, gl.TEXTURE1, etc.), allowing you to use multiple textures in a single shader.
             gl.activeTexture(gl.TEXTURE0);
-
             // This last line is later called during drawing process to switch between textures.
             // This line binds the texture to the TEXTURE_2D target of the currently active texture unit (which is texture unit 0).
             // gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -391,16 +389,16 @@
             });
 
             // from drawer
-            this._renderOffScreenTextures.forEach(t => {
+            this._offScreenTextures.forEach(t => {
                 if (t) {
                     gl.deleteTexture(t);
                 }
             });
-            this._renderOffScreenTextures = [];
+            this._offScreenTextures = [];
 
-            if (this._renderOffScreenBuffer) {
-                gl.deleteFramebuffer(this._renderOffScreenBuffer);
-                this._renderOffScreenBuffer = null;
+            if (this._offScreenBuffer) {
+                gl.deleteFramebuffer(this._offScreenBuffer);
+                this._offScreenBuffer = null;
             }
 
             // make canvases 1 x 1 px and delete references
@@ -501,6 +499,11 @@
         * @param {Array} tiledImages Array of TiledImage objects to draw
         */
         draw(tiledImages) {
+            const tilesToDraw = tiledImages[0].getTilesToDraw();
+            if (tilesToDraw.length === 0) {
+                return;
+            }
+
             // clear the output canvas
             this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
 
@@ -524,8 +527,8 @@
             if (twoPassRendering) {
                 this.enableStencilTest(false);
                 this._resizeOffScreenTextures(tiledImages.length);
-                console.log('Draw CALL with predefined tiledImages array.');
-                this._drawTwoPassEZ(tiledImages, view, viewMatrix);
+                console.log('DRAW() call with predefined tiledImages array.');
+                this._drawTwoPassNew(tiledImages, view, viewMatrix);
             } else {
                 this.enableStencilTest(false);
                 // this._resizeOffScreenTextures(tiledImages.length); podla mna to je zbytocne, naco su mi offscreentextury vo first passe?
@@ -926,36 +929,10 @@
             }
         }
 
-        /* Old resizeRenderer, MOZNO TREBA DACO SPRAVIT ESTE, neviem co sa tu sibrinkuje s tou texturou... */
-        /*
-        _resizeRenderer(){
-            let gl = this._gl;
-            let w = this._renderingCanvas.width;
-            let h = this._renderingCanvas.height;
-            gl.viewport(0, 0, w, h);
-
-            //release the old texture
-            gl.deleteTexture(this._renderToTexture);
-            //create a new texture and set it up
-            this._renderToTexture = gl.createTexture();
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, this._renderToTexture);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-            //bind the frame buffer to the new texture
-            gl.bindFramebuffer(gl.FRAMEBUFFER, this._glFrameBuffer);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._renderToTexture, 0);
-        }
-        */
-
         _registerResizeEventHandler() {
             // make the additional canvas elements mirror size changes to the output canvas
             const _this = this;
             this.viewer.addHandler("resize", function() {
-                console.log('Resize event');
                 if(_this._outputCanvas !== _this.viewer.drawer.canvas){
                     _this._outputCanvas.style.width = _this.viewer.drawer.canvas.clientWidth + 'px';
                     _this._outputCanvas.style.height = _this.viewer.drawer.canvas.clientHeight + 'px';
@@ -973,11 +950,8 @@
                 _this._renderingCanvas.width = _this._clippingCanvas.width = _this._outputCanvas.width;
                 _this._renderingCanvas.height = _this._clippingCanvas.height = _this._outputCanvas.height;
 
-                console.log('Resize event, rC.width:rC.height', _this._renderingCanvas.width, _this._renderingCanvas.height);
-                // important - update the size of the rendering viewport!
-                // _this._resizeRenderer(); OLD WAY
-                // NEW WAY
-                _this.renderer.setDimensions(0, 0, _this._renderingCanvas.width, _this._renderingCanvas.height);
+                console.log('Resize event, new.width:new.height', viewportSize.x, viewportSize.y);
+                _this.renderer.setDimensions(0, 0, viewportSize.x, viewportSize.y);
                 _this._size = viewportSize;
             });
         }
@@ -1052,26 +1026,20 @@
             return ratio * viewportZoom;
         }
 
-        /** Called only before drawTwoPass() call in draw() function, reinitialize
-         * count offScreenTextures to be used as first pass rendering target during
-         * twoPass render.
-         * @param {number} count number of textures to reinitialize
+        /** Initialize "count" offScreenTextures to be used as first pass rendering target during two pass rendering.
+         * @param {number} count number of textures to initialize
          */
         _resizeOffScreenTextures(count) {
-            if (count < 1) {
-                return;
+            const gl = this._gl;
+            if (count > gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)) {
+                throw new Error("webgldrawerModular::_resizeOffScreenTextures: Wanted number of textures is too big for this hardware!");
             }
 
-            const gl = this._gl;
-            count = Math.min(count, gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS));
-            //append or reinitialize textures
-            //const rebuildStartIndex = (this._offScreenTexturesInfo.size !== this._size) ? this._renderOffScreenTextures.length : 0;
-            //let i = rebuildStartIndex;
             for (let i = 0; i < count; ++i) {
-                // console.log('Pripravujem offscreen texturu cislo', i);
-                let texture = this._renderOffScreenTextures[i];
+                console.log('Inicializujem texturu cislo', i);
+                let texture = this._offScreenTextures[i];
                 if (!texture) {
-                    this._renderOffScreenTextures[i] = texture = gl.createTexture();
+                    this._offScreenTextures[i] = texture = gl.createTexture();
                 }
                 gl.bindTexture(gl.TEXTURE_2D, texture);
 
@@ -1084,32 +1052,26 @@
                 //     initialData[i + 1] = 255;
                 // }
                 // original was internalformat = gl.RGBA8
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA,
-                    x, y, 0, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, x, y, 0, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
             }
 
-            //destroy any textures that we don't need todo maybe just keep dont bother?
-            //for (let j = this._renderOffScreenTextures.length - 1; j >= i; j--) {
-                //let texture = this._renderOffScreenTextures.pop();
-                //gl.deleteTexture(texture);
-            //}
             this._offScreenTexturesInfo.initialized = count;
             this._offScreenTexturesInfo.textureSize = this._size;
         }
 
         /**
          * Iba pre twopass,
-         * Binds _renderOffScreenBuffer to i-th texture from _renderOffScreenTextures
-         * @param {number} i index to texture in this._renderOffScreenTextures
+         * Binds _offScreenBuffer to i-th texture from _offScreenTextures
+         * @param {number} i index to texture in this._offScreenTextures
          */
         _bindFrameBufferToOffScreenTexture(i) {
             const gl = this._gl;
-            let texture = this._renderOffScreenTextures[i];
-            gl.bindFramebuffer(gl.FRAMEBUFFER, this._renderOffScreenBuffer);
+            let texture = this._offScreenTextures[i];
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this._offScreenBuffer);
             gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
         }
 
@@ -1301,7 +1263,7 @@
 
         /**
          * Iba pre draw funkciu
-         * @param {[TiledImage]} tiledImages Array of tiledImage objects to draw
+         * @param {[TiledImage]} tiledImages Array of TiledImage objects to draw
          * @param {Object} viewport has bounds, center, rotation, zoom
          * @param {OpenSeadragon.Mat3} viewMatrix to apply
          */
@@ -1309,8 +1271,12 @@
             // console.log('TWO PASS r3nd3r1ng being used');
             const gl = this._gl;
             const shaderSpecification = 0;
-            gl.clear(gl.COLOR_BUFFER_BIT);
 
+            const plainShader = this.renderer.getSpecification(shaderSpecification).shaders.renderShader._renderContext;
+            // plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
+            this.renderer.useProgram(shaderSpecification);
+
+            gl.clear(gl.COLOR_BUFFER_BIT);
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 if (tiledImage.isTainted()) {
                     throw new Error("TiledImage.isTainted during two pass! -> not implemented!");
@@ -1323,21 +1289,9 @@
                     }
                     // nothing to draw or opacity is zero
                     if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
+                        console.log('NOTHING TO DRAW from drawing WOOOOT CHECK!');
                         return; // return or continue?
                     }
-
-                    const plainShader = this.renderer.getSpecification(shaderSpecification).shaders.renderShader._renderContext;
-                    plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
-
-                    //console.log('tiledImage.source:', tiledImage.source.shader);
-                    const specificationObject = tiledImage.source.shader;
-                    // change the program to first pass, just render tiles as they are
-                    this.renderer.useProgram(specificationObject._programIndexTarget);
-                    this.renderer.switchToRenderingPass(1);
-
-                    // render to offScreenTexture
-                    this._bindFrameBufferToOffScreenTexture(tiledImageIndex);
-
 
                     // MATRIX
                     let overallMatrix = viewMatrix;
@@ -1378,35 +1332,19 @@
                         // tiledImage has its own opacity and tile can also have its own opacity
                         plainShader.opacity.set(tile.opacity * tiledImage.opacity);
 
-                        /* DRAW */
-                        console.log('Drawujem tile-u');
+
+                        // SETUP WebGL
+                        this._bindFrameBufferToOffScreenTexture(tiledImageIndex);
+                        this.renderer.switchToRenderingPass(1);
+
+                        // Supply data to WebGL
                         this.renderer.processData(tileInfo.texture, {
                             transform: matrix,
                             zoom: viewport.zoom, //asi cislo
                             pixelSize: pixelSize, //asi cislo
                             textureCoords: tileInfo.position,
                         });
-
-                        // debuggin after first tile drawn (zaujimave, akoby jemnejsie pozadie + uplne bez mriezky)
-                        if (tileIndex === 0) {
-                            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-                            this.renderer.switchToRenderingPass(2);
-
-                            console.log('Drawujem second pass (tiledImage)');
-
-                            this.renderer.processData(this._renderOffScreenTextures[tiledImageIndex], {
-                                transform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
-                                zoom: 1,
-                                pixelSize: 1,
-                                textureCoords: [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0],
-                            });
-
-
-                            this._outputContext.drawImage(this._renderingCanvas, 0, 0);
-                            throw new Error("dodrawnute");
-                        }
                     } // end of TILES iteration
-
 
 
                     //---------------------------------------------------------------
@@ -1416,54 +1354,21 @@
                         console.warn('Preskakujem second pass!');
                     } else {
                         // gl.useProgram(this.programSecondPass);
-                        this.renderer.switchToRenderingPass(2);
                         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                        this.renderer.switchToRenderingPass(2);
 
 
                         console.log('Drawujem second pass (tiledImage)');
 
-                        this.renderer.processData(this._renderOffScreenTextures[tiledImageIndex], {
+                        this.renderer.processData(this._offScreenTextures[tiledImageIndex], {
                             transform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
                             zoom: 1,
                             pixelSize: 1,
-                            textureCoords: [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0],
+                            textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0])
                         });
-
-                        // treba toto?
-                        // const textureLocation = gl.getUniformLocation(this.programSecondPass, "u_texture");
-                        // gl.uniform1i(textureLocation, 0);
-                        // gl.activeTexture(gl.TEXTURE0); // do tadialto toto?
-                        // const texture = this._renderOffScreenTextures[tiledImageIndex];
-                        // gl.bindTexture(gl.TEXTURE_2D, texture);
-
-
-                        // const positionBuffer = gl.createBuffer();
-                        // gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-                        // this.__setRectangleStrip(gl, 0, 0, 1, 1);
-                        // const positionLocation = gl.getAttribLocation(this.programSecondPass, "a_positionn");
-                        // if (positionLocation === -1) {
-                        //     throw new Error("Nenasiel som v akutalnom programe a_position!");
-                        // }
-                        // gl.enableVertexAttribArray(positionLocation);
-                        // gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-
-                        // const texcoordBuffer = gl.createBuffer();
-                        // gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-                        // this.__setRectangleStrip(gl, 0, 0, 1, 1);
-                        // const texcoordLocation = gl.getAttribLocation(this.programSecondPass, "a_texCoords");
-                        // if (texcoordLocation === -1) {
-                        //     throw new Error("Nenasiel som v akutalnom programe a_texCoords!");
-                        // }
-                        // gl.enableVertexAttribArray(texcoordLocation);
-                        // gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
-
-
-                        // gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-                        // console.log('po second passe');
                     }
 
-
+                    //---------------------------------------------------------------
                     // Apply context2DPipeline or tick the flag that data are in rendering canvas and need to be copied to output canvas
                     let useContext2dPipeline = (tiledImage.compositeOperation ||
                         this.viewer.compositeOperation ||
@@ -1606,7 +1511,7 @@
                         const textureLocation = gl.getUniformLocation(this.programSecondPass, "u_texture");
                         gl.uniform1i(textureLocation, 0);
                         gl.activeTexture(gl.TEXTURE0); // do tadialto toto?
-                        const texture = this._renderOffScreenTextures[tiledImageIndex];
+                        const texture = this._offScreenTextures[tiledImageIndex];
                         gl.bindTexture(gl.TEXTURE_2D, texture);
 
 
@@ -1775,7 +1680,7 @@
                         gl.uniform1i(data.passLocation, 2);
 
                         // texture
-                        const texture = this._renderOffScreenTextures[tiledImageIndex];
+                        const texture = this._offScreenTextures[tiledImageIndex];
                         gl.bindTexture(gl.TEXTURE_2D, texture);
 
                         // draw
@@ -1804,24 +1709,9 @@
             });
         }
 
-        __setRectangle(gl, x, y, width, height) {
-            // Fills the ARRAY_BUFFER with two triangles representing a rectangle
-            var x1 = x;
-            var x2 = x + width;
-            var y1 = y;
-            var y2 = y + height;
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-                x1, y1,
-                x2, y1,
-                x1, y2,
-                x1, y2,
-                x2, y1,
-                x2, y2,
-            ]), gl.STATIC_DRAW);
-        }
-
+        /** Fills the ARRAY_BUFFER with triangle strip representing a rectangle.
+         */
         __setRectangleStrip(gl, x, y, width, height) {
-            // Fills the ARRAY_BUFFER with triangle strip representing a rectangle
             var x1 = x;
             var x2 = x + width;
             var y1 = y;
@@ -1858,99 +1748,8 @@
             return program;
         }
 
-        /* iba pre draw funkciu, ani nepouzite zatial lebo cez if nejdem tymto */
-        _drawTwoPass(tiledImages, viewport, viewMatrix) {
-            console.log('Idem drawovat two pass');
-            const gl = this._gl;
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            let drawnItems = 0;
-            for (const tiledImage of tiledImages) {
-                let tilesToDraw = tiledImage.getTilesToDraw();
-
-                if (tilesToDraw.length === 0) {
-                    continue;
-                }
-
-                //second pass first: check whether next render won't overflow batch size
-                //todo better access to the rendering context
-                const shader = this.renderer.getSpecification(0).shaders.renderShader._renderContext;
-                shader.setBlendMode(tiledImage.index === 0 ?
-                    "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
-                // const willDraw = drawnItems + shader.dataReferences.length;
-                // if (willDraw > this.maxTextureUnits) {
-                //     //merge to the output screen
-                //     this._bindFrameBufferToOffScreenTexture(-1);
-                //
-                //     //todo
-                //
-                //     drawnItems = 0;
-                // }
-
-                this.renderer.useProgram(0); //todo use program based on texture used, e.g. drawing multi output
-                this._bindFrameBufferToOffScreenTexture(drawnItems);
-
-                let overallMatrix = viewMatrix;
-                let imageRotation = tiledImage.getRotation(true);
-                // if needed, handle the tiledImage being rotated
-                if( imageRotation % 360 !== 0){
-                    let imageRotationMatrix = $.Mat3.makeRotation(-imageRotation * Math.PI / 180);
-                    let imageCenter = tiledImage.getBoundsNoRotate(true).getCenter();
-                    let t1 = $.Mat3.makeTranslation(imageCenter.x, imageCenter.y);
-                    let t2 = $.Mat3.makeTranslation(-imageCenter.x, -imageCenter.y);
-
-                    // update the view matrix to account for this image's rotation
-                    let localMatrix = t1.multiply(imageRotationMatrix).multiply(t2);
-                    overallMatrix = viewMatrix.multiply(localMatrix);
-                }
-
-                // iterate over tiles and add data for each one to the buffers
-                for (let tileIndex = tilesToDraw.length - 1; tileIndex >= 0; tileIndex--){
-                    const tile = tilesToDraw[tileIndex].tile;
-                    const tileContext = tile.getCanvasContext();
-                    const tileData = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
-                    if (tileData === null) {
-                        throw Error("webgldrawer::drawXPass: tile has no context!");
-                    }
-                    const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
-                    shader.opacity.set(tile.opacity * tiledImage.opacity);
-
-                    //todo pixelSize value (not yet memoized)
-                    this.renderer.processData(tileData.texture, {
-                        transform: matrix,
-                        zoom: viewport.zoom,
-                        pixelSize: 0,
-                        textureCoords: tileData.position
-                    });
-                }
-
-                ++drawnItems;
-
-                // Fire tiled-image-drawn event.
-                // TODO: the image data may not be on the output canvas yet!!
-                if( this.viewer ){
-                    /**
-                     * Raised when a tiled image is drawn to the canvas. Only valid
-                     * for webgl drawer.
-                     *
-                     * @event tiled-image-drawn
-                     * @memberof OpenSeadragon.Viewer
-                     * @type {object}
-                     * @property {OpenSeadragon.Viewer} eventSource - A reference to the Viewer which raised the event.
-                     * @property {OpenSeadragon.TiledImage} tiledImage - Which TiledImage is being drawn.
-                     * @property {Array} tiles - An array of Tile objects that were drawn.
-                     * @property {?Object} userData - Arbitrary subscriber-defined object.
-                     */
-                    this.viewer.raiseEvent( 'tiled-image-drawn', {
-                        tiledImage: tiledImage,
-                        tiles: tilesToDraw.map(info => info.tile),
-                    });
-                }
-            }
-        }
-
-        /* podobne ako webgldrawer _getTileData ale toto sa mi lubi viac, je krajsia funckia, sustredi sa iba na maticu
-        tie ostatne veci ktore sa nastavuju v _getTileData su podla mna prebytocne do tejto funkcie dat... */
+        /** Get transform matrix that will be applied to tile.
+         */
         _getTileMatrix(tile, tiledImage, viewMatrix){
             // compute offsets that account for tile overlap; needed for calculating the transform matrix appropriately
             // x, y, w, h in viewport coords
@@ -1973,7 +1772,9 @@
             ]);
 
             if (tile.flipped) {
+                // flips the tile so that we see it's back
                 const flipLeftAroundTileOrigin = $.Mat3.makeScaling(-1, 1);
+                // tile's geometry stays the same so when looking at it's back we gotta reverse the logic we would normally use
                 const moveRightAfterScaling = $.Mat3.makeTranslation(-1, 0);
                 matrix = matrix.multiply(flipLeftAroundTileOrigin).multiply(moveRightAfterScaling);
             }
