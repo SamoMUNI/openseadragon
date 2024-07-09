@@ -1063,9 +1063,7 @@
             this._offScreenTexturesInfo.textureSize = this._size;
         }
 
-        /**
-         * Iba pre twopass,
-         * Binds _offScreenBuffer to i-th texture from _offScreenTextures
+        /** Binds _offScreenBuffer to i-th texture from _offScreenTextures
          * @param {number} i index to texture in this._offScreenTextures
          */
         _bindFrameBufferToOffScreenTexture(i) {
