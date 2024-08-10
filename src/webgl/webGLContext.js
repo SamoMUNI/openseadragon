@@ -529,10 +529,50 @@
     in vec2 v_texture_coords;
 
     uniform sampler2D u_texture;
+    // out vec4 final_color;
+
+    vec4 osd_texture(int index, vec2 coords) {
+        return texture(u_texture, coords);
+    }
+
+    // blending
     out vec4 final_color;
+    vec4 _last_rendered_color = vec4(.0);
+    int _last_mode = 0;
+    bool _last_clip = false;
+    void blend(vec4 color, int mode, bool clip) {
+        //premultiplied alpha blending
+        //if (_last_clip) {
+        //  todo
+        //} else {
+            vec4 fg = _last_rendered_color;
+            vec4 pre_fg = vec4(fg.rgb * fg.a, fg.a);
+
+            if (_last_mode == 0) {
+                final_color = pre_fg + (1.0-fg.a)*final_color;
+            } else if (_last_mode == 1) {
+                final_color = vec4(pre_fg.rgb * final_color.rgb, pre_fg.a + final_color.a);
+            } else {
+                final_color = vec4(.0, .0, 1.0, 1.0);
+            }
+        //}
+        _last_rendered_color = color;
+        _last_mode = mode;
+        _last_clip = clip;
+    }
+
+    // definition${definition}
 
     void main() {
-        final_color = texture(u_texture, v_texture_coords);
+        if (pass_flag == 1) {
+            final_color = texture(u_texture, v_texture_coords);
+        } else {
+
+            // execution${execution}
+
+            //blend last level
+            blend(vec4(.0), 0, false);
+        }
     }`;
 
             return fragmentShaderCode;
