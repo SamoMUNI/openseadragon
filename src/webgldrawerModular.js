@@ -140,6 +140,11 @@
             // disable cull face, this solved flipping error
             this._gl.disable(this._gl.CULL_FACE);
 
+
+            /***** SETUP WEBGL PROGRAMS *****/
+            this._createTwoPassEasy();
+            this._createTwoPassEZ();
+
             /***** EVENT HANDLERS *****/
             // Add listeners for events that require modifying the scene or camera
             this._boundToTileReady = ev => this._tileReadyHandler(ev);
@@ -183,179 +188,6 @@
                     this.renderer.deleteProgram(tIndex);
                 }
             });
-
-
-            /** Skusam firstPass program spravit **/
-            const vertexShaderSourceFirstPass = `
-    precision mediump float;
-
-    attribute vec2 a_position;
-    attribute vec2 a_texCoord;
-    varying vec2 v_texCoord;
-
-    uniform mat3 u_transform_matrix;
-
-    void main() {
-        v_texCoord = a_texCoord;
-        gl_Position = vec4(u_transform_matrix * vec3(a_position, 1), 1);
-    }
-`;
-            const fragmentShaderSourceFirstPass = `
-    precision mediump float;
-    precision mediump sampler2D;
-
-    varying vec2 v_texCoord;
-    uniform sampler2D u_texture;
-
-    void main() {
-        gl_FragColor = texture2D(u_texture, v_texCoord);
-    }
-`;
-            this.vertexShaderFirstPass = this.__createShader(this._gl, this._gl.VERTEX_SHADER, vertexShaderSourceFirstPass);
-            if (!this.vertexShaderFirstPass) {
-                alert("Creation of first pass vertex shader failed");
-            }
-            this.fragmentShaderFirstPass = this.__createShader(this._gl, this._gl.FRAGMENT_SHADER, fragmentShaderSourceFirstPass);
-            if (!this.fragmentShaderFirstPass) {
-                alert("Creation of first pass fragment shader failed");
-            }
-            this.programFirstPass = this.__createProgram(this._gl, this.vertexShaderFirstPass, this.fragmentShaderFirstPass);
-            if (!this.programFirstPass) {
-                alert("Creation of first pass program failed");
-            }
-
-            /** Skusam secondPass program spravit **/
-            const vertexShaderSourceSecondPass = `
-    attribute vec2 a_positionn;
-    attribute vec2 a_texCoords;
-    varying vec2 v_texcoord;
-
-    void main() {
-        // convert from 0->1 to 0->2
-        vec2 zeroToTwo = a_positionn * 2.0;
-
-        // convert from 0->2 to -1->+1 (clipspace)
-        vec2 clipSpace = zeroToTwo - 1.0;
-
-        // original was gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
-        // but because texture from first pass comes flipped over x-axis I use this:
-        gl_Position = vec4(clipSpace * vec2(1, 1), 0, 1);
-
-        v_texcoord = a_texCoords;
-    }
-`;
-            const fragmentShaderSourceSecondPass = `
-    precision mediump float;
-
-    varying vec2 v_texcoord;
-    uniform sampler2D u_texture;
-
-    void main() {
-        gl_FragColor = texture2D(u_texture, v_texcoord);
-        //gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
-    }
-`;
-            this.vertexShaderSecondPass = this.__createShader(this._gl, this._gl.VERTEX_SHADER, vertexShaderSourceSecondPass);
-            if (!this.vertexShaderSecondPass) {
-                alert("Creation of vertex shader failed");
-            }
-            this.fragmentShaderSecondPass = this.__createShader(this._gl, this._gl.FRAGMENT_SHADER, fragmentShaderSourceSecondPass);
-            if (!this.fragmentShaderSecondPass) {
-                alert("Creation of fragment shader failed");
-            }
-            this.programSecondPass = this.__createProgram(this._gl, this.vertexShaderSecondPass, this.fragmentShaderSecondPass);
-            if (!this.programSecondPass) {
-                alert("Creation of program failed");
-            }
-
-            /** Skusam first+second pass program spravit **/
-            const vertexShaderSourceEZ = `
-    precision mediump float;
-
-    attribute vec2 a_position;
-    attribute vec2 a_texCoord;
-    varying vec2 v_texCoord;
-
-    uniform int u_pass;
-    uniform mat3 u_transform_matrix;
-
-    void main() {
-        v_texCoord = a_texCoord;
-
-        if (u_pass == 1) {
-            gl_Position = vec4(u_transform_matrix * vec3(a_position, 1), 1);
-        } else {
-            // convert from 0->1 to 0->2
-            vec2 oneToTwo = a_position * 2.0;
-
-            // convert from 0->2 to -1->+1 (clipSpace coordinates)
-            vec2 clipSpace = oneToTwo - 1.0;
-
-            gl_Position = vec4(clipSpace, 1, 1);
-        }
-    }
-`;
-            const fragmentShaderSourceEZ = `
-    precision mediump float;
-    precision mediump sampler2D;
-
-    varying vec2 v_texCoord;
-    uniform sampler2D u_texture;
-
-    void main() {
-        gl_FragColor = texture2D(u_texture, v_texCoord);
-    }
-`;
-            this.vertexShaderEZ = this.__createShader(this._gl, this._gl.VERTEX_SHADER, vertexShaderSourceEZ);
-            if (!this.vertexShaderEZ) {
-                alert("Creation of vertex shader failed");
-            }
-            this.fragmentShaderEZ = this.__createShader(this._gl, this._gl.FRAGMENT_SHADER, fragmentShaderSourceEZ);
-            if (!this.fragmentShaderEZ) {
-                alert("Creation of fragment shader failed");
-            }
-            this.programEZ = this.__createProgram(this._gl, this.vertexShaderEZ, this.fragmentShaderEZ);
-            if (!this.programEZ) {
-                alert("Creation of program failed");
-            }
-
-            const gl = this._gl;
-            gl.useProgram(this.programEZ);
-            this.programEZData = {
-                positionBuffer: gl.createBuffer(),
-                positionLocation: gl.getAttribLocation(this.programEZ, "a_position"),
-                texCoordBuffer: gl.createBuffer(),
-                texCoordLocation: gl.getAttribLocation(this.programEZ, "a_texCoord"),
-                matrixLocation: gl.getUniformLocation(this.programEZ, "u_transform_matrix"),
-                passLocation: gl.getUniformLocation(this.programEZ, "u_pass"),
-                textureLocation: gl.getUniformLocation(this.programEZ, "u_texture")
-            };
-
-            // OPTIMALIZATION - fill buffer with initial thrash and call vertexAttribPointer to tell WebGL how to read from the buffer,
-            //                  later there's no need to call vertexAttribPointer repeatedly during drawing
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.programEZData.positionBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
-            gl.enableVertexAttribArray(this.programEZData.positionLocation);
-            gl.vertexAttribPointer(this.programEZData.positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.programEZData.texCoordBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
-            gl.enableVertexAttribArray(this.programEZData.texCoordLocation);
-            gl.vertexAttribPointer(this.programEZData.texCoordLocation, 2, gl.FLOAT, false, 0, 0);
-
-            // texture unit setup
-            // This line sets the value of the uniform u_texture to 0. This tells the shader that u_texture corresponds to texture unit 0.
-            gl.uniform1i(this.programEZData.textureLocation, 0);
-            // This line activates texture unit 0. WebGL supports multiple texture units (e.g., gl.TEXTURE0, gl.TEXTURE1, etc.), allowing you to use multiple textures in a single shader.
-            gl.activeTexture(gl.TEXTURE0);
-            // This last line is later called during drawing process to switch between textures.
-            // This line binds the texture to the TEXTURE_2D target of the currently active texture unit (which is texture unit 0).
-            // gl.bindTexture(gl.TEXTURE_2D, texture);
-
-
-
-
-
         }//end of constructor
 
 
@@ -528,6 +360,8 @@
                 this.enableStencilTest(false);
                 this._resizeOffScreenTextures(tiledImages.length);
                 console.log('DRAW() call with predefined tiledImages array.');
+                //this._drawTwoPassEasy(tiledImages, view, viewMatrix);
+                //this._drawTwoPassEZ(tiledImages, view, viewMatrix);
                 this._drawTwoPassNew(tiledImages, view, viewMatrix);
             } else {
                 this.enableStencilTest(false);
@@ -1389,7 +1223,94 @@
             }); //end of for tiledImage of tiledImages
         } // end of new two pass
 
+        /** Lahko pochopitelne dva WebGL programy ktore sa pouzivaju jeden na first pass druhy na second pass.
+         */
+        _createTwoPassEasy() {
+            const vertexShaderSourceFirstPass = `
+    precision mediump float;
 
+    attribute vec2 a_position;
+    attribute vec2 a_texCoord;
+    varying vec2 v_texCoord;
+
+    uniform mat3 u_transform_matrix;
+
+    void main() {
+        v_texCoord = a_texCoord;
+        gl_Position = vec4(u_transform_matrix * vec3(a_position, 1), 1);
+    }
+`;
+            const fragmentShaderSourceFirstPass = `
+    precision mediump float;
+    precision mediump sampler2D;
+
+    varying vec2 v_texCoord;
+    uniform sampler2D u_texture;
+
+    void main() {
+        gl_FragColor = texture2D(u_texture, v_texCoord);
+    }
+`;
+            this.vertexShaderFirstPass = this.__createShader(this._gl, this._gl.VERTEX_SHADER, vertexShaderSourceFirstPass);
+            if (!this.vertexShaderFirstPass) {
+                alert("Creation of first pass vertex shader failed");
+            }
+            this.fragmentShaderFirstPass = this.__createShader(this._gl, this._gl.FRAGMENT_SHADER, fragmentShaderSourceFirstPass);
+            if (!this.fragmentShaderFirstPass) {
+                alert("Creation of first pass fragment shader failed");
+            }
+            this.programFirstPass = this.__createProgram(this._gl, this.vertexShaderFirstPass, this.fragmentShaderFirstPass);
+            if (!this.programFirstPass) {
+                alert("Creation of first pass program failed");
+            }
+
+            const vertexShaderSourceSecondPass = `
+    attribute vec2 a_positionn;
+    attribute vec2 a_texCoords;
+    varying vec2 v_texcoord;
+
+    void main() {
+        // convert from 0->1 to 0->2
+        vec2 zeroToTwo = a_positionn * 2.0;
+
+        // convert from 0->2 to -1->+1 (clipspace)
+        vec2 clipSpace = zeroToTwo - 1.0;
+
+        // original was gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+        // but because texture from first pass comes flipped over x-axis I use this:
+        gl_Position = vec4(clipSpace * vec2(1, 1), 0, 1);
+
+        v_texcoord = a_texCoords;
+    }
+`;
+            const fragmentShaderSourceSecondPass = `
+    precision mediump float;
+
+    varying vec2 v_texcoord;
+    uniform sampler2D u_texture;
+
+    void main() {
+        gl_FragColor = texture2D(u_texture, v_texcoord);
+        //gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
+    }
+`;
+            this.vertexShaderSecondPass = this.__createShader(this._gl, this._gl.VERTEX_SHADER, vertexShaderSourceSecondPass);
+            if (!this.vertexShaderSecondPass) {
+                alert("Creation of vertex shader failed");
+            }
+            this.fragmentShaderSecondPass = this.__createShader(this._gl, this._gl.FRAGMENT_SHADER, fragmentShaderSourceSecondPass);
+            if (!this.fragmentShaderSecondPass) {
+                alert("Creation of fragment shader failed");
+            }
+            this.programSecondPass = this.__createProgram(this._gl, this.vertexShaderSecondPass, this.fragmentShaderSecondPass);
+            if (!this.programSecondPass) {
+                alert("Creation of program failed");
+            }
+
+        }
+
+        /** Pouzitie lahkych WebGL programov ktore sa pouzivaju jeden na first pass druhy na second pass na kreslenie.
+         */
         _drawTwoPassEasy(tiledImages, viewport, viewMatrix) {
             // pozadie svetlo zelene po first passe, po renderovani z textury pozadie silno modre (initial data v texture)
             const gl = this._gl;
@@ -1562,6 +1483,96 @@
             }); //end of for tiledImage of tiledImages
         } // end of new two pass easy
 
+        /** Lahko pochopitelny WebGL program ktory pouziva vetvenie aby sa rozhodol ci first alebo second pass.
+         * Teda je iba jeden a netreba ho medzi passmi prepinat.
+         */
+        _createTwoPassEZ() {
+            const vertexShaderSourceEZ = `
+    precision mediump float;
+
+    attribute vec2 a_position;
+    attribute vec2 a_texCoord;
+    varying vec2 v_texCoord;
+
+    uniform int u_pass;
+    uniform mat3 u_transform_matrix;
+
+    void main() {
+        v_texCoord = a_texCoord;
+
+        if (u_pass == 1) {
+            gl_Position = vec4(u_transform_matrix * vec3(a_position, 1), 1);
+        } else {
+            // convert from 0->1 to 0->2
+            vec2 oneToTwo = a_position * 2.0;
+
+            // convert from 0->2 to -1->+1 (clipSpace coordinates)
+            vec2 clipSpace = oneToTwo - 1.0;
+
+            gl_Position = vec4(clipSpace, 1, 1);
+        }
+    }
+`;
+            const fragmentShaderSourceEZ = `
+    precision mediump float;
+    precision mediump sampler2D;
+
+    varying vec2 v_texCoord;
+    uniform sampler2D u_texture;
+
+    void main() {
+        gl_FragColor = texture2D(u_texture, v_texCoord);
+    }
+`;
+            this.vertexShaderEZ = this.__createShader(this._gl, this._gl.VERTEX_SHADER, vertexShaderSourceEZ);
+            if (!this.vertexShaderEZ) {
+                alert("Creation of vertex shader failed");
+            }
+            this.fragmentShaderEZ = this.__createShader(this._gl, this._gl.FRAGMENT_SHADER, fragmentShaderSourceEZ);
+            if (!this.fragmentShaderEZ) {
+                alert("Creation of fragment shader failed");
+            }
+            this.programEZ = this.__createProgram(this._gl, this.vertexShaderEZ, this.fragmentShaderEZ);
+            if (!this.programEZ) {
+                alert("Creation of program failed");
+            }
+
+            const gl = this._gl;
+            gl.useProgram(this.programEZ);
+            this.programEZData = {
+                positionBuffer: gl.createBuffer(),
+                positionLocation: gl.getAttribLocation(this.programEZ, "a_position"),
+                texCoordBuffer: gl.createBuffer(),
+                texCoordLocation: gl.getAttribLocation(this.programEZ, "a_texCoord"),
+                matrixLocation: gl.getUniformLocation(this.programEZ, "u_transform_matrix"),
+                passLocation: gl.getUniformLocation(this.programEZ, "u_pass"),
+                textureLocation: gl.getUniformLocation(this.programEZ, "u_texture")
+            };
+
+            // OPTIMALIZATION - fill buffer with initial thrash and call vertexAttribPointer to tell WebGL how to read from the buffer,
+            //                  later there's no need to call vertexAttribPointer repeatedly during drawing
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.programEZData.positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(this.programEZData.positionLocation);
+            gl.vertexAttribPointer(this.programEZData.positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.programEZData.texCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(this.programEZData.texCoordLocation);
+            gl.vertexAttribPointer(this.programEZData.texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+            // texture unit setup
+            // This line sets the value of the uniform u_texture to 0. This tells the shader that u_texture corresponds to texture unit 0.
+            gl.uniform1i(this.programEZData.textureLocation, 0);
+            // This line activates texture unit 0. WebGL supports multiple texture units (e.g., gl.TEXTURE0, gl.TEXTURE1, etc.), allowing you to use multiple textures in a single shader.
+            gl.activeTexture(gl.TEXTURE0);
+            // This last line is later called during drawing process to switch between textures.
+            // This line binds the texture to the TEXTURE_2D target of the currently active texture unit (which is texture unit 0).
+            // gl.bindTexture(gl.TEXTURE_2D, texture);
+        }
+
+        /** Pouzitie lahkeho WebGL programu ktory pouziva vetvenie aby sa rozhodol ci first alebo second pass na kreslenie.
+         */
         _drawTwoPassEZ(tiledImages, viewport, viewMatrix) {
             // pozadie svetlo zelene po first passe, po renderovani z textury pozadie silno modre (initial data v texture)
             const gl = this._gl;
