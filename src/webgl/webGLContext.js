@@ -654,7 +654,7 @@
             // toto neviem ci je dobre lebo running hovori o tom ze renderer bezi s nejakou validnou specifikaciou...
             // ked chcem pouzit customprogram tak ale nebude bezat podla nijakej specifikacie => ajtak sa zapne running?
             // co ked este nebezal renderer a na supu chcem pouzit customprogram co potom ?
-            console.log('PROGRAMLOADED called!');
+            // console.log('PROGRAMLOADED called!');
             if (!this.renderer.running) {
                 return;
             }

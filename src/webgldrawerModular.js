@@ -145,6 +145,7 @@
             this._createTwoPassEasy();
             this._createTwoPassEZ();
 
+
             /***** EVENT HANDLERS *****/
             // Add listeners for events that require modifying the scene or camera
             this._boundToTileReady = ev => this._tileReadyHandler(ev);
@@ -160,32 +161,33 @@
 
             /* Pridane event handlery z draweru */
             this.viewer.world.addHandler("add-item", (e) => {
-                //todo: use this.renderer.uniqueId to set rendering targets
                 console.log('ADD-ITEM EVENT !!!');
                 let shader = e.item.source.shader;
                 if (shader) {
-                    if (Number.isInteger(shader._programIndexTarget)) {
-                        return; //already configured, multiple drawers
-                    }
-                    const targetIndex = this.renderer.getSpecificationsCount();
-                    if (this.renderer.addRenderingSpecifications(shader)) {
-                        this.renderer.buildProgram(targetIndex, null, true, this.renderer.buildOptions);
-                        shader._programIndexTarget = targetIndex;
+                    if (shader._initialized) {
                         return;
                     }
+                    const targetIndex = this.renderer.getSpecificationsCount();
+                    this.renderer.addRenderingSpecifications(shader);
+                    this.renderer.buildProgram(targetIndex, null, true, this.renderer.buildOptions);
+                    shader._programIndexTarget = targetIndex;
+                    shader._initialized = true;
+                    e.item.source.shader._utilizeLocalMethods = true;
+
                 } else {
-                    e.item.source.shader = shader = this.renderer.defaultRenderingSpecification;
+                    e.item.source.shader = this.renderer.defaultRenderingSpecification;
+                    e.item.source.shader._programIndexTarget = 0;
+                    e.item.source.shader._initialized = true;
+                    e.item.source.shader._utilizeLocalMethods = true;
                 }
-                //set default program: identity
-                shader._programIndexTarget = 0;
             });
 
             this.viewer.world.addHandler("remove-item", (e) => {
                 console.log('REMOVE-ITEM EVENT !!!');
-                const tIndex = e.item.source.shader._programIndexTarget;
-                if (tIndex > 0) {
-                    this.renderer.setRenderingSpecification(tIndex, null);
-                    this.renderer.deleteProgram(tIndex);
+                const targetIndex = e.item.source.shader._programIndexTarget;
+                if (targetIndex !== 0) {
+                    this.renderer.deleteRenderingSpecification(targetIndex);
+                    this.renderer.deleteProgram(targetIndex);
                 }
             });
         }//end of constructor
@@ -354,8 +356,15 @@
             let viewMatrix = scaleMatrix.multiply(rotMatrix).multiply(posMatrix);
 
             // const gl = this._gl;
-            let twoPassRendering = true;
-            // skusit proste premazat cervenou
+            let twoPassRendering = false;
+            for (const tiledImage of tiledImages) {
+                if (tiledImage.source.shader._utilizeLocalMethods ||
+                    tiledImage.getOpacity() < 1 ||
+                    tiledImage.getTilesToDraw()[0].hasTransparency
+                ) {
+                    twoPassRendering = true;
+                }
+            }
             if (twoPassRendering) {
                 this.enableStencilTest(false);
                 this._resizeOffScreenTextures(tiledImages.length);
@@ -870,7 +879,7 @@
             }
 
             for (let i = 0; i < count; ++i) {
-                console.log('Inicializujem texturu cislo', i);
+                // console.log('Inicializujem texturu cislo', i);
                 let texture = this._offScreenTextures[i];
                 if (!texture) {
                     this._offScreenTextures[i] = texture = gl.createTexture();
