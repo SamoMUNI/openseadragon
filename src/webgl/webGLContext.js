@@ -15,6 +15,29 @@
         return result;
     }
 
+    function createShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error("webGLContext::createShader(): Shader compilation error:", gl.getShaderInfoLog(shader));
+          return null;
+        }
+        return shader;
+    }
+
+    function createProgram(gl, vertexShader, fragmentShader) {
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          console.error("webGLContext::createProgram(): Program linking error:", gl.getProgramInfoLog(program));
+          return null;
+        }
+        return program;
+    }
+
     /**
      * @interface OpenSeadragon.WebGLModule.WebGLImplementation
      * Interface for the visualisation rendering implementation which can run
@@ -264,6 +287,10 @@
             this._locationPixelSize = null;
             this._locationZoomLevel = null;
             this._locationTexture = null;
+
+            this._firstPassProgram = null;
+            this._createFirstPassProgram(); // sets this._firstPassProgram to WebGL program
+            this._initializeFirstPassProgram();
         }
 
         /** Get WebGL2RenderingContext (static used to avoid instantiation of this class in case of missing support)
@@ -291,6 +318,101 @@
         /* ??? */
         sampleTexture(index, vec2coords) {
             return `osd_texture(${index}, ${vec2coords})`;
+        }
+
+        _createFirstPassProgram() {
+            const vsource = `#version 300 es
+    precision mediump float;
+
+    const vec3 viewport[4] = vec3[4] (
+        vec3(0.0, 1.0, 1.0),
+        vec3(0.0, 0.0, 1.0),
+        vec3(1.0, 1.0, 1.0),
+        vec3(1.0, 0.0, 1.0)
+    );
+
+    uniform mat3 u_transform_matrix;
+
+    in vec2 a_texCoord;
+    out vec2 v_texCoord;
+
+    void main() {
+        v_texCoord = a_texCoord;
+        gl_Position = vec4(u_transform_matrix * viewport[gl_VertexID], 1);
+    }
+`;
+            const fsource = `#version 300 es
+    precision mediump float;
+    precision mediump sampler2D;
+
+    in vec2 v_texCoord;
+    uniform sampler2D u_texture;
+
+    out vec4 outColor;
+
+    void main() {
+        outColor = texture(u_texture, v_texCoord);
+    }
+`;
+            const gl = this.gl;
+            const vfp = createShader(gl, gl.VERTEX_SHADER, vsource);
+            if (!vfp) {
+                alert("Creation of first pass vertex shader failed upsi");
+                throw new Error("Down");
+            }
+            const ffp = createShader(gl, gl.FRAGMENT_SHADER, fsource);
+            if (!ffp) {
+                alert("Creation of first pass fragment shader failed dupsi");
+                throw new Error("Down");
+            }
+            const pfp = createProgram(gl, vfp, ffp);
+            if (!pfp) {
+                alert("Creation of first pass program failed och juj");
+                throw new Error("Down");
+            }
+
+            this._firstPassProgram = pfp;
+        }
+
+        _initializeFirstPassProgram() {
+            const gl = this.gl;
+            const program = this._firstPassProgram;
+            gl.useProgram(program);
+
+            // Locations
+            this._firstPassProgramTexcoordLocation = gl.getAttribLocation(program, "a_texCoord");
+            this._firstPassProgramTransformMatrixLocation = gl.getUniformLocation(program, "u_transform_matrix");
+            this._firstPassProgramTextureLocation = gl.getUniformLocation(program, "u_texture");
+
+            // Initialize texture coords attribute
+            this._firstPassProgramTexcoordBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramTexcoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(this._firstPassProgramTexcoordBuffer);
+            gl.vertexAttribPointer(this._firstPassProgramTexcoordBuffer, 2, gl.FLOAT, false, 0, 0);
+
+            // Initialize texture
+            gl.uniform1i(this._firstPassProgramTextureLocation, 0);
+            gl.activeTexture(gl.TEXTURE0);
+        }
+
+        _useFirstPassProgram(texture, textureCoords, transformMatrix) {
+            const gl = this.gl;
+
+            // Texture coords
+            gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramTexcoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, textureCoords, gl.STATIC_DRAW);
+
+            // Transform matrix
+            gl.uniformMatrix3fv(this._firstPassProgramTransformMatrixLocation, false, transformMatrix);
+
+            // Texture
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            // Draw triangle strip (two triangles) from a static array defined in the vertex shader
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+            // TU SOM SKONCIL, TREBA NAHODIT DO MODULARU
         }
 
         /** Dolezita flow funkcia, je volana pri buildeni specifikacie v rendereri.
