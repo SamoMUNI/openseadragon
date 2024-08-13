@@ -346,6 +346,8 @@
                 const parsed = this._parseSpec(spec);
                 if (parsed) {
                     this._programSpecifications.push(parsed);
+                } else {
+                    throw new Error("renderer::addRenderingSpecifications: Invalid specification!");
                 }
             }
             return true;
