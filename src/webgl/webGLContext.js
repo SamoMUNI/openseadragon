@@ -634,6 +634,48 @@
             return 'Error: invalid texture: unsupported sampling type ' + type;
         }
 
+
+       /** Get vertex shader's glsl code.
+         * @param {object} options
+         * @returns {string} vertex shader's glsl code
+         */
+       compileVertexShader(options) {
+        const textureId = options.instanceCount > 1 ? 'gl_InstanceID' : '0';
+
+        const vertexShaderCode = `#version 300 es
+precision mediump float;
+
+flat out int v_texture_id;
+in vec2 a_texture_coords;
+out vec2 v_texture_coords;
+
+uniform mat3 u_transform_matrix;
+
+const vec3 second_pass_viewport[4] = vec3[4] (
+    vec3(0.0, 0.0, 1.0),
+    vec3(0.0, 1.0, 1.0),
+    vec3(1.0, 0.0, 1.0),
+    vec3(1.0, 1.0, 1.0)
+);
+
+void main() {
+    v_texture_id = ${textureId};
+    v_texture_coords = a_texture_coords;
+
+
+    // convert from 0->1 to 0->2
+    vec3 oneToTwo = second_pass_viewport[gl_VertexID] * 2.0;
+
+    // convert from 0->2 to -1->+1 (clipSpace coordinates)
+    vec3 clipSpace = oneToTwo - 1.0;
+
+    gl_Position = vec4(clipSpace, 1);
+}`;
+
+        return vertexShaderCode;
+    }
+
+
         /** Get fragment shader's glsl code.
          * @param {string} definition glsl code outta main function
          * @param {string} execution glsl code inside the main function
@@ -706,45 +748,6 @@
             return fragmentShaderCode;
         }
 
-        /** Get vertex shader's glsl code.
-         * @param {object} options
-         * @returns {string} vertex shader's glsl code
-         */
-        compileVertexShader(options) {
-            const textureId = options.instanceCount > 1 ? 'gl_InstanceID' : '0';
-
-            const vertexShaderCode = `#version 300 es
-    precision mediump float;
-
-    flat out int v_texture_id;
-    in vec2 a_texture_coords;
-    out vec2 v_texture_coords;
-
-    uniform mat3 u_transform_matrix;
-
-    const vec3 second_pass_viewport[4] = vec3[4] (
-        vec3(0.0, 0.0, 1.0),
-        vec3(0.0, 1.0, 1.0),
-        vec3(1.0, 0.0, 1.0),
-        vec3(1.0, 1.0, 1.0)
-    );
-
-    void main() {
-        v_texture_id = ${textureId};
-        v_texture_coords = a_texture_coords;
-
-
-        // convert from 0->1 to 0->2
-        vec3 oneToTwo = second_pass_viewport[gl_VertexID] * 2.0;
-
-        // convert from 0->2 to -1->+1 (clipSpace coordinates)
-        vec3 clipSpace = oneToTwo - 1.0;
-
-        gl_Position = vec4(clipSpace, 1);
-    }`;
-
-            return vertexShaderCode;
-        }
 
         /** Called when associated webgl program is switched to. Volane z forceswitchshader z rendereru alebo pri useCustomProgram z rendereru.
          * Prepaja atributy (definove touto classou) a atributy (definovane shaderami a ich controls) s ich odpovedajucimi glsl premennymi.
@@ -837,7 +840,6 @@
 
             // draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            console.log('Pozdrav z noveho sajrajtu');
         }
     };
 

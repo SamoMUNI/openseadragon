@@ -144,7 +144,10 @@
 
             // disable cull face, this solved flipping error
             this._gl.disable(this._gl.CULL_FACE);
-
+            const maxArrayLayers = this._gl.getParameter(this._gl.MAX_ARRAY_TEXTURE_LAYERS);
+            console.log('Max textureArray layers', maxArrayLayers);
+            const maxTextureUnits = this._gl.getParameter(this._gl.MAX_TEXTURE_IMAGE_UNITS);
+            console.log('Max texture units', maxTextureUnits);
 
             /***** SETUP WEBGL PROGRAMS *****/
             this._createTwoPassEasy();
@@ -1327,6 +1330,10 @@
 
 
             const gl = this._gl;
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            const shaderSpecification = 0;
+            const plainShader = this.renderer.getSpecification(shaderSpecification).shaders.renderShader._renderContext;
+
             this._initializeOffScreenTextureArray(tiledImages.length);
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
@@ -1393,45 +1400,24 @@
 
 
             // SECOND PASS (render from textures to output canvas)
-            gl.useProgram(psp);
+            this.renderer.useProgram(shaderSpecification);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
             for (let i = 0; i < tiledImages.length; ++i) {
-                // treba toto?
-                const textureArrayLocation = gl.getUniformLocation(psp, "u_textureArray");
-                const textureLayerLocation = gl.getUniformLocation(psp, "u_layer");
-                gl.activeTexture(gl.TEXTURE0);
-                gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._offscreenTextureArray);
-                gl.uniform1i(textureArrayLocation, 0);
-                gl.uniform1i(textureLayerLocation, i);
+                plainShader.setBlendMode(tiledImages[i].index === 0 ? "source-over" : tiledImages[i].compositeOperation || this.viewer.compositeOperation);
+                plainShader.opacity.set(tiledImages[i].opacity);
 
-
-                // position vertices over whole viewport
-                const positionBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-                this.__setRectangleStrip(gl, 0, 0, 1, 1);
-                const positionLocation = gl.getAttribLocation(psp, "a_positionn");
-                if (positionLocation === -1) {
-                    throw new Error("Nenasiel som v akutalnom programe a_position!");
-                }
-                gl.enableVertexAttribArray(positionLocation);
-                gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-                // texture coordinates over whole texture
-                const texcoordBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-                this.__setRectangleStrip(gl, 0, 0, 1, 1);
-                const texcoordLocation = gl.getAttribLocation(psp, "a_texCoords");
-                if (texcoordLocation === -1) {
-                    throw new Error("Nenasiel som v akutalnom programe a_texCoords!");
-                }
-                gl.enableVertexAttribArray(texcoordLocation);
-                gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
-
-                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                this.renderer.processData(this._offscreenTextureArray, i, {
+                    transform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+                    zoom: 1,
+                    pixelSize: 1,
+                    textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0])
+                });
+                console.log('Pozdrav z noveho sajrajtu');
             }
 
-            // draw data to output canvas and clear the rendering canvas
+
+            // OUTPUT data to output canvas and clear the rendering canvas
             this._outputContext.drawImage(this._renderingCanvas, 0, 0);
             gl.clear(gl.COLOR_BUFFER_BIT);
             this._renderingCanvasHasImageData = false;
