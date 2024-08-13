@@ -278,19 +278,23 @@
             // console.log("konstruujem webgl20 implementaciu");
             super(renderer, gl, "2.0", options); // sets this.renderer, this.gl, this.webglVersion, this.options
 
+            // SECOND PASS PROGRAM
             // attributes that will be filled with glsl buffers and locations during programLoaded() call
             this._bufferTextureCoords = null; // :glBuffer, pre kazdu tile-u sa sem nahraju data jej textureCoords
             this._locationTextureCoords = null; // :glAttribLocation, atribut na previazanie s buffrom hore, nahra sa skrze neho do glsl
-            this._locationPassFlag = null;
             this._locationTransformMatrix = null;
 
             this._locationPixelSize = null;
             this._locationZoomLevel = null;
-            this._locationTexture = null;
+            this._locationTextureArray = null;
 
+            // FIRST PASS PROGRAM
             this._firstPassProgram = null;
+            this._firstPassProgramTexcoordLocation = null;
+            this._firstPassProgramTransformMatrixLocation = null;
+            this._firstPassProgramTextureLocation = null;
+            this._firstPassProgramTexcoordBuffer = null;
             this._createFirstPassProgram(); // sets this._firstPassProgram to WebGL program
-            this._initializeFirstPassProgram();
         }
 
         /** Get WebGL2RenderingContext (static used to avoid instantiation of this class in case of missing support)
@@ -320,6 +324,9 @@
             return `osd_texture(${index}, ${vec2coords})`;
         }
 
+        /** Sets this._firstPassProgram to WebGL program.
+         * Creates WebGL program that will be used as first pass program during two pass rendering (render into texture).
+         */
         _createFirstPassProgram() {
             const vsource = `#version 300 es
     precision mediump float;
@@ -374,7 +381,10 @@
             this._firstPassProgram = pfp;
         }
 
-        _initializeFirstPassProgram() {
+        /** gl.useProgram(firstPassProgram) + initialize firstPassProgram's attributes.
+         *
+         */
+        loadFirstPassProgram() {
             const gl = this.gl;
             const program = this._firstPassProgram;
             gl.useProgram(program);
@@ -396,7 +406,12 @@
             gl.activeTexture(gl.TEXTURE0);
         }
 
-        _useFirstPassProgram(texture, textureCoords, transformMatrix) {
+        /** Draw using firstPassProgram.
+         * @param {WebGLTexture} texture
+         * @param {Float32Array} textureCoords
+         * @param {Array} transformMatrix
+         */
+        drawFirstPassProgram(texture, textureCoords, transformMatrix) {
             const gl = this.gl;
 
             // Texture coords
@@ -411,8 +426,6 @@
 
             // Draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-            // TU SOM SKONCIL, TREBA NAHODIT DO MODULARU
         }
 
         /** Dolezita flow funkcia, je volana pri buildeni specifikacie v rendereri.
@@ -639,22 +652,20 @@
 
             const fragmentShaderCode = `#version 300 es
     precision mediump float;
-    precision mediump sampler2D;
+    // precision mediump sampler2D;
     precision mediump sampler2DArray;
 
     uniform float u_pixel_size_in_fragments;
     uniform float u_zoom_level;
 
-    flat in int pass_flag; // 1. pass or 2. pass
-
     flat in int v_texture_id;
     in vec2 v_texture_coords;
 
-    uniform sampler2D u_texture;
-    // out vec4 final_color;
+    uniform sampler2DArray u_textureArray;
+    uniform int u_textureLayer;
 
     vec4 osd_texture(int index, vec2 coords) {
-        return texture(u_texture, coords);
+        return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
     }
 
     // blending
@@ -686,15 +697,10 @@
     // definition${definition}
 
     void main() {
-        if (pass_flag == 1) {
-            final_color = texture(u_texture, v_texture_coords);
-        } else {
+        // execution${execution}
 
-            // execution${execution}
-
-            //blend last level
-            blend(vec4(.0), 0, false);
-        }
+        //blend last level
+        blend(vec4(.0), 0, false);
     }`;
 
             return fragmentShaderCode;
@@ -710,21 +716,11 @@
             const vertexShaderCode = `#version 300 es
     precision mediump float;
 
-    uniform int u_pass_flag; // 1. pass or 2. pass
-    flat out int pass_flag;
-
     flat out int v_texture_id;
     in vec2 a_texture_coords;
     out vec2 v_texture_coords;
 
     uniform mat3 u_transform_matrix;
-
-    const vec3 first_pass_viewport[4] = vec3[4] (
-        vec3(0.0, 1.0, 1.0),
-        vec3(0.0, 0.0, 1.0),
-        vec3(1.0, 1.0, 1.0),
-        vec3(1.0, 0.0, 1.0)
-    );
 
     const vec3 second_pass_viewport[4] = vec3[4] (
         vec3(0.0, 0.0, 1.0),
@@ -734,38 +730,21 @@
     );
 
     void main() {
-        pass_flag = u_pass_flag;
         v_texture_id = ${textureId};
         v_texture_coords = a_texture_coords;
 
-        if (u_pass_flag == 1) {
-            gl_Position = vec4(u_transform_matrix * first_pass_viewport[gl_VertexID], 1);
-        } else {
-            // convert from 0->1 to 0->2
-            vec3 oneToTwo = second_pass_viewport[gl_VertexID] * 2.0;
 
-            // convert from 0->2 to -1->+1 (clipSpace coordinates)
-            vec3 clipSpace = oneToTwo - 1.0;
+        // convert from 0->1 to 0->2
+        vec3 oneToTwo = second_pass_viewport[gl_VertexID] * 2.0;
 
-            gl_Position = vec4(clipSpace, 1);
-        }
+        // convert from 0->2 to -1->+1 (clipSpace coordinates)
+        vec3 clipSpace = oneToTwo - 1.0;
 
-    }
-
-    // The only thing that this vertex shader does is that it draws over the whole viewport and send texture coordinates to fragment shader.
-    `;
+        gl_Position = vec4(clipSpace, 1);
+    }`;
 
             return vertexShaderCode;
         }
-
-        /**
-         * Switch to first or second rendering pass.
-         * @param {number} pass 1 = first pass, 2 = second pass
-         */
-        switchToRenderingPass(pass) {
-            this.gl.uniform1i(this._locationPassFlag, pass);
-        }
-
 
         /** Called when associated webgl program is switched to. Volane z forceswitchshader z rendereru alebo pri useCustomProgram z rendereru.
          * Prepaja atributy (definove touto classou) a atributy (definovane shaderami a ich controls) s ich odpovedajucimi glsl premennymi.
@@ -791,13 +770,13 @@
 
             // VERTEX shader's locations
             this._locationTextureCoords = gl.getAttribLocation(program, "a_texture_coords");
-            this._locationPassFlag = gl.getUniformLocation(program, "u_pass_flag");
             this._locationTransformMatrix = gl.getUniformLocation(program, "u_transform_matrix");
 
             // FRAGMENT shader's locations
             this._locationPixelSize = gl.getUniformLocation(program, "u_pixel_size_in_fragments");
             this._locationZoomLevel = gl.getUniformLocation(program, "u_zoom_level");
-            this._locationTexture = gl.getUniformLocation(program, "u_texture");
+            this._locationTextureArray = gl.getUniformLocation(program, "u_textureArray");
+            this._locationTextureLayer = gl.getUniformLocation(program, "u_textureLayer");
 
             // Initialize texture coords attribute
             this._bufferTextureCoords = gl.createBuffer();
@@ -807,7 +786,7 @@
             gl.vertexAttribPointer(this._locationTextureCoords, 2, gl.FLOAT, false, 0, 0);
 
             // Initialize texture
-            gl.uniform1i(this._locationTexture, 0);
+            gl.uniform1i(this._locationTextureArray, 0);
             gl.activeTexture(gl.TEXTURE0);
         }
 
@@ -817,14 +796,14 @@
          * Fill the glsl variables and draw.
          * @param {WebGLProgram} program currently being used with renderer
          * @param {object} spec specification corresponding to program (from renderer._programSpecifications)
-         * @param {WebGLTexture} texture to draw from
+         * @param {WebGLTexture} textureArray to draw from
          * @param {object} tileInfo
          * @param {[Float]} tileInfo.transform 3*3 matrix that should be applied to tile vertices
          * @param {number} tileInfo.zoom
          * @param {number} tileInfo.pixelSize
          * @param {Float32Array} tileInfo.textureCoords 8 suradnic, (2 pre kazdy vrchol triangle stripu)
          */
-        programUsed(program, spec, texture, tileInfo) {
+        programUsed(program, spec, textureArray, textureLayer, tileInfo) {
             if (!this.renderer.running) {
                 throw new Error("webGLContext::programUsed: Renderer not running!");
             }
@@ -851,10 +830,14 @@
             gl.uniformMatrix3fv(this._locationTransformMatrix, false, tileInfo.transform);
 
             // texture
-            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
+
+            // textureArray layer
+            gl.uniform1i(this._locationTextureLayer, textureLayer);
 
             // draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            console.log('Pozdrav z noveho sajrajtu');
         }
     };
 

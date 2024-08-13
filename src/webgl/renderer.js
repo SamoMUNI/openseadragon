@@ -438,6 +438,14 @@
             }
         }
 
+        useFirstPassProgram() {
+            this.webglContext.loadFirstPassProgram();
+        }
+
+        drawFirstPassProgram(texture, textureCoords, transformMatrix) {
+            this.webglContext.drawFirstPassProgram(texture, textureCoords, transformMatrix);
+        }
+
         /**
          * Switch to program at index: this is the index (order) in which
          * setShaders(...) was called. If you want to switch to shader that
@@ -541,8 +549,8 @@
 
         /** DRAWING !
          * Renders data using WebGL
-         * @param {GLuint|[GLuint]} texture or texture array for instanced drawing
-         *
+         * @param {GLuint|[GLuint]} textureArray texture array for instanced drawing
+         * @param {Number} textureLayer
          * @param {Object} tileOpts
          * @param {OpenSeadragon.Mat3|[OpenSeadragon.Mat3]} tileOpts.transform position transform
          *      matrix or flat matrix array (instance drawing)
@@ -554,7 +562,7 @@
          * @instance
          * @memberOf WebGLModule
          */
-        processData(texture, tileOpts) {
+        processData(textureArray, textureLayer, tileOpts) {
             //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
             const spec = this._programSpecifications[this._program];
             //console.log('processData: spec=', spec);
@@ -562,7 +570,7 @@
             if (!spec) {
                 $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             } else {
-                this.webglContext.programUsed(this.program, spec, texture, tileOpts);
+                this.webglContext.programUsed(this.program, spec, textureArray, textureLayer, tileOpts);
             }
         }
         // CUSTOM program I guess DRAWING !
