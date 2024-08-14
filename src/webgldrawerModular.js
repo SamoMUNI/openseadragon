@@ -383,7 +383,7 @@
                 //this._resizeOffScreenTextures(tiledImages.length);
                 console.log('DRAW() call with predefined tiledImages array.');
                 //this._drawTwoPassEasy(tiledImages, view, viewMatrix);
-                //this._drawTwoPassEZ(tiledImages, view, viewMatrix);
+                // this._drawTwoPassEZ(tiledImages, view, viewMatrix);
                 // this._drawTwoPass(tiledImages, view, viewMatrix);
                 this._drawTwoPassNew(tiledImages, view, viewMatrix);
             } else {
@@ -935,6 +935,7 @@
          * @param {Number} numOfLayers
          */
         _initializeOffScreenTextureArray(numOfLayers) {
+            //console.log('Pozdrav z initialize off screen texture array!');
             const gl = this._gl;
             if (this._offscreenTextureArray) {
                 gl.deleteTexture(this._offscreenTextureArray);
@@ -944,6 +945,7 @@
 
             const x = this._size.x;
             const y = this._size.y;
+            //console.log('Resize textures', x, y);
             // Once you allocate storage with gl.texStorage3D, you cannot change the texture's size or format, which helps optimize performance and ensures consistency.
             gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, x, y, numOfLayers);
 
@@ -955,6 +957,8 @@
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            this._offscreenTextureArrayLayers = numOfLayers;
         }
         /**
          *
@@ -1282,58 +1286,11 @@
 
 
         _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
-            const v2source = `#version 300 es
-    in vec2 a_positionn;
-    in vec2 a_texCoords;
-    out vec2 v_texcoord;
-
-    void main() {
-        // convert from 0->1 to 0->2
-        vec2 zeroToTwo = a_positionn * 2.0;
-
-        // convert from 0->2 to -1->+1 (clipspace)
-        vec2 clipSpace = zeroToTwo - 1.0;
-
-        // original was gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
-        // but because texture from first pass comes flipped over x-axis I use this:
-        gl_Position = vec4(clipSpace * vec2(1, 1), 0, 1);
-
-        v_texcoord = a_texCoords;
-    }
-`;
-            const f2source = `#version 300 es
-    precision mediump float;
-    precision mediump sampler2DArray;
-
-    in vec2 v_texcoord;
-    uniform sampler2DArray u_textureArray;
-    uniform int u_layer;
-
-    out vec4 outColor;
-
-    void main() {
-        outColor = texture(u_textureArray, vec3(v_texcoord, float(u_layer)));
-    }
-`;
-            const vsp = this.__createShader(this._gl, this._gl.VERTEX_SHADER, v2source);
-            if (!vsp) {
-                alert("Creation of vertex shader failed");
-            }
-            const fsp = this.__createShader(this._gl, this._gl.FRAGMENT_SHADER, f2source);
-            if (!fsp) {
-                alert("Creation of fragment shader failed");
-            }
-            const psp = this.__createProgram(this._gl, vsp, fsp);
-            if (!psp) {
-                alert("Creation of program failed");
-            }
-
-
             const gl = this._gl;
-            gl.clear(gl.COLOR_BUFFER_BIT);
             const shaderSpecification = 0;
             const plainShader = this.renderer.getSpecification(shaderSpecification).shaders.renderShader._renderContext;
 
+            gl.clear(gl.COLOR_BUFFER_BIT);
             this._initializeOffScreenTextureArray(tiledImages.length);
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
@@ -1367,8 +1324,10 @@
                         let localMatrix = t1.multiply(imageRotationMatrix).multiply(t2);
                         overallMatrix = viewMatrix.multiply(localMatrix);
                     }
-                    // let pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
+                    // const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
+                    // FRAMEBUFFER
+                    this._bindFrameBufferToOffScreenTextureArray(tiledImageIndex);
 
                     // ITERATE over TILES
                     for (let tileIndex = 0; tileIndex < tilesToDraw.length; ++tileIndex) {
@@ -1392,7 +1351,6 @@
 
 
                         // WebGL
-                        this._bindFrameBufferToOffScreenTextureArray(tiledImageIndex);
                         this.renderer.drawFirstPassProgram(tileInfo.texture, tileInfo.position, matrix);
                     } // end of TILES iteration
                 }
@@ -1403,18 +1361,19 @@
             this.renderer.useProgram(shaderSpecification);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-            for (let i = 0; i < tiledImages.length; ++i) {
-                plainShader.setBlendMode(tiledImages[i].index === 0 ? "source-over" : tiledImages[i].compositeOperation || this.viewer.compositeOperation);
-                plainShader.opacity.set(tiledImages[i].opacity);
+            tiledImages.forEach((tiledImage, i) => {
+                plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
+                plainShader.opacity.set(tiledImage.opacity);
+                const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
                 this.renderer.processData(this._offscreenTextureArray, i, {
                     transform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
-                    zoom: 1,
-                    pixelSize: 1,
+                    zoom: viewport.zoom,
+                    pixelSize: pixelSize,
                     textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0])
                 });
                 console.log('Pozdrav z noveho sajrajtu');
-            }
+            });
 
 
             // OUTPUT data to output canvas and clear the rendering canvas
@@ -1782,6 +1741,7 @@
             gl.useProgram(this.programEZ);
             //gl.clearColor(0, 1, 0, 0.5);
             gl.clear(gl.COLOR_BUFFER_BIT);
+            this._resizeOffScreenTextures(tiledImages.length);
 
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 if (tiledImage.isTainted()) {

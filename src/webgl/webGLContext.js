@@ -386,6 +386,7 @@
          */
         loadFirstPassProgram() {
             const gl = this.gl;
+            console.log('loadFirstPass, viewport =', gl.getParameter(gl.VIEWPORT));
             const program = this._firstPassProgram;
             gl.useProgram(program);
 
@@ -764,6 +765,8 @@ void main() {
             }
 
             const gl = this.gl;
+            console.log('ProgramLoaded, viewport =', gl.getParameter(gl.VIEWPORT));
+
             // Allow for custom loading
             gl.useProgram(program);
             if (spec) {

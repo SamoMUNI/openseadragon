@@ -271,12 +271,10 @@
          * @memberOf WebGLModule
          */
         setDimensions(x, y, width, height) {
-            //console.log('som v setDimensions, x,y,w,h:', x, y, width, height);
-            if (width === this.canvas.width && height === this.canvas.height) {
-                return;
-            }
+            // NETUSIM Z KADE SA TU ZJAVIL V RENDERERI CANVAS -> treba zistit ach jo
             this.canvas.width = width;
             this.canvas.height = height;
+            console.log('Settujem viewport z rendereru na', x, y, width, height);
             this.gl.viewport(x, y, width, height);
         }
 
