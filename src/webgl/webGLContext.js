@@ -386,7 +386,6 @@
          */
         loadFirstPassProgram() {
             const gl = this.gl;
-            console.log('loadFirstPass, viewport =', gl.getParameter(gl.VIEWPORT));
             const program = this._firstPassProgram;
             gl.useProgram(program);
 
@@ -491,12 +490,8 @@
                         let shader = layer._renderContext;
 
                         // returns array of strings where one element corresponds to one glsl code line
-                        let fsd = shader.getFragmentShaderDefinition();
-                        console.log('fsd ->', fsd);
-
-                        /* map adds tabs to glsl code lines, join puts them all together separating them with newlines
-                            (join used because we do not want to add newline to the last line of code) */
-                        definition += fsd.map((glLine) => "    " + glLine).join("\n");
+                        const fsd = shader.getFragmentShaderDefinition();
+                        definition += fsd;
 
                         // getFSE `return ${this.sampleChannel("osd_texture_coords")};` (from plainShader)
                         // getFSE = osd_texture(0, osd_texture_coords).rgba
@@ -707,6 +702,11 @@ void main() {
     uniform sampler2DArray u_textureArray;
     uniform int u_textureLayer;
 
+    // utility function
+    bool close(float value, float target) {
+        return abs(target - value) < 0.001;
+    }
+
     vec4 osd_texture(int index, vec2 coords) {
         return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
     }
@@ -765,7 +765,6 @@ void main() {
             }
 
             const gl = this.gl;
-            console.log('ProgramLoaded, viewport =', gl.getParameter(gl.VIEWPORT));
 
             // Allow for custom loading
             gl.useProgram(program);

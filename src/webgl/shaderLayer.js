@@ -219,7 +219,11 @@
                     glsl.push(code.trim());
                 }
             }
-            return glsl;
+
+            /* map adds tabs to glsl code lines, join puts them all together separating them with newlines
+                (join used because we do not want to add newline to the last line of code) */
+            let retval = glsl.map((glLine) => "    " + glLine).join("\n");
+            return retval;
         }
 
         setBlendMode(name) {
@@ -291,6 +295,7 @@
                 console.error("Shader not properly initialized! Call shader.construct()!");
             }
             for (let control of this._ownedControls) {
+                // console.log(`Control ${control}, this[control] = ${this[control]}`);
                 this[control].init();
             }
         }
@@ -551,6 +556,7 @@
                 console.warn(`Shader ${this.constructor.name()} overrides as a control name ${name} existing property!`);
             }
 
+            console.log('addControl, pred volanim UIControls.build');
             const controlObject = this.constructor.defaultControls[name];
             const control = $.WebGLModule.UIControls.build(this, name, controlObject, controlOptions);
             // create new attribute to shaderLayer class -> shaderLayer.<control name> = <control object>
@@ -791,6 +797,7 @@
             // if control's type (eg.: opacity -> range) not already present in this._items
             /* VOBEC SOM NEPRESIEL TUTO CAST */
             if (!this._items[defaultParams.type]) {
+                console.log('UIControls:build - if vetva, typ =', defaultParams.type);
                 if (!this._impls[defaultParams.type]) {
                     return this._buildFallback(defaultParams.type, originalType,
                         owner, controlName, controlObject, params);
@@ -807,7 +814,7 @@
                 return this._buildFallback(defaultParams.type, originalType,
                     owner, controlName, controlObject, params);
             } else { // control's type (eg.: range/number/...) is present in this._items
-                console.log('UIControls:build - prechadzam tadeto');
+                console.log('UIControls:build - else vetva');
                 let controlTypeObject = this.getUiElement(defaultParams.type);
                 let comp = new $.WebGLModule.UIControls.SimpleUIControl(
                     owner, controlName, defaultParams, controlTypeObject

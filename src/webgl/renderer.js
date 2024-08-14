@@ -274,7 +274,6 @@
             // NETUSIM Z KADE SA TU ZJAVIL V RENDERERI CANVAS -> treba zistit ach jo
             this.canvas.width = width;
             this.canvas.height = height;
-            console.log('Settujem viewport z rendereru na', x, y, width, height);
             this.gl.viewport(x, y, width, height);
         }
 
@@ -987,7 +986,8 @@
             this.defaultRenderingSpecification = {
                 shaders: {
                     renderShader: {
-                        type: "identity",
+                        // type: "identity",
+                        type: "edge",
                         dataReferences: [0],
                     }
                 }

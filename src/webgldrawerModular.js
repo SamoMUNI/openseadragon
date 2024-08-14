@@ -346,13 +346,12 @@
         * @param {Array} tiledImages Array of TiledImage objects to draw
         */
         draw(tiledImages) {
-            const tilesToDraw = tiledImages[0].getTilesToDraw();
-            if (tilesToDraw.length === 0) {
-                return;
-            }
-
             // clear the output canvas
             this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
+
+            if (tiledImages.length === 0 || tiledImages[0].getTilesToDraw() === 0) {
+                return;
+            }
 
             let view = {
                 bounds: this.viewport.getBoundsNoRotate(true),
@@ -368,7 +367,7 @@
             let rotMatrix = $.Mat3.makeRotation(-view.rotation);
             let viewMatrix = scaleMatrix.multiply(rotMatrix).multiply(posMatrix);
 
-            // const gl = this._gl;
+            const gl = this._gl;
             let twoPassRendering = true;
             // for (const tiledImage of tiledImages) {
             //     if (tiledImage.source.shader._utilizeLocalMethods ||
@@ -395,6 +394,8 @@
             /* context2dPipeline was not used, data are still in _renderingCanvas */
             if (this._renderingCanvasHasImageData) {
                 this._outputContext.drawImage(this._renderingCanvas, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+                this._renderingCanvasHasImageData = false;
             }
         }//end of draw function
 
@@ -1288,12 +1289,11 @@
         _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
             const gl = this._gl;
             const shaderSpecification = 0;
-            const plainShader = this.renderer.getSpecification(shaderSpecification).shaders.renderShader._renderContext;
-
+            //const plainShader = this.renderer.getSpecification(shaderSpecification).shaders.renderShader._renderContext;
             gl.clear(gl.COLOR_BUFFER_BIT);
-            this._initializeOffScreenTextureArray(tiledImages.length);
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
+            this._initializeOffScreenTextureArray(tiledImages.length);
             this.renderer.useFirstPassProgram();
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 if (tiledImage.isTainted()) {
@@ -1360,10 +1360,9 @@
             // SECOND PASS (render from textures to output canvas)
             this.renderer.useProgram(shaderSpecification);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
             tiledImages.forEach((tiledImage, i) => {
-                plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
-                plainShader.opacity.set(tiledImage.opacity);
+                //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
+                //plainShader.opacity.set(tiledImage.opacity);
                 const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
                 this.renderer.processData(this._offscreenTextureArray, i, {
@@ -1372,15 +1371,11 @@
                     pixelSize: pixelSize,
                     textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0])
                 });
-                console.log('Pozdrav z noveho sajrajtu');
             });
 
 
             // OUTPUT data to output canvas and clear the rendering canvas
-            this._outputContext.drawImage(this._renderingCanvas, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-            this._renderingCanvasHasImageData = false;
-
+            this._renderingCanvasHasImageData = true;
         }//end of function
 
 

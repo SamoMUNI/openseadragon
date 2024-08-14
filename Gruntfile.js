@@ -74,6 +74,7 @@ module.exports = function(grunt) {
             "src/webgl/webGLContext.js",
             "src/webgl/drawer.js",
             "src/webgl/plainShader.js",
+            "src/webgl/edgeShader.js"
         ];
 
     var banner = "//! <%= pkg.name %> <%= pkg.version %>\n" +
