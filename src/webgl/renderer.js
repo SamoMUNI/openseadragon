@@ -330,6 +330,10 @@
             return this._programSpecifications[index];
         }
 
+        getSpecifications() {
+            return this._programSpecifications;
+        }
+
         /**
          * Set program shaders. Vertex shader is set by default a square.
          * @param {[RenderingConfig]} specifications - objects that define the what to render (see Readme)
@@ -667,12 +671,15 @@
             const specification = this._programSpecifications[i];
             if (!specification) {
                 $.console.error(`$.WebGLModule::_forceSwitchProgram: Invalid rendering specification index ${i}!`);
-                return;
+                $.console.error('$.WebGLModule::_forceSwitchProgram: programSpecifications:', this._programSpecifications);
+                // throw new Error("stop");
             }
 
-            const program = this._programs[i];
+            let program = this._programs[i];
             if (!program) {
                 this._specificationToProgram(specification, i);
+                program = this._programs[i];
+                console.log('Pridany program, specs=', this.getSpecifications());
             } else if (i !== this._program) {
                 this._updateRequiredDataSources(specification);
             }
@@ -825,7 +832,7 @@
          * @param {boolean} options.debug draw debugging info
          * @returns
          */
-        _specificationToProgram(spec, idx, options) {
+        _specificationToProgram(spec, idx, options = {}) {
             // nastavi _dataSources na [__gdnu__ * pocet datareferenci v spec.shaders.ALL.datareferences]
             this._updateRequiredDataSources(spec);
             const gl = this.gl;
@@ -896,6 +903,7 @@
                 spec.order = Object.keys(spec.shaders);
             }
 
+            console.log('Tu som!');
             this._buildSpecification(program, spec, options);
             this.visualisationReady(idx, spec); // useless now, probably name should be something like specificationReady
             return idx;
@@ -940,6 +948,7 @@
                 console.error(`Invalid shader -> ${ShaderFactoryClass.name()}! Construct must call super implementation!`);
             }
             console.log('Shader implementacia hotofson, zacina dalsia era !', shaderObject._renderContext);
+            console.log('specs =', this.getSpecifications());
         }
 
 
@@ -986,8 +995,8 @@
             this.defaultRenderingSpecification = {
                 shaders: {
                     renderShader: {
-                        // type: "identity",
-                        type: "edge",
+                        type: "identity",
+                        // type: "edge",
                         dataReferences: [0],
                     }
                 }

@@ -170,23 +170,58 @@
             /* Pridane event handlery z draweru */
             this.viewer.world.addHandler("add-item", (e) => {
                 console.log('ADD-ITEM EVENT !!!');
+                let duomo = false;
+                if (e.item.source.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
+                    duomo = true;
+                }
+                if (duomo) {
+                    console.log('Adding duomo tiledImage!');
+                }
+
                 let shader = e.item.source.shader;
                 if (shader) {
-                    if (shader._initialized) {
-                        return;
+                    console.log('Druhy raz v addIteme, shader=', shader);
+                    console.log(this.renderer.flag); // bude undefined, vid komentar dole...
+                    if (duomo) {
+                        /* Tomuto vobec nerozumiem preco je takto, povodne som proste skippoval ak uz bol raz tiledImage videny, ale ocividne renderer ako by bol neupdatnuty...
+                            Zatial co e.item.source... su dobre nastavene takze netusim :( */
+                        const spec = {
+                            shaders: {
+                                renderShader: {
+                                    // type: "identity",
+                                    type: "edge",
+                                    dataReferences: [0],
+                                }
+                            }
+                        };
+                        this.renderer.addRenderingSpecifications(spec);
                     }
-                    const targetIndex = this.renderer.getSpecificationsCount();
-                    this.renderer.addRenderingSpecifications(shader);
-                    this.renderer.buildProgram(targetIndex, null, true, this.renderer.buildOptions);
-                    shader._programIndexTarget = targetIndex;
-                    shader._initialized = true;
-                    e.item.source.shader._utilizeLocalMethods = true;
-
                 } else {
-                    e.item.source.shader = this.renderer.defaultRenderingSpecification;
-                    e.item.source.shader._programIndexTarget = 0;
-                    e.item.source.shader._initialized = true;
-                    e.item.source.shader._utilizeLocalMethods = true;
+                    console.log('Prvy raz v addIteme, shader=', shader);
+                    if (duomo) {
+                        const targetIndex = this.renderer.getSpecificationsCount();
+                        const spec = {
+                            shaders: {
+                                renderShader: {
+                                    // type: "identity",
+                                    type: "edge",
+                                    dataReferences: [0],
+                                }
+                            }
+                        };
+                        this.renderer.addRenderingSpecifications(spec);
+                        this.renderer.flag = Symbol("pridana specifikacia pre dom bola");
+
+                        e.item.source.shader = spec;
+                        e.item.source.shader._programIndexTarget = targetIndex;
+                        e.item.source.shader._initialized = true;
+                        e.item.source.shader._utilizeLocalMethods = true;
+                    } else { // not duomo TiledImage
+                        e.item.source.shader = this.renderer.defaultRenderingSpecification;
+                        e.item.source.shader._programIndexTarget = 0;
+                        e.item.source.shader._initialized = true;
+                        e.item.source.shader._utilizeLocalMethods = true;
+                    }
                 }
             });
 
@@ -346,6 +381,12 @@
         * @param {Array} tiledImages Array of TiledImage objects to draw
         */
         draw(tiledImages) {
+            // console.log('Draw func, renderer\'s specs =', this.renderer.getSpecifications(), '. Number of tiledImages =', tiledImages.length);
+            // if (tiledImages.length !== this.renderer.getSpecificationsCount()) {
+            //     console.log('Kedze sa nerovna pocet tiledImages poctu specifikacii v rendereri, CAKAM!');
+            //     return;
+            // }
+
             // clear the output canvas
             this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
 
@@ -380,7 +421,7 @@
             if (twoPassRendering) {
                 this.enableStencilTest(false);
                 //this._resizeOffScreenTextures(tiledImages.length);
-                console.log('DRAW() call with predefined tiledImages array.');
+                // console.log('DRAW() call with predefined tiledImages array.');
                 //this._drawTwoPassEasy(tiledImages, view, viewMatrix);
                 // this._drawTwoPassEZ(tiledImages, view, viewMatrix);
                 // this._drawTwoPass(tiledImages, view, viewMatrix);
@@ -1288,7 +1329,7 @@
 
         _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
             const gl = this._gl;
-            const shaderSpecification = 0;
+            //const shaderSpecification = 0;
             //const plainShader = this.renderer.getSpecification(shaderSpecification).shaders.renderShader._renderContext;
             gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -1358,11 +1399,11 @@
 
 
             // SECOND PASS (render from textures to output canvas)
-            this.renderer.useProgram(shaderSpecification);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             tiledImages.forEach((tiledImage, i) => {
                 //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
                 //plainShader.opacity.set(tiledImage.opacity);
+                this.renderer.useProgram(tiledImage.source.shader._programIndexTarget);
                 const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
                 this.renderer.processData(this._offscreenTextureArray, i, {

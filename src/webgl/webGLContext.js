@@ -454,6 +454,7 @@
          */
         //todo try to implement on the global scope version-independntly
         compileSpecification(program, specification, options) {
+            console.log('CompileSpecification, specs=', this.renderer.getSpecifications());
             // fragment shader's code placed outside of the main function
             var definition = "\n",
             // fragment shader's code placed inside the main function
