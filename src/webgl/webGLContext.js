@@ -428,6 +428,19 @@
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
 
+
+        /**
+         *
+         * @param {[ShaderLayer]} shaderLayers array of ShaderLayers to use
+         */
+        // createProgram(shaderLayers) {
+        //     const gl = this.gl;
+        //     const program = gl.createProgram();
+        //     for (const shaderLayer of shaderLayers) {
+
+        //     }
+        // }
+
         /** Dolezita flow funkcia, je volana pri buildeni specifikacie v rendereri.
          * Prechadza cez shaders danej spec, komunikuje s ich instanciami
          * a robi podla nich glsl kod pre fragment shader (vola ich funkcie getFragmentShaderDefinition/Execution).

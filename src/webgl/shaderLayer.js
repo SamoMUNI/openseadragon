@@ -144,7 +144,7 @@
          * @param {string} id unique ID among all webgl instances and shaders
          * @param {object} privateOptions options that should not be touched, necessary for linking the layer to the core
          * @param {object} privateOptions.shaderObject concrete shader object definition from spec.shaders
-         * @param {WebGLImplementation} privateOptions.webglContext plainShader
+         * @param {WebGLImplementation} privateOptions.webglContext
          * @param {boolean} privateOptions.interactive
          * @param {function} privateOptions.invalidate
          * @param {function} privateOptions.rebuild

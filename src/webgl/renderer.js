@@ -820,6 +820,37 @@
             }
         }
 
+        createDefaultProgram() {
+            this.defaultRenderingSpecification = {
+                shaders: {
+                    renderShader: {
+                        type: "identity",
+                        dataReferences: [0],
+                    }
+                }
+            }
+            this.addRenderingSpecifications(this.defaultRenderingSpecification);
+
+            const PlainShader = $.WebGLModule.ShaderMediator.getClass("identity");
+            // new Class(id: string, options: object)
+            const plainShader = new PlainShader('identity_shader' , {
+                shaderObject: this.defaultRenderingSpecification.shaders.renderShader,
+                webglContext: this.webglContext,
+                interactive: false,
+                invalidate: () => {},
+                rebuild: () => {},
+                refetch: () => {}
+            });
+            plainShader.construct();
+            if (!plainShader.initialized()) {
+                throw new Error('renderer.js::createDefaultProgram(): Could not built default program!');
+            }
+
+            const gl = this.gl;
+            this.webglContext.createProgram([plainShader]);
+
+        }
+
         /**
          * Iterate through specification's shaderObjects and create their corresponding instantions.
          * BuildSpec call begins creation of glsl code, webglcontext iterates through shaders and communicates with their instantions I guess.
@@ -1030,6 +1061,8 @@
                 this.gl.disable(this.gl.BLEND);
             }
         }
+
+
 
     };
     /**
