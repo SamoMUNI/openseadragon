@@ -429,18 +429,6 @@
         }
 
 
-        /**
-         *
-         * @param {[ShaderLayer]} shaderLayers array of ShaderLayers to use
-         */
-        // createProgram(shaderLayers) {
-        //     const gl = this.gl;
-        //     const program = gl.createProgram();
-        //     for (const shaderLayer of shaderLayers) {
-
-        //     }
-        // }
-
         /** Dolezita flow funkcia, je volana pri buildeni specifikacie v rendereri.
          * Prechadza cez shaders danej spec, komunikuje s ich instanciami
          * a robi podla nich glsl kod pre fragment shader (vola ich funkcie getFragmentShaderDefinition/Execution).
@@ -503,7 +491,7 @@
 
                         let shader = layer._renderContext;
 
-                        // returns array of strings where one element corresponds to one glsl code line
+                        // returns string which corresponds to glsl code
                         const fsd = shader.getFragmentShaderDefinition();
                         definition += fsd;
 
@@ -751,16 +739,62 @@ void main() {
         _last_clip = clip;
     }
 
-    // definition${definition}
+
+    // definitions of shaderLayers:${definition}
 
     void main() {
-        // execution${execution}
+        // executions of shaderLayers${execution}
 
         //blend last level
         blend(vec4(.0), 0, false);
     }`;
 
             return fragmentShaderCode;
+        }
+
+
+        /**
+         *
+         * @param {[ShaderLayer]} shaderLayers array of ShaderLayers to use
+         */
+        programCreated(shaderLayers) {
+            const gl = this.gl;
+            const program = gl.createProgram();
+
+            let definition = '',
+                execution = '';
+                // globalScopeCode = {};
+            for (const shaderLayer of shaderLayers) {
+                // returns string which corresponds to glsl code
+                const fsd = shaderLayer.getFragmentShaderDefinition();
+                definition += '\n' + fsd;
+                definition += `
+    vec4 ${shaderLayer.uid}_execution() {
+        ${shaderLayer.getFragmentShaderExecution()}
+    }`;
+
+                // ak ma opacity shaderLayer tak zavolaj jeho execution a prenasob alpha channel opacitou a to posli do blend funkcie, inak tam posli rovno jeho execution
+                if (shaderLayer.opacity) {
+                    execution += `
+        vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
+        ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
+        blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
+                } else {
+                    execution += `
+        blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform})`;
+                }
+            }
+
+            const vertexShaderCode = this.compileVertexShader({});
+            const fragmentShaderCode = this.compileFragmentShader(definition, execution, {});
+            // toto by som spravil inak, ale kedze uz je naimplementovana funkcia _compileProgram tak ju pouzijem
+            program._osdOptions = {};
+            program._osdOptions.vs = vertexShaderCode;
+            program._osdOptions.fs = fragmentShaderCode;
+            this._compileProgram(program, $.console.error);
+
+            this._secondPassProgram = program;
+            return program;
         }
 
 

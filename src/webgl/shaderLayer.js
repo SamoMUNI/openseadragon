@@ -180,7 +180,7 @@
          * @param {[number]} dataReferences indexes of data being requested for this shader (this.__shaderObject.dataReferences)
          */
         /* options = {}, dataReferences = [0] */
-        construct(options, dataReferences) {
+        construct(options = {}, dataReferences = [0]) {
             this._ownedControls = [];
             // prechadza controls v defaultControls a nastavi pre kazdy this[control] = <SimpleUIControl>, plus mena da do _ownedControls
             this._buildControls(options);
@@ -1496,7 +1496,7 @@
 
         glLoaded(program, gl) {
             this.glLocation = gl.getUniformLocation(program, this.webGLVariableName);
-            //console.log(`glLocation = ${this.glLocation}, webGLVariableName = ${this.webGLVariableName}`);
+            // console.log(`shaderLayer, glLocation = ${this.glLocation}, webGLVariableName = ${this.webGLVariableName}`);
         }
 
         toHtml(breakLine = true, controlCss = "") {

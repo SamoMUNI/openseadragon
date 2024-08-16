@@ -219,6 +219,7 @@
             for (let key in shaders) {
                 //rendering == true means no error
                 let shader = shaders[key];
+                // console.log(`eachVisibleShaderLayer:: key=${key}, shader.rendering=${shader.rendering}`);
                 if (shader && shader.rendering) {
                     try {
                         callback(shader);
@@ -627,7 +628,7 @@
             this.gl.cullFace(this.gl.FRONT);
 
             //this.running = true; //podla mna to tu nema byt, _forceSwitchProgram nastavi spravne
-
+            console.log('V inite, idem do forceSwitchProgram');
             this._forceSwitchProgram(this._program);
             this.ready();
         }
@@ -677,6 +678,7 @@
 
             let program = this._programs[i];
             if (!program) {
+                console.log(`forceSwitch, no program, gonna build one! this._programs =${this._programs}, i =${i}`);
                 this._specificationToProgram(specification, i);
                 program = this._programs[i];
                 console.log('Pridany program, specs=', this.getSpecifications());
@@ -832,8 +834,8 @@
             this.addRenderingSpecifications(this.defaultRenderingSpecification);
 
             const PlainShader = $.WebGLModule.ShaderMediator.getClass("identity");
-            // new Class(id: string, options: object)
-            const plainShader = new PlainShader('identity_shader', {
+            //                  new Class      (uniqueId: string, options: object)
+            const plainShader = new PlainShader('default_shader', {
                 shaderObject: this.defaultRenderingSpecification.shaders.renderShader,
                 webglContext: this.webglContext,
                 interactive: false,
@@ -846,9 +848,20 @@
                 throw new Error('renderer.js::createDefaultProgram(): Could not built default program!');
             }
 
-            // const gl = this.gl;
-            this.webglContext.createProgram([plainShader]);
+            const shaderObject = this.defaultRenderingSpecification.shaders.renderShader;
+            shaderObject._index = 0;
+            shaderObject._renderContext = plainShader;
+            shaderObject.visible = true;
+            shaderObject.rendering = true;
 
+            const program = this.webglContext.programCreated([plainShader]);
+            this._program = 0;
+            this._programs[0] = program;
+
+            this.running = true;
+            this.webglContext.programLoaded(program, this.defaultRenderingSpecification);
+
+            console.log('renderer.js::createDefaultProgram(): DEFAULT PROGRAM CREATED!');
         }
 
         /**
@@ -887,8 +900,7 @@
                     if (!ShaderFactoryClass) {
                         shaderObject.error = "Unknown shaderObject type.";
                         shaderObject.desc = `The shaderObject type '${shaderObject.type}' has no associated factory.`;
-                        /* shaderObject.name je undefined, asi si chcel ze ako ja shaderObject nazvany v spec.shaders, ale neviem ako to ziskat */
-                        console.warn("Skipping shaderObject " + shaderObject.name);
+                        console.warn("Skipping shaderObject " + key);
                         continue;
                     }
                     this._initializeShaderFactory(spec, ShaderFactoryClass, shaderObject, index);

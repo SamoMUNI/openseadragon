@@ -110,14 +110,12 @@
             };
             // OLD $.extend(this.options, rendererOptions) [this.options are options.options from DRAWERBASE]
             this.renderer = new $.WebGLModule(rendererOptions);
-
-            // this._setupRenderer(); TREBA CEKNUT CI SA NASTAVUJE RENDERER SAM ALE MYSLIM ZE HEJ...
-            // spusta velky build rendereru s default specifikaciou
-            this.renderer._createSinglePassShader('TEXTURE_2D');
+            //this.renderer._createSinglePassShader('TEXTURE_2D');
+            this.renderer.createDefaultProgram();
 
             /* returns $.Point */
             // const size = this._calculateCanvasSize();
-            console.log('Som v konstruktori draweru, renderer canvasu a this._size nastavujem na', this.canvas.width, this.canvas.height);
+            // console.log('Som v konstruktori draweru, renderer canvasu a this._size nastavujem na', this.canvas.width, this.canvas.height);
             this.renderer.init(this.canvas.width, this.canvas.height);
             this._size = new $.Point(this.canvas.width, this.canvas.height); // current viewport size, changed during resize event
 
@@ -139,15 +137,15 @@
             this._offscreenTextureArrayLayers = 0;
 
 
-            console.log('V konstruktori draweru, po inicializacii je renderer =', this.renderer);
+            console.log('V konstruktori modularDraweru, po inicializacii je renderer =', this.renderer);
 
 
             // disable cull face, this solved flipping error
             this._gl.disable(this._gl.CULL_FACE);
-            const maxArrayLayers = this._gl.getParameter(this._gl.MAX_ARRAY_TEXTURE_LAYERS);
-            console.log('Max textureArray layers', maxArrayLayers);
-            const maxTextureUnits = this._gl.getParameter(this._gl.MAX_TEXTURE_IMAGE_UNITS);
-            console.log('Max texture units', maxTextureUnits);
+            // const maxArrayLayers = this._gl.getParameter(this._gl.MAX_ARRAY_TEXTURE_LAYERS);
+            // console.log('Max textureArray layers', maxArrayLayers);
+            // const maxTextureUnits = this._gl.getParameter(this._gl.MAX_TEXTURE_IMAGE_UNITS);
+            // console.log('Max texture units', maxTextureUnits);
 
             /***** SETUP WEBGL PROGRAMS *****/
             this._createTwoPassEasy();
@@ -180,8 +178,8 @@
 
                 let shader = e.item.source.shader;
                 if (shader) {
-                    console.log('Druhy raz v addIteme, shader=', shader);
-                    console.log(this.renderer.flag); // bude undefined, vid komentar dole...
+                    // console.log('Druhy raz v addIteme, shader=', shader);
+                    // console.log(this.renderer.flag); // bude undefined, vid komentar dole...
                     if (duomo) {
                         /* Tomuto vobec nerozumiem preco je takto, povodne som proste skippoval ak uz bol raz tiledImage videny, ale ocividne renderer ako by bol neupdatnuty...
                             Zatial co e.item.source... su dobre nastavene takze netusim :( */
@@ -197,7 +195,7 @@
                         this.renderer.addRenderingSpecifications(spec);
                     }
                 } else {
-                    console.log('Prvy raz v addIteme, shader=', shader);
+                    // console.log('Prvy raz v addIteme, shader=', shader);
                     if (duomo) {
                         const targetIndex = this.renderer.getSpecificationsCount();
                         const spec = {
