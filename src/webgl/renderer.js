@@ -828,12 +828,12 @@
                         dataReferences: [0],
                     }
                 }
-            }
+            };
             this.addRenderingSpecifications(this.defaultRenderingSpecification);
 
             const PlainShader = $.WebGLModule.ShaderMediator.getClass("identity");
             // new Class(id: string, options: object)
-            const plainShader = new PlainShader('identity_shader' , {
+            const plainShader = new PlainShader('identity_shader', {
                 shaderObject: this.defaultRenderingSpecification.shaders.renderShader,
                 webglContext: this.webglContext,
                 interactive: false,
@@ -846,7 +846,7 @@
                 throw new Error('renderer.js::createDefaultProgram(): Could not built default program!');
             }
 
-            const gl = this.gl;
+            // const gl = this.gl;
             this.webglContext.createProgram([plainShader]);
 
         }
