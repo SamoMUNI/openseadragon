@@ -766,8 +766,10 @@ void main() {
                 // globalScopeCode = {};
             for (const shaderLayer of shaderLayers) {
                 // returns string which corresponds to glsl code
+                // TU SOM SKONCIL
+                definition += `\n// Definition of ${shaderLayer}\n`;
                 const fsd = shaderLayer.getFragmentShaderDefinition();
-                definition += '\n' + fsd;
+                definition += fsd;
                 definition += `
     vec4 ${shaderLayer.uid}_execution() {
         ${shaderLayer.getFragmentShaderExecution()}
@@ -778,12 +780,12 @@ void main() {
                     execution += `
         vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
         ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
-        blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
+        blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});\n`;
                 } else {
                     execution += `
-        blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform})`;
+        blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});\n`;
                 }
-            }
+            } // end of for cycle
 
             const vertexShaderCode = this.compileVertexShader({});
             const fragmentShaderCode = this.compileFragmentShader(definition, execution, {});

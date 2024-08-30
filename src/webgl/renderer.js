@@ -822,6 +822,17 @@
             }
         }
 
+        _getRenderContextsFromSpecifications() {
+            let contexts = [];
+            for (const spec of this._programSpecifications) {
+                if (spec !== undefined) {
+                    contexts.push(spec.shaders.renderShader._renderContext);
+                }
+            }
+
+            return contexts;
+        }
+
         createDefaultProgram() {
             this.defaultRenderingSpecification = {
                 shaders: {
@@ -862,6 +873,40 @@
             this.webglContext.programLoaded(program, this.defaultRenderingSpecification);
 
             console.log('renderer.js::createDefaultProgram(): DEFAULT PROGRAM CREATED!');
+        }
+
+
+        updateProgram(specification) {
+            console.log('renderer:: updateProgram call!');
+
+            const EdgeShader = $.WebGLModule.ShaderMediator.getClass(specification.shaders.renderShader.type);
+            const edgeShader = new EdgeShader('edge_shader', {
+                shaderObject: specification.shaders.renderShader,
+                webglContext: this.webglContext,
+                interactive: false,
+                invalidate: () => {},
+                rebuild: () => {},
+                refetch: () => {}
+            });
+            edgeShader.construct();
+            if (!edgeShader.initialized()) {
+                throw new Error('renderer.js::updateProgram(): Could not update program!');
+            }
+
+            const shaderObject = specification.shaders.renderShader;
+            shaderObject._index = 0;
+            shaderObject._renderContext = edgeShader;
+            shaderObject.visible = true;
+            shaderObject.rendering = true;
+
+            const program = this.webglContext.programCreated(this._getRenderContextsFromSpecifications());
+            this._program = 0;
+            this._programs[0] = program;
+
+            this.running = true;
+            this.webglContext.programLoaded(program, specification);
+
+            console.log('renderer.js::updateProgram(): PROGRAM UPDATED!');
         }
 
         /**

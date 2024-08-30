@@ -193,6 +193,7 @@
                             }
                         };
                         this.renderer.addRenderingSpecifications(spec);
+                        this.renderer.updateProgram(spec);
                     }
                 } else {
                     // console.log('Prvy raz v addIteme, shader=', shader);
@@ -208,6 +209,8 @@
                             }
                         };
                         this.renderer.addRenderingSpecifications(spec);
+                        this.renderer.updateProgram(spec);
+
                         this.renderer.flag = Symbol("pridana specifikacia pre dom bola");
 
                         e.item.source.shader = spec;
@@ -1401,7 +1404,9 @@
             tiledImages.forEach((tiledImage, i) => {
                 //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
                 //plainShader.opacity.set(tiledImage.opacity);
-                this.renderer.useProgram(tiledImage.source.shader._programIndexTarget);
+                // this.renderer.useProgram(tiledImage.source.shader._programIndexTarget);
+                this.renderer.useProgram(0);
+
                 const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
                 this.renderer.processData(this._offscreenTextureArray, i, {
