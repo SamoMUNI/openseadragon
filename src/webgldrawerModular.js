@@ -1329,6 +1329,7 @@
 
 
         _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
+            console.log('Draw call.');
             const gl = this._gl;
             //const shaderSpecification = 0;
             //const plainShader = this.renderer.getSpecification(shaderSpecification).shaders.renderShader._renderContext;
@@ -1401,6 +1402,9 @@
 
             // SECOND PASS (render from textures to output canvas)
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            console.log('Second pass, shaders of program 0 =');
+            this.renderer.printWebglShadersOfCurrentProgram();
+
             tiledImages.forEach((tiledImage, i) => {
                 //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
                 //plainShader.opacity.set(tiledImage.opacity);
@@ -1409,7 +1413,7 @@
 
                 const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
-                this.renderer.processData(this._offscreenTextureArray, i, {
+                this.renderer.processData(this._offscreenTextureArray, i, tiledImage.source.shader._programIndexTarget, {
                     transform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
                     zoom: viewport.zoom,
                     pixelSize: pixelSize,

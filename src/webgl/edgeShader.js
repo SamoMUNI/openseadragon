@@ -34,8 +34,7 @@
 
         getFragmentShaderDefinition() {
             //here we override so we should call super method to include our uniforms
-            return `
-    ${super.getFragmentShaderDefinition()}
+            return `${super.getFragmentShaderDefinition()}
 
     //todo try replace with step function
     float clipToThresholdf_${this.uid}(float value) {

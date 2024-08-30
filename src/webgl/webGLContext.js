@@ -701,19 +701,21 @@ void main() {
     flat in int v_texture_id;
     in vec2 v_texture_coords;
 
+    uniform int u_shaderLayerIndex;
+
     uniform sampler2DArray u_textureArray;
     uniform int u_textureLayer;
+
+    vec4 osd_texture(int index, vec2 coords) {
+        return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
+    }
 
     // utility function
     bool close(float value, float target) {
         return abs(target - value) < 0.001;
     }
 
-    vec4 osd_texture(int index, vec2 coords) {
-        return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
-    }
-
-    // blending
+    // blending function
     out vec4 final_color;
     vec4 _last_rendered_color = vec4(.0);
     int _last_mode = 0;
@@ -740,10 +742,12 @@ void main() {
     }
 
 
-    // definitions of shaderLayers:${definition}
+    // Definition of shaderLayers:${definition}
 
     void main() {
-        // executions of shaderLayers${execution}
+        // Execution of shaderLayers:
+        switch (u_shaderLayerIndex) {${execution}
+        }
 
         //blend last level
         blend(vec4(.0), 0, false);
@@ -764,10 +768,9 @@ void main() {
             let definition = '',
                 execution = '';
                 // globalScopeCode = {};
-            for (const shaderLayer of shaderLayers) {
+            shaderLayers.forEach((shaderLayer, shaderLayerIndex) => {
+                definition += `\n// Definition of ${shaderLayer.constructor.type()} shader:\n`;
                 // returns string which corresponds to glsl code
-                // TU SOM SKONCIL
-                definition += `\n// Definition of ${shaderLayer}\n`;
                 const fsd = shaderLayer.getFragmentShaderDefinition();
                 definition += fsd;
                 definition += `
@@ -775,17 +778,23 @@ void main() {
         ${shaderLayer.getFragmentShaderExecution()}
     }`;
 
+                execution += `
+            case ${shaderLayerIndex}:`;
+
                 // ak ma opacity shaderLayer tak zavolaj jeho execution a prenasob alpha channel opacitou a to posli do blend funkcie, inak tam posli rovno jeho execution
                 if (shaderLayer.opacity) {
                     execution += `
-        vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
-        ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
-        blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});\n`;
+                vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
+                ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
+                blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
                 } else {
                     execution += `
-        blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});\n`;
+                blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
                 }
-            } // end of for cycle
+
+                execution += `
+                break;`;
+            }); // end of for cycle
 
             const vertexShaderCode = this.compileVertexShader({});
             const fragmentShaderCode = this.compileFragmentShader(definition, execution, {});
@@ -832,6 +841,7 @@ void main() {
             this._locationZoomLevel = gl.getUniformLocation(program, "u_zoom_level");
             this._locationTextureArray = gl.getUniformLocation(program, "u_textureArray");
             this._locationTextureLayer = gl.getUniformLocation(program, "u_textureLayer");
+            this._locationShaderLayerIndex = gl.getUniformLocation(program, "u_shaderLayerIndex");
 
             // Initialize texture coords attribute
             this._bufferTextureCoords = gl.createBuffer();
@@ -858,7 +868,7 @@ void main() {
          * @param {number} tileInfo.pixelSize
          * @param {Float32Array} tileInfo.textureCoords 8 suradnic, (2 pre kazdy vrchol triangle stripu)
          */
-        programUsed(program, spec, textureArray, textureLayer, tileInfo) {
+        programUsed(program, spec, textureArray, textureLayer, shaderLayerIndex, tileInfo) {
             if (!this.renderer.running) {
                 throw new Error("webGLContext::programUsed: Renderer not running!");
             }
@@ -889,6 +899,10 @@ void main() {
 
             // textureArray layer
             gl.uniform1i(this._locationTextureLayer, textureLayer);
+
+            // index of shaderLayer to use
+            console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerIndex);
+            gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
 
             // draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

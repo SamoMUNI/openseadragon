@@ -553,6 +553,7 @@
          * Renders data using WebGL
          * @param {GLuint|[GLuint]} textureArray texture array for instanced drawing
          * @param {Number} textureLayer
+         * @param {Number} shaderLayerIndex uniform for fragment shader to decide which shaderLayer to use for rendering
          * @param {Object} tileOpts
          * @param {OpenSeadragon.Mat3|[OpenSeadragon.Mat3]} tileOpts.transform position transform
          *      matrix or flat matrix array (instance drawing)
@@ -564,7 +565,7 @@
          * @instance
          * @memberOf WebGLModule
          */
-        processData(textureArray, textureLayer, tileOpts) {
+        processData(textureArray, textureLayer, shaderLayerIndex, tileOpts) {
             //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
             const spec = this._programSpecifications[this._program];
             //console.log('processData: spec=', spec);
@@ -572,7 +573,7 @@
             if (!spec) {
                 $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             } else {
-                this.webglContext.programUsed(this.program, spec, textureArray, textureLayer, tileOpts);
+                this.webglContext.programUsed(this.program, spec, textureArray, textureLayer, shaderLayerIndex, tileOpts);
             }
         }
         // CUSTOM program I guess DRAWING !
@@ -907,6 +908,12 @@
             this.webglContext.programLoaded(program, specification);
 
             console.log('renderer.js::updateProgram(): PROGRAM UPDATED!');
+        }
+
+        printWebglShadersOfCurrentProgram() {
+            const opts = this._programs[0]._osdOptions;
+            $.console.info("VERTEX SHADER\n", opts.vs);
+            $.console.info("FRAGMENT SHADER\n", opts.fs);
         }
 
         /**
