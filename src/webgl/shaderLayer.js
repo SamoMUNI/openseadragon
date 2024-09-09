@@ -255,7 +255,9 @@
          */
         glDrawing(program, gl) {
             if (this._blendUniform) {
-                gl.uniform1i(this._blendLoc, this.blendMode);
+                // console.error(`shaderLayer ${this.constructor.name()} nastavuje blend_mode na ${this.blendMode}`);
+                // gl.uniform1i(this._blendLoc, this.blendMode);
+                gl.uniform1i(this._blendLoc, 0);
                 gl.uniform1i(this._clipLoc, 0); //todo
             }
 
@@ -272,15 +274,19 @@
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
         glLoaded(program, gl) {
+            //console.log(`shaderLayer ${this.constructor.name()} loading it's variables! Glsl names = ${this._clipUniform}, ${this._blendUniform}`);
             if (!this._blendUniform) {
                 $.console.warn("Shader layer has autoblending disabled: are you sure you called super.getFragmentShaderDefinition()?");
             } else {
                 this._clipLoc = gl.getUniformLocation(program, this._clipUniform);
                 this._blendLoc = gl.getUniformLocation(program, this._blendUniform);
+                // if (this._blendLoc === null) {
+                //     throw new Error(`shaderLayer ${this.constructor.name()} could not load blend uniform location! this._blendUniform = ${this._blendLoc}, this._clipLoc = ${this._clipLoc}`);
+                // }
             }
 
             for (let control of this._ownedControls) {
-                // console.log(`Loadujem ${control}`); HINT
+                //console.log(`Loadujem ${control}`);
                 this[control].glLoaded(program, gl);
             }
         }

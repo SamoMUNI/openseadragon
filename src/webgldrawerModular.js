@@ -169,20 +169,21 @@
             this.viewer.world.addHandler("add-item", (e) => {
                 console.log('ADD-ITEM EVENT !!!');
                 let duomo = false;
+                let plants = false;
+                //console.error('tileSOURCE = ', e.item.source);
                 if (e.item.source.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
                     duomo = true;
+                } else if (e.item.source._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
+                    plants = true;
                 }
-                if (duomo) {
-                    console.log('Adding duomo tiledImage!');
-                }
+                    // } else if (e.item.source.tilesUrl === undefined) {
+                    //     b = true;
+                    // }
 
                 let shader = e.item.source.shader;
+                // TI uz raz bol kedze shader parameter ma nastaveny ale dosiel druhy raz napriklad pre minimapku (ina instancia rendereru, treba nastavit znova)
                 if (shader) {
-                    // console.log('Druhy raz v addIteme, shader=', shader);
-                    // console.log(this.renderer.flag); // bude undefined, vid komentar dole...
                     if (duomo) {
-                        /* Tomuto vobec nerozumiem preco je takto, povodne som proste skippoval ak uz bol raz tiledImage videny, ale ocividne renderer ako by bol neupdatnuty...
-                            Zatial co e.item.source... su dobre nastavene takze netusim :( */
                         const spec = {
                             shaders: {
                                 renderShader: {
@@ -194,7 +195,20 @@
                         };
                         this.renderer.addRenderingSpecifications(spec);
                         this.renderer.updateProgram(spec);
+
+                    } else if (plants) {
+                        const spec = {
+                            shaders: {
+                                renderShader: {
+                                    type: "negative",
+                                    dataReferences: [0],
+                                }
+                            }
+                        };
+                        this.renderer.addRenderingSpecifications(spec);
+                        this.renderer.updateProgram(spec);
                     }
+
                 } else {
                     // console.log('Prvy raz v addIteme, shader=', shader);
                     if (duomo) {
@@ -217,7 +231,26 @@
                         e.item.source.shader._programIndexTarget = targetIndex;
                         e.item.source.shader._initialized = true;
                         e.item.source.shader._utilizeLocalMethods = true;
-                    } else { // not duomo TiledImage
+
+                    } else if (plants) {
+                        const targetIndex = this.renderer.getSpecificationsCount();
+                        const spec = {
+                            shaders: {
+                                renderShader: {
+                                    type: "negative",
+                                    dataReferences: [0],
+                                }
+                            }
+                        };
+                        this.renderer.addRenderingSpecifications(spec);
+                        this.renderer.updateProgram(spec);
+
+                        e.item.source.shader = spec;
+                        e.item.source.shader._programIndexTarget = targetIndex;
+                        e.item.source.shader._initialized = true;
+                        e.item.source.shader._utilizeLocalMethods = true;
+
+                    } else { // identity TiledImage
                         e.item.source.shader = this.renderer.defaultRenderingSpecification;
                         e.item.source.shader._programIndexTarget = 0;
                         e.item.source.shader._initialized = true;
@@ -1403,13 +1436,15 @@
             // SECOND PASS (render from textures to output canvas)
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             console.log('Second pass, shaders of program 0 =');
-            this.renderer.printWebglShadersOfCurrentProgram();
+
+            // this.renderer.printWebglShadersOfCurrentProgram();
+            this.renderer.useDefaultProgram();
+            // this.renderer.useProgram(0);
 
             tiledImages.forEach((tiledImage, i) => {
                 //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
                 //plainShader.opacity.set(tiledImage.opacity);
                 // this.renderer.useProgram(tiledImage.source.shader._programIndexTarget);
-                this.renderer.useProgram(0);
 
                 const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 

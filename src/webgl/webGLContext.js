@@ -715,7 +715,7 @@ void main() {
         return abs(target - value) < 0.001;
     }
 
-    // blending function
+    // blending function, zabezpecuje ze to co je uz vyrenderovane sa zblenduje s tym co renderujem teraz ASI? NECHAPEM JAK TO MOZE FUNGOVAT A AKO TO FUNGUJE
     out vec4 final_color;
     vec4 _last_rendered_color = vec4(.0);
     int _last_mode = 0;
@@ -747,6 +747,9 @@ void main() {
     void main() {
         // Execution of shaderLayers:
         switch (u_shaderLayerIndex) {${execution}
+            default:
+                blend(default_shader_execution(), default_shader_blend, default_shader_clip);
+                break;
         }
 
         //blend last level
@@ -782,16 +785,17 @@ void main() {
             case ${shaderLayerIndex}:`;
 
                 // ak ma opacity shaderLayer tak zavolaj jeho execution a prenasob alpha channel opacitou a to posli do blend funkcie, inak tam posli rovno jeho execution
-                if (shaderLayer.opacity) {
-                    execution += `
-                vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
-                ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
-                blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
-                } else {
-                    execution += `
+                // if (shaderLayer.opacity) {
+                //     execution += `
+                // vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
+                // ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
+                // blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
+                // } else {
+                //     execution += `
+                // blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
+                // }
+                execution += `
                 blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
-                }
-
                 execution += `
                 break;`;
             }); // end of for cycle
@@ -814,7 +818,7 @@ void main() {
          * @param {WebGLProgram} program WebGLProgram to use
          * @param {object|null} spec specification corresponding to program, null when using custom program not built on any specification
          */
-        programLoaded(program, spec = null) {
+        programLoaded(program, spec = null, shaderLayers = null) {
             // toto neviem ci je dobre lebo running hovori o tom ze renderer bezi s nejakou validnou specifikaciou...
             // ked chcem pouzit customprogram tak ale nebude bezat podla nijakej specifikacie => ajtak sa zapne running?
             // co ked este nebezal renderer a na supu chcem pouzit customprogram co potom ?
@@ -829,7 +833,13 @@ void main() {
             gl.useProgram(program);
             if (spec) {
                 // for every shader and it's controls connect their attributes to their corresponding glsl variables
+                console.log('Calling glLoaded on specification', spec);
                 this.renderer.glLoaded(gl, program, spec);
+            }
+            if (shaderLayers) {
+                for (const shaderLayer of shaderLayers) {
+                    shaderLayer.glLoaded(program, gl);
+                }
             }
 
             // VERTEX shader's locations
@@ -898,11 +908,77 @@ void main() {
             gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
 
             // textureArray layer
+            console.log('programUsed: do textureLayer nahram cislo', textureLayer);
             gl.uniform1i(this._locationTextureLayer, textureLayer);
 
             // index of shaderLayer to use
             console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerIndex);
             gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
+
+
+            // CONTROLS
+            const blendLocE = gl.getUniformLocation(program, "edge_shader_blend");
+            const blendLocD = gl.getUniformLocation(program, "default_shader_blend");
+            console.error(blendLocD, blendLocE);
+            if (blendLocD !== null) {
+                // gl.uniform1i(blendLocD, 0);
+            } else {
+                console.error("blendLOcD je undefined");
+            }
+            if(blendLocE !== null) {
+                // gl.uniform1i(blendLocE, 0);
+                console.error(`blendE = ${gl.getUniform(program, blendLocE)}, blendD = ${gl.getUniform(program, blendLocD)}`);
+
+            } else {
+                console.error("blendLOcE je undefined");
+            }
+
+
+            const colorLocE = gl.getUniformLocation(program, "color_edge_shader");
+            const colorLocD = gl.getUniformLocation(program, "color_default_shader");
+            console.error(colorLocD, colorLocE);
+            if (colorLocD !== null) {
+                // gl.uniform3f(colorLocD, 0.0, 1.0, 0.0);
+            } else {
+                console.error("colorLOcD je undefined");
+            }
+            if(colorLocE !== null) {
+                // gl.uniform3f(colorLocE, 0.0, 1.0, 0.0);
+                console.error(`colorE = ${gl.getUniform(program, colorLocE)}, colorD = ${gl.getUniform(program, colorLocD)}`);
+            } else {
+                console.error("colorLOcE je undefined");
+            }
+
+            const thresholdLocE = gl.getUniformLocation(program, "threshold_edge_shader");
+            const thresholdLocD = gl.getUniformLocation(program, "threshold_default_shader");
+            console.error(thresholdLocD, thresholdLocE);
+            if (thresholdLocD !== null) {
+                // gl.uniform1f(thresholdLocD, 0.5);
+            } else {
+                console.error("thresholdLOcD je undefined");
+            }
+            if(thresholdLocE !== null) {
+                // gl.uniform1f(thresholdLocE, 0.5);
+                console.error(`thresholdE = ${gl.getUniform(program, thresholdLocE)}, thresholdD = ${gl.getUniform(program, thresholdLocD)}`);
+
+            } else {
+                console.error("thresholdLOcE je undefined");
+            }
+
+            const edgeThicknessLocE = gl.getUniformLocation(program, "edgeThickness_edge_shader");
+            const edgeThicknessLocD = gl.getUniformLocation(program, "edgeThickness_default_shader");
+            console.error(edgeThicknessLocD, edgeThicknessLocE);
+            if (edgeThicknessLocD !== null) {
+                // gl.uniform1f(edgeThicknessLocD, 0.2);
+            } else {
+                console.error("edgeThicknessLOcD je undefined");
+            }
+            if(edgeThicknessLocE !== null) {
+                // gl.uniform1f(edgeThicknessLocE, 0.2);
+                console.error(`edgeThicknessE = ${gl.getUniform(program, edgeThicknessLocE)}, edgeThicknessD = ${gl.getUniform(program, edgeThicknessLocD)}`);
+            } else {
+                console.error("edgeThicknessLOcE je undefined");
+            }
 
             // draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

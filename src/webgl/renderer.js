@@ -838,14 +838,14 @@
             this.defaultRenderingSpecification = {
                 shaders: {
                     renderShader: {
-                        type: "identity",
+                        type: "edge",
                         dataReferences: [0],
                     }
                 }
             };
             this.addRenderingSpecifications(this.defaultRenderingSpecification);
 
-            const PlainShader = $.WebGLModule.ShaderMediator.getClass("identity");
+            const PlainShader = $.WebGLModule.ShaderMediator.getClass("edge");
             //                  new Class      (uniqueId: string, options: object)
             const plainShader = new PlainShader('default_shader', {
                 shaderObject: this.defaultRenderingSpecification.shaders.renderShader,
@@ -880,8 +880,9 @@
         updateProgram(specification) {
             console.log('renderer:: updateProgram call!');
 
-            const EdgeShader = $.WebGLModule.ShaderMediator.getClass(specification.shaders.renderShader.type);
-            const edgeShader = new EdgeShader('edge_shader', {
+            // const Shader = $.WebGLModule.ShaderMediator.getClass(specification.shaders.renderShader.type);
+            const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
+            const shader = new Shader(specification.shaders.renderShader.type + '_shader', {
                 shaderObject: specification.shaders.renderShader,
                 webglContext: this.webglContext,
                 interactive: false,
@@ -889,14 +890,14 @@
                 rebuild: () => {},
                 refetch: () => {}
             });
-            edgeShader.construct();
-            if (!edgeShader.initialized()) {
+            shader.construct();
+            if (!shader.initialized()) {
                 throw new Error('renderer.js::updateProgram(): Could not update program!');
             }
 
             const shaderObject = specification.shaders.renderShader;
             shaderObject._index = 0;
-            shaderObject._renderContext = edgeShader;
+            shaderObject._renderContext = shader;
             shaderObject.visible = true;
             shaderObject.rendering = true;
 
@@ -908,6 +909,14 @@
             this.webglContext.programLoaded(program, specification);
 
             console.log('renderer.js::updateProgram(): PROGRAM UPDATED!');
+        }
+
+        useDefaultProgram() {
+            const program = this._programs[0];
+            for (const spec of this._programSpecifications) {
+                this.webglContext.programLoaded(program, spec);
+            }
+            // this.webglContext.programLoaded(program, null, this._getRenderContextsFromSpecifications());
         }
 
         printWebglShadersOfCurrentProgram() {

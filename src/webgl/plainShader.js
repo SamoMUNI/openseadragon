@@ -30,7 +30,9 @@
         getFragmentShaderExecution() {
             // osd_texture(0, osd_texture_coords).rgba
             return `return ${this.sampleChannel("v_texture_coords")};`;
-            //return `return vec4(osd_texture_coords, .0, 1.0);`;
+
+            // return just green color
+            // return 'return vec4(0, 1, 0, 0.5);';
 
         }
     };

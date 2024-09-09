@@ -82,7 +82,11 @@
         if ((dx < -0.5 || dy < -0.5)) {
             return vec4(${this.color.sample()} * 0.7, .7); //inner border
         }
-        return vec4(.0);
+
+        // nedetekujem ziadnu hranu => vykresli priesvitnu farbu
+        // return vec4(.0);
+        return vec4(1, 0, 0, 0.5);
+        // return osd_texture(0, v_texture_coords).rgba;
     `;
         }
     };
