@@ -255,6 +255,7 @@
          */
         glDrawing(program, gl) {
             if (this._blendUniform) {
+                console.log(`shaderLayer ${this.constructor.name()} filling it's variables blend and clip!`);
                 // console.error(`shaderLayer ${this.constructor.name()} nastavuje blend_mode na ${this.blendMode}`);
                 // gl.uniform1i(this._blendLoc, this.blendMode);
                 gl.uniform1i(this._blendLoc, 0);
@@ -262,6 +263,8 @@
             }
 
             for (let control of this._ownedControls) {
+                console.log(`shaderLayer ${this.constructor.name()} filling ${control}`);
+
                 //FIXME: dimension param
                 this[control].glDrawing(program, gl);
             }
@@ -274,7 +277,7 @@
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
         glLoaded(program, gl) {
-            //console.log(`shaderLayer ${this.constructor.name()} loading it's variables! Glsl names = ${this._clipUniform}, ${this._blendUniform}`);
+            console.log(`shaderLayer ${this.constructor.name()} loading it's blend and clip variables! Glsl names = ${this._clipUniform}, ${this._blendUniform}`);
             if (!this._blendUniform) {
                 $.console.warn("Shader layer has autoblending disabled: are you sure you called super.getFragmentShaderDefinition()?");
             } else {
@@ -286,7 +289,7 @@
             }
 
             for (let control of this._ownedControls) {
-                //console.log(`Loadujem ${control}`);
+                console.log(`shaderLayer ${this.constructor.name()} loading ${control}`);
                 this[control].glLoaded(program, gl);
             }
         }
@@ -1453,15 +1456,15 @@
 
         /**
          *
-         * @param {ShaderLayer} owner owner of the control (shader)
-         * @param {string} controlName name of the control (eg. "opacity")
+         * @param {ShaderLayer} owner owner of the control (shaderLayer)
+         * @param {string} name name of the control (eg. "opacity")
          * @param {object} params controlObject.default
          * @param {object} intristicComponent control type object from UIControls._items
          * @param {*} uniq
          */
         //uses intristicComponent that holds all specifications needed to work with the component uniformly
-        constructor(owner, controlName, params, intristicComponent, uniq = "") {
-            super(owner, controlName, uniq);
+        constructor(owner, name, params, intristicComponent, uniq = "") {
+            super(owner, name, uniq);
             this.component = intristicComponent;
             // do _params da params s urcenym poradim properties (asi)
             this._params = this.getParams(params);
@@ -1472,7 +1475,9 @@
             //this unfortunatelly makes cache erasing and rebuilding vis impossible, the shader part has to be fully re-instantiated
             this.params.default = this.encodedValue;
 
+            console.error(`UIControl ${this.name} INIT() -> sets its encodedValue to ${this.encodedValue}`);
             this.value = this.component.normalize(this.component.decode(this.encodedValue), this.params);
+            console.error(`UIControl ${this.name} INIT() -> sets its value to ${this.value}`);
 
             if (this.params.interactive) {
                 const _this = this;
@@ -1497,12 +1502,12 @@
 
         glDrawing(program, gl) {
             gl[this.component.glUniformFunName()](this.glLocation, this.value);
-            //console.log('Settujem', this.component.glUniformFunName(), this.glLocation, 'na', this.value);
+            console.log('Settujem', this.component.glUniformFunName(), 'odpovedajuci', this.webGLVariableName, 'na', this.value);
         }
 
         glLoaded(program, gl) {
             this.glLocation = gl.getUniformLocation(program, this.webGLVariableName);
-            // console.log(`shaderLayer, glLocation = ${this.glLocation}, webGLVariableName = ${this.webGLVariableName}`);
+            console.log(`control setting this.glLocation to ${this.webGLVariableName}`);
         }
 
         toHtml(breakLine = true, controlCss = "") {

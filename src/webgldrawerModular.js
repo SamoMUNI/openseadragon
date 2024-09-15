@@ -1435,7 +1435,7 @@
 
             // SECOND PASS (render from textures to output canvas)
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-            console.log('Second pass, shaders of program 0 =');
+            //console.log('Second pass, shaders of program 0 =');
 
             // this.renderer.printWebglShadersOfCurrentProgram();
             this.renderer.useDefaultProgram();

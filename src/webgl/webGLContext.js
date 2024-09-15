@@ -916,69 +916,69 @@ void main() {
             gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
 
 
-            // CONTROLS
-            const blendLocE = gl.getUniformLocation(program, "edge_shader_blend");
-            const blendLocD = gl.getUniformLocation(program, "default_shader_blend");
-            console.error(blendLocD, blendLocE);
-            if (blendLocD !== null) {
-                // gl.uniform1i(blendLocD, 0);
-            } else {
-                console.error("blendLOcD je undefined");
-            }
-            if(blendLocE !== null) {
-                // gl.uniform1i(blendLocE, 0);
-                console.error(`blendE = ${gl.getUniform(program, blendLocE)}, blendD = ${gl.getUniform(program, blendLocD)}`);
+            // CONTROLS debugging
+            // const blendLocE = gl.getUniformLocation(program, "edge_shader_blend");
+            // const blendLocD = gl.getUniformLocation(program, "default_shader_blend");
+            // console.error(blendLocD, blendLocE);
+            // if (blendLocD !== null) {
+            //     // gl.uniform1i(blendLocD, 0);
+            // } else {
+            //     console.error("blendLOcD je undefined");
+            // }
+            // if(blendLocE !== null) {
+            //     // gl.uniform1i(blendLocE, 0);
+            //     console.error(`blendE = ${gl.getUniform(program, blendLocE)}, blendD = ${gl.getUniform(program, blendLocD)}`);
 
-            } else {
-                console.error("blendLOcE je undefined");
-            }
+            // } else {
+            //     console.error("blendLOcE je undefined");
+            // }
 
 
-            const colorLocE = gl.getUniformLocation(program, "color_edge_shader");
-            const colorLocD = gl.getUniformLocation(program, "color_default_shader");
-            console.error(colorLocD, colorLocE);
-            if (colorLocD !== null) {
-                // gl.uniform3f(colorLocD, 0.0, 1.0, 0.0);
-            } else {
-                console.error("colorLOcD je undefined");
-            }
-            if(colorLocE !== null) {
-                // gl.uniform3f(colorLocE, 0.0, 1.0, 0.0);
-                console.error(`colorE = ${gl.getUniform(program, colorLocE)}, colorD = ${gl.getUniform(program, colorLocD)}`);
-            } else {
-                console.error("colorLOcE je undefined");
-            }
+            // const colorLocE = gl.getUniformLocation(program, "color_edge_shader");
+            // const colorLocD = gl.getUniformLocation(program, "color_default_shader");
+            // console.error(colorLocD, colorLocE);
+            // if (colorLocD !== null) {
+            //     // gl.uniform3f(colorLocD, 0.0, 1.0, 0.0);
+            // } else {
+            //     console.error("colorLOcD je undefined");
+            // }
+            // if(colorLocE !== null) {
+            //     // gl.uniform3f(colorLocE, 0.0, 1.0, 0.0);
+            //     console.error(`colorE = ${gl.getUniform(program, colorLocE)}, colorD = ${gl.getUniform(program, colorLocD)}`);
+            // } else {
+            //     console.error("colorLOcE je undefined");
+            // }
 
-            const thresholdLocE = gl.getUniformLocation(program, "threshold_edge_shader");
-            const thresholdLocD = gl.getUniformLocation(program, "threshold_default_shader");
-            console.error(thresholdLocD, thresholdLocE);
-            if (thresholdLocD !== null) {
-                // gl.uniform1f(thresholdLocD, 0.5);
-            } else {
-                console.error("thresholdLOcD je undefined");
-            }
-            if(thresholdLocE !== null) {
-                // gl.uniform1f(thresholdLocE, 0.5);
-                console.error(`thresholdE = ${gl.getUniform(program, thresholdLocE)}, thresholdD = ${gl.getUniform(program, thresholdLocD)}`);
+            // const thresholdLocE = gl.getUniformLocation(program, "threshold_edge_shader");
+            // const thresholdLocD = gl.getUniformLocation(program, "threshold_default_shader");
+            // console.error(thresholdLocD, thresholdLocE);
+            // if (thresholdLocD !== null) {
+            //     // gl.uniform1f(thresholdLocD, 0.5);
+            // } else {
+            //     console.error("thresholdLOcD je undefined");
+            // }
+            // if(thresholdLocE !== null) {
+            //     // gl.uniform1f(thresholdLocE, 0.5);
+            //     console.error(`thresholdE = ${gl.getUniform(program, thresholdLocE)}, thresholdD = ${gl.getUniform(program, thresholdLocD)}`);
 
-            } else {
-                console.error("thresholdLOcE je undefined");
-            }
+            // } else {
+            //     console.error("thresholdLOcE je undefined");
+            // }
 
-            const edgeThicknessLocE = gl.getUniformLocation(program, "edgeThickness_edge_shader");
-            const edgeThicknessLocD = gl.getUniformLocation(program, "edgeThickness_default_shader");
-            console.error(edgeThicknessLocD, edgeThicknessLocE);
-            if (edgeThicknessLocD !== null) {
-                // gl.uniform1f(edgeThicknessLocD, 0.2);
-            } else {
-                console.error("edgeThicknessLOcD je undefined");
-            }
-            if(edgeThicknessLocE !== null) {
-                // gl.uniform1f(edgeThicknessLocE, 0.2);
-                console.error(`edgeThicknessE = ${gl.getUniform(program, edgeThicknessLocE)}, edgeThicknessD = ${gl.getUniform(program, edgeThicknessLocD)}`);
-            } else {
-                console.error("edgeThicknessLOcE je undefined");
-            }
+            // const edgeThicknessLocE = gl.getUniformLocation(program, "edgeThickness_edge_shader");
+            // const edgeThicknessLocD = gl.getUniformLocation(program, "edgeThickness_default_shader");
+            // console.error(edgeThicknessLocD, edgeThicknessLocE);
+            // if (edgeThicknessLocD !== null) {
+            //     // gl.uniform1f(edgeThicknessLocD, 0.2);
+            // } else {
+            //     console.error("edgeThicknessLOcD je undefined");
+            // }
+            // if(edgeThicknessLocE !== null) {
+            //     // gl.uniform1f(edgeThicknessLocE, 0.2);
+            //     console.error(`edgeThicknessE = ${gl.getUniform(program, edgeThicknessLocE)}, edgeThicknessD = ${gl.getUniform(program, edgeThicknessLocD)}`);
+            // } else {
+            //     console.error("edgeThicknessLOcE je undefined");
+            // }
 
             // draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
