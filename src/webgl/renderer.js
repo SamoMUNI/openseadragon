@@ -624,14 +624,15 @@
             this._initialized = true;
             this.setDimensions(0, 0, width, height); // pridal som dve nuly na zaciatok
 
-            //todo rotate anticlockwise to cull backfaces
-            this.gl.enable(this.gl.CULL_FACE);
-            this.gl.cullFace(this.gl.FRONT);
+            // throw new Error("konec");
+            // //todo rotate anticlockwise to cull backfaces
+            // this.gl.enable(this.gl.CULL_FACE);
+            // this.gl.cullFace(this.gl.FRONT);
 
-            //this.running = true; //podla mna to tu nema byt, _forceSwitchProgram nastavi spravne
-            console.log('V inite, idem do forceSwitchProgram');
-            this._forceSwitchProgram(this._program);
-            this.ready();
+            // //this.running = true; //podla mna to tu nema byt, _forceSwitchProgram nastavi spravne
+            // console.log('V inite, idem do forceSwitchProgram');
+            // this._forceSwitchProgram(this._program);
+            // this.ready();
         }
 
         //////////////////////////////////////////////////////////////////////////////
@@ -823,6 +824,7 @@
             }
         }
 
+        // returns shaderLayer instantiations
         _getRenderContextsFromSpecifications() {
             let contexts = [];
             for (const spec of this._programSpecifications) {
@@ -838,14 +840,14 @@
             this.defaultRenderingSpecification = {
                 shaders: {
                     renderShader: {
-                        type: "edge",
+                        type: "identity",
                         dataReferences: [0],
                     }
                 }
             };
             this.addRenderingSpecifications(this.defaultRenderingSpecification);
 
-            const PlainShader = $.WebGLModule.ShaderMediator.getClass("edge");
+            const PlainShader = $.WebGLModule.ShaderMediator.getClass("identity");
             //                  new Class      (uniqueId: string, options: object)
             const plainShader = new PlainShader('default_shader', {
                 shaderObject: this.defaultRenderingSpecification.shaders.renderShader,
@@ -859,6 +861,7 @@
             if (!plainShader.initialized()) {
                 throw new Error('renderer.js::createDefaultProgram(): Could not built default program!');
             }
+            plainShader.init();
 
             const shaderObject = this.defaultRenderingSpecification.shaders.renderShader;
             shaderObject._index = 0;
@@ -880,8 +883,8 @@
         updateProgram(specification) {
             console.log('renderer:: updateProgram call!');
 
-            // const Shader = $.WebGLModule.ShaderMediator.getClass(specification.shaders.renderShader.type);
-            const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
+            const Shader = $.WebGLModule.ShaderMediator.getClass(specification.shaders.renderShader.type);
+            // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
             const shader = new Shader(specification.shaders.renderShader.type + '_shader', {
                 shaderObject: specification.shaders.renderShader,
                 webglContext: this.webglContext,
@@ -894,6 +897,7 @@
             if (!shader.initialized()) {
                 throw new Error('renderer.js::updateProgram(): Could not update program!');
             }
+            shader.init();
 
             const shaderObject = specification.shaders.renderShader;
             shaderObject._index = 0;

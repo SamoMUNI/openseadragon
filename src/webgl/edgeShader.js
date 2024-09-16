@@ -84,9 +84,9 @@
         }
 
         // nedetekujem ziadnu hranu => vykresli priesvitnu farbu
-        // return vec4(.0);
-        return vec4(1, 0, 0, 0.5);
-        // return osd_texture(0, v_texture_coords).rgba;
+        return vec4(.0);
+        // return vec4(1, 0, 0, 0.5); red
+        // return osd_texture(0, v_texture_coords).rgba; identity
     `;
         }
     };

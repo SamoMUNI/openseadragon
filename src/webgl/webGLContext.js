@@ -748,8 +748,13 @@ void main() {
         // Execution of shaderLayers:
         switch (u_shaderLayerIndex) {${execution}
             default:
-                blend(default_shader_execution(), default_shader_blend, default_shader_clip);
-                break;
+                // render only where is data in the texture
+                if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
+                    final_color = vec4(.0);
+                } else {
+                    final_color = vec4(1, 0, 0, 0.5);
+                }
+                return;
         }
 
         //blend last level
@@ -785,17 +790,17 @@ void main() {
             case ${shaderLayerIndex}:`;
 
                 // ak ma opacity shaderLayer tak zavolaj jeho execution a prenasob alpha channel opacitou a to posli do blend funkcie, inak tam posli rovno jeho execution
-                // if (shaderLayer.opacity) {
-                //     execution += `
-                // vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
-                // ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
-                // blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
-                // } else {
-                //     execution += `
-                // blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
-                // }
-                execution += `
+                if (shaderLayer.opacity) {
+                    execution += `
+                vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
+                ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
+                blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
+                } else {
+                    execution += `
                 blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
+                }
+                // execution += `
+                // final_color = ${shaderLayer.uid}_execution();`; pokial nechcem pouzit blend funkciu ale rovno ceknut vystup shaderu
                 execution += `
                 break;`;
             }); // end of for cycle
@@ -822,7 +827,7 @@ void main() {
             // toto neviem ci je dobre lebo running hovori o tom ze renderer bezi s nejakou validnou specifikaciou...
             // ked chcem pouzit customprogram tak ale nebude bezat podla nijakej specifikacie => ajtak sa zapne running?
             // co ked este nebezal renderer a na supu chcem pouzit customprogram co potom ?
-            // console.log('PROGRAMLOADED called!');
+            console.log('PROGRAMLOADED called!');
             if (!this.renderer.running) {
                 return;
             }
@@ -833,12 +838,14 @@ void main() {
             gl.useProgram(program);
             if (spec) {
                 // for every shader and it's controls connect their attributes to their corresponding glsl variables
-                console.log('Calling glLoaded on specification', spec);
+                console.log('Calling glLoaded + glDrawing on specification', spec);
                 this.renderer.glLoaded(gl, program, spec);
+                this.renderer.glDrawing(gl, program, spec);
             }
             if (shaderLayers) {
                 for (const shaderLayer of shaderLayers) {
                     shaderLayer.glLoaded(program, gl);
+                    shaderLayer.glDrawing(program, gl);
                 }
             }
 
@@ -882,12 +889,13 @@ void main() {
             if (!this.renderer.running) {
                 throw new Error("webGLContext::programUsed: Renderer not running!");
             }
+            console.log('PROGRAMUSED call!');
 
             const gl = this.gl;
-            if (spec) {
-                // for every shader and it's controls fill their corresponding glsl variables
-                this.renderer.glDrawing(gl, program, spec);
-            }
+            // if (spec) {
+            //     // for every shader and it's controls fill their corresponding glsl variables
+            //     this.renderer.glDrawing(gl, program, spec);
+            // }
 
             // fill FRAGMENT shader's uniforms (that are unused)
             gl.uniform1f(this._locationPixelSize, tileInfo.pixelSize || 1);

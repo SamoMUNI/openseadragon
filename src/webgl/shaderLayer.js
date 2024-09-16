@@ -915,7 +915,7 @@
         }
     };
 
-    //implementation of UI control objects
+    //definitions of possible control's types -> kazdy shader ma definovane dake controls a podla ich type: sa niektory shit z tadeto prideli do SimpleUIControl.componentco ty
     //simple functionality
     $.WebGLModule.UIControls._items = {
         number: {
@@ -1459,7 +1459,7 @@
          * @param {ShaderLayer} owner owner of the control (shaderLayer)
          * @param {string} name name of the control (eg. "opacity")
          * @param {object} params controlObject.default
-         * @param {object} intristicComponent control type object from UIControls._items
+         * @param {object} intristicComponent control's type, object from UIControls._items
          * @param {*} uniq
          */
         //uses intristicComponent that holds all specifications needed to work with the component uniformly
@@ -1470,13 +1470,21 @@
             this._params = this.getParams(params);
         }
 
+        /**
+         * do encodedvalue nastavi default hodnotu aku ma control definovanu v jsone jemu odpovedajucom
+         * do value da vypocitanu (z jsonu) uz finalnu hodnotu ktora sa bude posielat do glsl
+         */
         init() {
             this.encodedValue = this.load(this.params.default);
             //this unfortunatelly makes cache erasing and rebuilding vis impossible, the shader part has to be fully re-instantiated
             this.params.default = this.encodedValue;
 
             console.error(`UIControl ${this.name} INIT() -> sets its encodedValue to ${this.encodedValue}`);
+            // najprv dekoduje encodedValue, pri color to znamena napriklad ze zo stringu #ffffff sa prevedie na array troch floatov, pre range ze proste parse float na vstupe
+            // potom normalizuje, co pri farbe nerobi nic ale napriklad pri range to uz nejakym sposobom dostava do rozmedzia <0, 1> s tym ze napriklad ak min je 0 a max 100 a default hodnota 40 tak hodnotu
+            // tomu da 0.4, asi chapes, nech to sedi s originalom, klasicky ako v statistike ze vzdialenosti ostanu rovnake, hodnota je default hodnota a hranice intervalu su min a max v json definicii
             this.value = this.component.normalize(this.component.decode(this.encodedValue), this.params);
+            console.error(`UIControl ${this.name} INIT() -> value without normalizing`, this.component.decode(this.encodedValue));
             console.error(`UIControl ${this.name} INIT() -> sets its value to ${this.value}`);
 
             if (this.params.interactive) {
@@ -1501,13 +1509,13 @@
         }
 
         glDrawing(program, gl) {
-            gl[this.component.glUniformFunName()](this.glLocation, this.value);
             console.log('Settujem', this.component.glUniformFunName(), 'odpovedajuci', this.webGLVariableName, 'na', this.value);
+            gl[this.component.glUniformFunName()](this.glLocation, this.value);
         }
 
         glLoaded(program, gl) {
             this.glLocation = gl.getUniformLocation(program, this.webGLVariableName);
-            console.log(`control setting this.glLocation to ${this.webGLVariableName}`);
+            console.log(`setting this.glLocation to ${this.webGLVariableName}`);
         }
 
         toHtml(breakLine = true, controlCss = "") {
