@@ -85,6 +85,8 @@
             this._programs = {}; // {number: WebGLProgram}, WebGLPrograms indexed with numbers
             this._programSpecifications = []; // [object], array of specification objects, index of specification corresponds to index of WebGLProgram created from that specification in _programs
 
+            this.shadersCounter = {}; // {identity: <num of tiledImages using identity>, edge: <num of tiledImages using edges>}
+
             this._dataSources = [];
             this._origDataSources = [];
 
@@ -551,6 +553,7 @@
 
         /** DRAWING !
          * Renders data using WebGL
+         * @param {Object} spec object specification of shader to use
          * @param {GLuint|[GLuint]} textureArray texture array for instanced drawing
          * @param {Number} textureLayer
          * @param {Number} shaderLayerIndex uniform for fragment shader to decide which shaderLayer to use for rendering
@@ -565,16 +568,16 @@
          * @instance
          * @memberOf WebGLModule
          */
-        processData(textureArray, textureLayer, shaderLayerIndex, tileOpts) {
+        processData(spec, shader, textureArray, textureLayer, shaderLayerIndex, tileOpts) {
             //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
-            const spec = this._programSpecifications[this._program];
+            // const spec = this._programSpecifications[this._program];
             //console.log('processData: spec=', spec);
             // console.log('processData, tileOpts =', tileOpts);
-            if (!spec) {
-                $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
-            } else {
-                this.webglContext.programUsed(this.program, spec, textureArray, textureLayer, shaderLayerIndex, tileOpts);
-            }
+            // if (!spec) {
+            //     $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
+            // } else {
+                this.webglContext.programUsed(this.program, null, shader, textureArray, textureLayer, shaderLayerIndex, tileOpts);
+            // }
         }
         // CUSTOM program I guess DRAWING !
         processCustomData(texture, tileOpts) {
@@ -609,17 +612,17 @@
                 $.console.error("Already initialized!");
                 return;
             }
-            if (this._programSpecifications.length < 1) {
-                $.console.error("No specification specified!");
-                /**
-                 * @event fatal-error
-                 */
-                this.raiseEvent('fatal-error', {message: "No specification specified!",
-                    details: "$.WebGLModule::init: Called with no specification set."});
-                return;
-            }
-            this._program = firstProgram;
-            this.getCurrentProgramIndex();
+            // if (this._programSpecifications.length < 1) {
+            //     $.console.error("No specification specified!");
+            //     /**
+            //      * @event fatal-error
+            //      */
+            //     this.raiseEvent('fatal-error', {message: "No specification specified!",
+            //         details: "$.WebGLModule::init: Called with no specification set."});
+            //     return;
+            // }
+            // this._program = firstProgram;
+            // this.getCurrentProgramIndex();
 
             this._initialized = true;
             this.setDimensions(0, 0, width, height); // pridal som dve nuly na zaciatok
@@ -836,56 +839,65 @@
             return contexts;
         }
 
-        createDefaultProgram() {
-            this.defaultRenderingSpecification = {
-                shaders: {
-                    renderShader: {
-                        type: "identity",
-                        dataReferences: [0],
-                    }
-                }
-            };
-            this.addRenderingSpecifications(this.defaultRenderingSpecification);
-
-            const PlainShader = $.WebGLModule.ShaderMediator.getClass("identity");
-            //                  new Class      (uniqueId: string, options: object)
-            const plainShader = new PlainShader('default_shader', {
-                shaderObject: this.defaultRenderingSpecification.shaders.renderShader,
-                webglContext: this.webglContext,
-                interactive: false,
-                invalidate: () => {},
-                rebuild: () => {},
-                refetch: () => {}
-            });
-            plainShader.construct();
-            if (!plainShader.initialized()) {
-                throw new Error('renderer.js::createDefaultProgram(): Could not built default program!');
+        _getShaders() {
+            let shaders = [];
+            for (const shaderType in this.shadersCounter) {
+                shaders.push(this.shadersCounter[shaderType].shaderLayer);
             }
-            plainShader.init();
+            return shaders;
+        }
 
-            const shaderObject = this.defaultRenderingSpecification.shaders.renderShader;
-            shaderObject._index = 0;
-            shaderObject._renderContext = plainShader;
-            shaderObject.visible = true;
-            shaderObject.rendering = true;
+        createDefaultProgram() {
+            // const defaultRenderingSpecification = {
+            //     shaders: {
+            //         renderShader: {
+            //             type: "identity",
+            //             dataReferences: [0],
+            //         }
+            //     }
+            // };
+            // this.addRenderingSpecifications(defaultRenderingSpecification);
 
-            const program = this.webglContext.programCreated([plainShader]);
+            // const PlainShader = $.WebGLModule.ShaderMediator.getClass("identity");
+            // //                  new Class      (uniqueId: string, options: object)
+            // const plainShader = new PlainShader('default_shader', {
+            //     shaderObject: defaultRenderingSpecification.shaders.renderShader,
+            //     webglContext: this.webglContext,
+            //     interactive: false,
+            //     invalidate: () => {},
+            //     rebuild: () => {},
+            //     refetch: () => {}
+            // });
+            // plainShader.construct();
+            // if (!plainShader.initialized()) {
+            //     throw new Error('renderer.js::createDefaultProgram(): Could not built default program!');
+            // }
+            // plainShader.init();
+
+            // const shaderObject = defaultRenderingSpecification.shaders.renderShader;
+            // shaderObject._index = 0;
+            // shaderObject._renderContext = plainShader;
+            // shaderObject.visible = true;
+            // shaderObject.rendering = true;
+
+            const program = this.webglContext.programCreated([]);
             this._program = 0;
             this._programs[0] = program;
 
             this.running = true;
-            this.webglContext.programLoaded(program, this.defaultRenderingSpecification);
+            //this.gl.useProgram(program);
+            //this.webglContext.programLoaded(program, defaultRenderingSpecification);
 
             console.log('renderer.js::createDefaultProgram(): DEFAULT PROGRAM CREATED!');
         }
 
 
-        updateProgram(specification) {
+        updateProgram(specification, shaderType) {
             console.log('renderer:: updateProgram call!');
 
-            const Shader = $.WebGLModule.ShaderMediator.getClass(specification.shaders.renderShader.type);
+            const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
-            const shader = new Shader(specification.shaders.renderShader.type + '_shader', {
+            const shader = new Shader(shaderType + '_shader', {
                 shaderObject: specification.shaders.renderShader,
                 webglContext: this.webglContext,
                 interactive: false,
@@ -895,32 +907,48 @@
             });
             shader.construct();
             if (!shader.initialized()) {
-                throw new Error('renderer.js::updateProgram(): Could not update program!');
+                throw new Error('renderer.js::updateProgram(): Could not construct shader from specification =', specification, '!');
             }
             shader.init();
 
-            const shaderObject = specification.shaders.renderShader;
-            shaderObject._index = 0;
-            shaderObject._renderContext = shader;
-            shaderObject.visible = true;
-            shaderObject.rendering = true;
-
-            const program = this.webglContext.programCreated(this._getRenderContextsFromSpecifications());
+            const program = this.webglContext.programCreated(this._getShaders().concat([shader]));
             this._program = 0;
             this._programs[0] = program;
 
-            this.running = true;
-            this.webglContext.programLoaded(program, specification);
+            // this.running = true;
+            // this.gl.useProgram(program);
+            // this.webglContext.programLoaded(program, specification);
 
             console.log('renderer.js::updateProgram(): PROGRAM UPDATED!');
+            return shader;
         }
 
-        useDefaultProgram() {
+        useDefaultProgram(shader) {
             const program = this._programs[0];
-            for (const spec of this._programSpecifications) {
-                this.webglContext.programLoaded(program, spec);
+            this.gl.useProgram(program);
+            // for (const spec of this._programSpecifications) {
+            //     this.webglContext.programLoaded(program, spec);
+            // }
+            this.webglContext.programLoaded(program, null, this._getShaders());
+        }
+
+        /**
+         * Popis:
+         * @param {object} spec json coming with tiledImage defining it's settings
+         * @param {string} shaderType examples = identity, edge, negative,...
+         * @returns {ShaderLayer} instantion of shader to use with tiledImage
+         */
+        getShader(spec, shaderType) {
+            if (this.shadersCounter[shaderType] === undefined) {
+                const newShader = this.updateProgram(spec, shaderType);
+                this.shadersCounter[shaderType] = {};
+                this.shadersCounter[shaderType]["count"] = 1;
+                this.shadersCounter[shaderType]["shaderLayer"] = newShader;
+            } else {
+                this.shadersCounter[shaderType]["count"]++;
             }
-            // this.webglContext.programLoaded(program, null, this._getRenderContextsFromSpecifications());
+
+            return this.shadersCounter[shaderType]["shaderLayer"];
         }
 
         printWebglShadersOfCurrentProgram() {

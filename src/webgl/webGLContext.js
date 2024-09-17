@@ -279,16 +279,21 @@
             super(renderer, gl, "2.0", options); // sets this.renderer, this.gl, this.webglVersion, this.options
 
             // SECOND PASS PROGRAM
-            // attributes that will be filled with glsl buffers and locations during programLoaded() call
+            this._secondPassProgram = null;
+            this._shadersMapping = {default: -1}; // {identity: 0, edge: 1, ...} maps shaderType to u_shaderLayerIndex
+
             this._bufferTextureCoords = null; // :glBuffer, pre kazdu tile-u sa sem nahraju data jej textureCoords
             this._locationTextureCoords = null; // :glAttribLocation, atribut na previazanie s buffrom hore, nahra sa skrze neho do glsl
-            this._locationTransformMatrix = null;
+            this._locationTransformMatrix = null; // u_transform_matrix
 
-            this._locationPixelSize = null;
-            this._locationZoomLevel = null;
-            this._locationTextureArray = null;
+            this._locationPixelSize = null; // u_pixel_size_in_fragments ?
+            this._locationZoomLevel = null; // u_zoom_level ?
+            this._locationTextureArray = null; // u_textureArray TEXTURE_2D_ARRAY
+            this._locationTextureLayer = null; // u_textureLayer which layer from TEXTURE_2D_ARRAY to use
+            this._locationShaderLayerIndex = null; // u_shaderLayerIndex which shaderLayer to use for rendering
 
-            // FIRST PASS PROGRAM
+
+            // FIRST PASS PROGRAM, used to render data from tiledImages to their corresponding layers in TEXTURE_2D_ARRAY
             this._firstPassProgram = null;
             this._firstPassProgramTexcoordLocation = null;
             this._firstPassProgramTransformMatrixLocation = null;
@@ -633,11 +638,11 @@
         }
 
 
-       /** Get vertex shader's glsl code.
+        /** Get vertex shader's glsl code.
          * @param {object} options
          * @returns {string} vertex shader's glsl code
          */
-       compileVertexShader(options) {
+        compileVertexShader(options) {
         const textureId = options.instanceCount > 1 ? 'gl_InstanceID' : '0';
 
         const vertexShaderCode = `#version 300 es
@@ -671,7 +676,7 @@ void main() {
 }`;
 
         return vertexShaderCode;
-    }
+        }
 
 
         /** Get fragment shader's glsl code.
@@ -742,16 +747,15 @@ void main() {
     }
 
 
-    // Definition of shaderLayers:${definition}
+    // Definition of shaderLayers:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
 
     void main() {
         // Execution of shaderLayers:
         switch (u_shaderLayerIndex) {${execution}
             default:
-                // render only where is data in the texture
                 if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
                     final_color = vec4(.0);
-                } else {
+                } else { // render only where there's data in the texture
                     final_color = vec4(1, 0, 0, 0.5);
                 }
                 return;
@@ -768,6 +772,7 @@ void main() {
         /**
          *
          * @param {[ShaderLayer]} shaderLayers array of ShaderLayers to use
+         * @returns {WebGLProgram}
          */
         programCreated(shaderLayers) {
             const gl = this.gl;
@@ -776,6 +781,8 @@ void main() {
             let definition = '',
                 execution = '';
                 // globalScopeCode = {};
+
+
             shaderLayers.forEach((shaderLayer, shaderLayerIndex) => {
                 definition += `\n// Definition of ${shaderLayer.constructor.type()} shader:\n`;
                 // returns string which corresponds to glsl code
@@ -788,7 +795,6 @@ void main() {
 
                 execution += `
             case ${shaderLayerIndex}:`;
-
                 // ak ma opacity shaderLayer tak zavolaj jeho execution a prenasob alpha channel opacitou a to posli do blend funkcie, inak tam posli rovno jeho execution
                 if (shaderLayer.opacity) {
                     execution += `
@@ -803,6 +809,8 @@ void main() {
                 // final_color = ${shaderLayer.uid}_execution();`; pokial nechcem pouzit blend funkciu ale rovno ceknut vystup shaderu
                 execution += `
                 break;`;
+
+                this._shadersMapping[shaderLayer.constructor.type()] = shaderLayerIndex;
             }); // end of for cycle
 
             const vertexShaderCode = this.compileVertexShader({});
@@ -827,25 +835,26 @@ void main() {
             // toto neviem ci je dobre lebo running hovori o tom ze renderer bezi s nejakou validnou specifikaciou...
             // ked chcem pouzit customprogram tak ale nebude bezat podla nijakej specifikacie => ajtak sa zapne running?
             // co ked este nebezal renderer a na supu chcem pouzit customprogram co potom ?
-            console.log('PROGRAMLOADED called!');
+            // console.log('PROGRAMLOADED called!');
             if (!this.renderer.running) {
-                return;
+                throw new Error("shit");
             }
 
             const gl = this.gl;
 
             // Allow for custom loading
-            gl.useProgram(program);
-            if (spec) {
-                // for every shader and it's controls connect their attributes to their corresponding glsl variables
-                console.log('Calling glLoaded + glDrawing on specification', spec);
-                this.renderer.glLoaded(gl, program, spec);
-                this.renderer.glDrawing(gl, program, spec);
-            }
+            //gl.useProgram(program);
+            // if (spec) {
+            //     // for every shader and it's controls connect their attributes to their corresponding glsl variables
+            //     console.log('Calling glLoaded on specification', spec);
+            //     this.renderer.glLoaded(gl, program, spec);
+            //     // this.renderer.glDrawing(gl, program, spec);
+            // }
             if (shaderLayers) {
                 for (const shaderLayer of shaderLayers) {
+                    //console.log('Calling glLoaded on shaderLayer', shaderLayer.constructor.name(), shaderLayer);
                     shaderLayer.glLoaded(program, gl);
-                    shaderLayer.glDrawing(program, gl);
+                    //shaderLayer.glDrawing(program, gl);
                 }
             }
 
@@ -885,17 +894,26 @@ void main() {
          * @param {number} tileInfo.pixelSize
          * @param {Float32Array} tileInfo.textureCoords 8 suradnic, (2 pre kazdy vrchol triangle stripu)
          */
-        programUsed(program, spec, textureArray, textureLayer, shaderLayerIndex, tileInfo) {
+        programUsed(program, spec, shaderLayer, textureArray, textureLayer, shaderLayerIndex, tileInfo) {
             if (!this.renderer.running) {
                 throw new Error("webGLContext::programUsed: Renderer not running!");
             }
-            console.log('PROGRAMUSED call!');
+            // console.log('PROGRAMUSED call!');
 
             const gl = this.gl;
             // if (spec) {
-            //     // for every shader and it's controls fill their corresponding glsl variables
+            //     console.log('spec =', spec);
+            //     // fill shader's control's uniforms
             //     this.renderer.glDrawing(gl, program, spec);
             // }
+            if (shaderLayer) {
+                //console.log('Calling glDrawing on shaderLayer', shaderLayer.constructor.name(), shaderLayer);
+                shaderLayer.glDrawing(program, gl);
+                const shaderLayerI = this._shadersMapping[shaderLayer.constructor.type()];
+                // index of shaderLayer to use
+                console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerI);
+                gl.uniform1i(this._locationShaderLayerIndex, shaderLayerI);
+            }
 
             // fill FRAGMENT shader's uniforms (that are unused)
             gl.uniform1f(this._locationPixelSize, tileInfo.pixelSize || 1);
@@ -919,9 +937,7 @@ void main() {
             console.log('programUsed: do textureLayer nahram cislo', textureLayer);
             gl.uniform1i(this._locationTextureLayer, textureLayer);
 
-            // index of shaderLayer to use
-            console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerIndex);
-            gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
+
 
 
             // CONTROLS debugging

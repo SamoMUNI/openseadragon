@@ -255,7 +255,7 @@
          */
         glDrawing(program, gl) {
             if (this._blendUniform) {
-                console.log(`shaderLayer ${this.constructor.name()} filling it's variables blend and clip!`);
+                // console.log(`shaderLayer ${this.constructor.name()} filling it's variables blend and clip!`);
                 // console.error(`shaderLayer ${this.constructor.name()} nastavuje blend_mode na ${this.blendMode}`);
                 // gl.uniform1i(this._blendLoc, this.blendMode);
                 gl.uniform1i(this._blendLoc, 0);
@@ -263,7 +263,7 @@
             }
 
             for (let control of this._ownedControls) {
-                console.log(`shaderLayer ${this.constructor.name()} filling ${control}`);
+                // console.log(`shaderLayer ${this.constructor.name()} filling ${control}`);
 
                 //FIXME: dimension param
                 this[control].glDrawing(program, gl);
@@ -277,7 +277,7 @@
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
         glLoaded(program, gl) {
-            console.log(`shaderLayer ${this.constructor.name()} loading it's blend and clip variables! Glsl names = ${this._clipUniform}, ${this._blendUniform}`);
+            // console.log(`shaderLayer ${this.constructor.name()} loading it's blend and clip variables! Glsl names = ${this._clipUniform}, ${this._blendUniform}`);
             if (!this._blendUniform) {
                 $.console.warn("Shader layer has autoblending disabled: are you sure you called super.getFragmentShaderDefinition()?");
             } else {
@@ -289,7 +289,7 @@
             }
 
             for (let control of this._ownedControls) {
-                console.log(`shaderLayer ${this.constructor.name()} loading ${control}`);
+                // console.log(`shaderLayer ${this.constructor.name()} loading ${control}`);
                 this[control].glLoaded(program, gl);
             }
         }
@@ -1479,13 +1479,15 @@
             //this unfortunatelly makes cache erasing and rebuilding vis impossible, the shader part has to be fully re-instantiated
             this.params.default = this.encodedValue;
 
-            console.error(`UIControl ${this.name} INIT() -> sets its encodedValue to ${this.encodedValue}`);
+            // console.error(`UIControl ${this.name} INIT() -> sets its encodedValue to ${this.encodedValue}`);
+
             // najprv dekoduje encodedValue, pri color to znamena napriklad ze zo stringu #ffffff sa prevedie na array troch floatov, pre range ze proste parse float na vstupe
             // potom normalizuje, co pri farbe nerobi nic ale napriklad pri range to uz nejakym sposobom dostava do rozmedzia <0, 1> s tym ze napriklad ak min je 0 a max 100 a default hodnota 40 tak hodnotu
             // tomu da 0.4, asi chapes, nech to sedi s originalom, klasicky ako v statistike ze vzdialenosti ostanu rovnake, hodnota je default hodnota a hranice intervalu su min a max v json definicii
             this.value = this.component.normalize(this.component.decode(this.encodedValue), this.params);
-            console.error(`UIControl ${this.name} INIT() -> value without normalizing`, this.component.decode(this.encodedValue));
-            console.error(`UIControl ${this.name} INIT() -> sets its value to ${this.value}`);
+
+            // console.error(`UIControl ${this.name} INIT() -> value without normalizing`, this.component.decode(this.encodedValue));
+            // console.error(`UIControl ${this.name} INIT() -> sets its value to ${this.value}`);
 
             if (this.params.interactive) {
                 const _this = this;
@@ -1509,13 +1511,13 @@
         }
 
         glDrawing(program, gl) {
-            console.log('Settujem', this.component.glUniformFunName(), 'odpovedajuci', this.webGLVariableName, 'na', this.value);
+            // console.log('Settujem', this.component.glUniformFunName(), 'odpovedajuci', this.webGLVariableName, 'na', this.value);
             gl[this.component.glUniformFunName()](this.glLocation, this.value);
         }
 
         glLoaded(program, gl) {
+            // console.log(`setting this.glLocation to ${this.webGLVariableName}`);
             this.glLocation = gl.getUniformLocation(program, this.webGLVariableName);
-            console.log(`setting this.glLocation to ${this.webGLVariableName}`);
         }
 
         toHtml(breakLine = true, controlCss = "") {

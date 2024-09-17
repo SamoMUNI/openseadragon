@@ -77,6 +77,8 @@
              */
 
             // private members
+            this._id = Math.random();
+            console.log('Drawer ID =', this._id);
             this._destroyed = false;
             this._TextureMap = new Map();
             this._TileMap = new Map(); //unused
@@ -167,10 +169,9 @@
 
             /* Pridane event handlery z draweru */
             this.viewer.world.addHandler("add-item", (e) => {
-                console.log('ADD-ITEM EVENT !!!');
+                console.error('ADD-ITEM EVENT !!!, size =', this._size);
                 let duomo = false;
                 let plants = false;
-                //console.error('tileSOURCE = ', e.item.source);
                 if (e.item.source.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
                     duomo = true;
                 } else if (e.item.source._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
@@ -180,92 +181,54 @@
                     //     b = true;
                     // }
 
-                let shader = e.item.source.shader;
-                // TI uz raz bol kedze shader parameter ma nastaveny ale dosiel druhy raz napriklad pre minimapku (ina instancia rendereru, treba nastavit znova)
-                if (shader) {
+                // tiledImage seen for the first time
+                if (e.item.source.drawers === undefined) {
+                    e.item.source.drawers = {};
+                }
+
+                const drawers = e.item.source.drawers;
+                if (drawers[this._id] === undefined) {
+                    let spec;
+                    let shaderType;
                     if (duomo) {
-                        const spec = {
-                            shaders: {
-                                renderShader: {
-                                    // type: "identity",
-                                    type: "edge",
-                                    dataReferences: [0],
-                                }
-                            }
-                        };
-                        this.renderer.addRenderingSpecifications(spec);
-                        this.renderer.updateProgram(spec);
-
+                        shaderType = "edge";
                     } else if (plants) {
-                        const spec = {
-                            shaders: {
-                                renderShader: {
-                                    type: "negative",
-                                    dataReferences: [0],
-                                }
-                            }
-                        };
-                        this.renderer.addRenderingSpecifications(spec);
-                        this.renderer.updateProgram(spec);
+                        shaderType = "negative";
+                    } else { // identity tiledImage
+                        shaderType = "identity";
                     }
+                    spec = {
+                        shaders: {
+                            renderShader: {
+                                type: shaderType,
+                                dataReferences: [0],
+                            }
+                        }
+                    };
+                    const targetIndex = this.renderer.getSpecificationsCount();
+                    this.renderer.addRenderingSpecifications(spec);
 
+                    const shader = this.renderer.getShader(spec, shaderType);
+                    const shaderObject = spec.shaders.renderShader;
+                    shaderObject._renderContext = shader;
+                    shaderObject._index = 0;
+                    shaderObject.visible = true;
+                    shaderObject.rendering = true;
+
+                    spec._programIndexTarget = targetIndex;
+                    spec._initialized = true;
+                    spec._utilizeLocalMethods = true;
+                    drawers[this._id] = spec;
                 } else {
-                    // console.log('Prvy raz v addIteme, shader=', shader);
-                    if (duomo) {
-                        const targetIndex = this.renderer.getSpecificationsCount();
-                        const spec = {
-                            shaders: {
-                                renderShader: {
-                                    // type: "identity",
-                                    type: "edge",
-                                    dataReferences: [0],
-                                }
-                            }
-                        };
-                        this.renderer.addRenderingSpecifications(spec);
-                        this.renderer.updateProgram(spec);
-
-                        this.renderer.flag = Symbol("pridana specifikacia pre dom bola");
-
-                        e.item.source.shader = spec;
-                        e.item.source.shader._programIndexTarget = targetIndex;
-                        e.item.source.shader._initialized = true;
-                        e.item.source.shader._utilizeLocalMethods = true;
-
-                    } else if (plants) {
-                        const targetIndex = this.renderer.getSpecificationsCount();
-                        const spec = {
-                            shaders: {
-                                renderShader: {
-                                    type: "negative",
-                                    dataReferences: [0],
-                                }
-                            }
-                        };
-                        this.renderer.addRenderingSpecifications(spec);
-                        this.renderer.updateProgram(spec);
-
-                        e.item.source.shader = spec;
-                        e.item.source.shader._programIndexTarget = targetIndex;
-                        e.item.source.shader._initialized = true;
-                        e.item.source.shader._utilizeLocalMethods = true;
-
-                    } else { // identity TiledImage
-                        e.item.source.shader = this.renderer.defaultRenderingSpecification;
-                        e.item.source.shader._programIndexTarget = 0;
-                        e.item.source.shader._initialized = true;
-                        e.item.source.shader._utilizeLocalMethods = true;
-                    }
+                    throw new Error("webgldrawerModular.js::add-item: This should not happen!");
                 }
             });
 
             this.viewer.world.addHandler("remove-item", (e) => {
                 console.log('REMOVE-ITEM EVENT !!!');
-                const targetIndex = e.item.source.shader._programIndexTarget;
-                if (targetIndex !== 0) {
-                    this.renderer.deleteRenderingSpecification(targetIndex);
-                    this.renderer.deleteProgram(targetIndex);
-                }
+                // treba spravit viac...
+                delete e.item.source.drawers[this._id];
+
             });
         }//end of constructor
 
@@ -1362,7 +1325,7 @@
 
 
         _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
-            console.log('Draw call.');
+            // console.log('Draw call on size =', this._size);
             const gl = this._gl;
             //const shaderSpecification = 0;
             //const plainShader = this.renderer.getSpecification(shaderSpecification).shaders.renderShader._renderContext;
@@ -1435,12 +1398,10 @@
 
             // SECOND PASS (render from textures to output canvas)
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-            //console.log('Second pass, shaders of program 0 =');
-
+            // console.log('Second pass, need to change the program.');
             // this.renderer.printWebglShadersOfCurrentProgram();
-            this.renderer.useDefaultProgram();
             // this.renderer.useProgram(0);
-
+            this.renderer.useDefaultProgram();
             tiledImages.forEach((tiledImage, i) => {
                 //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
                 //plainShader.opacity.set(tiledImage.opacity);
@@ -1448,7 +1409,13 @@
 
                 const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
-                this.renderer.processData(this._offscreenTextureArray, i, tiledImage.source.shader._programIndexTarget, {
+                // console.log('Pred processData volanim, tiledImage.source.shader.shaders.renderShader._renderContext =', tiledImage.source.shader.shaders.renderShader._renderContext);
+                // console.log('Pred processData volanim, this.renderer._getRenderContextsFromSpecifications()[0] =', this.renderer._getRenderContextsFromSpecifications()[0]);
+                // this.renderer.useDefaultProgram(tiledImage.source.shader.shaders.renderShader._renderContext);
+                // if (tiledImage.source.shader !== this.renderer.getSpecification(0)) {
+                //     throw new Error("Nerovna sa more!");
+                // }
+                this.renderer.processData(null, tiledImage.source.drawers[this._id].shaders.renderShader._renderContext, this._offscreenTextureArray, i, tiledImage.source.drawers[this._id]._programIndexTarget, {
                     transform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
                     zoom: viewport.zoom,
                     pixelSize: pixelSize,
