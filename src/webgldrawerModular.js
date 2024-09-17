@@ -1404,18 +1404,14 @@
             this.renderer.useDefaultProgram();
             tiledImages.forEach((tiledImage, i) => {
                 //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
-                //plainShader.opacity.set(tiledImage.opacity);
-                // this.renderer.useProgram(tiledImage.source.shader._programIndexTarget);
+
+                const shader = tiledImage.source.drawers[this._id].shaders.renderShader._renderContext;
+                if (shader.opacity !== undefined) {
+                    shader.opacity.set(tiledImage.opacity);
+                }
 
                 const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
-
-                // console.log('Pred processData volanim, tiledImage.source.shader.shaders.renderShader._renderContext =', tiledImage.source.shader.shaders.renderShader._renderContext);
-                // console.log('Pred processData volanim, this.renderer._getRenderContextsFromSpecifications()[0] =', this.renderer._getRenderContextsFromSpecifications()[0]);
-                // this.renderer.useDefaultProgram(tiledImage.source.shader.shaders.renderShader._renderContext);
-                // if (tiledImage.source.shader !== this.renderer.getSpecification(0)) {
-                //     throw new Error("Nerovna sa more!");
-                // }
-                this.renderer.processData(null, tiledImage.source.drawers[this._id].shaders.renderShader._renderContext, this._offscreenTextureArray, i, tiledImage.source.drawers[this._id]._programIndexTarget, {
+                this.renderer.processData(null, shader, this._offscreenTextureArray, i, tiledImage.source.drawers[this._id]._programIndexTarget, {
                     transform: [1, 0, 0, 0, 1, 0, 0, 0, 1],
                     zoom: viewport.zoom,
                     pixelSize: pixelSize,
@@ -1423,8 +1419,7 @@
                 });
             });
 
-
-            // OUTPUT data to output canvas and clear the rendering canvas
+            // flag that data need to be PUT to the output canvas and that the rendering canvas needs to be cleared
             this._renderingCanvasHasImageData = true;
         }//end of function
 
