@@ -637,6 +637,13 @@
             return 'Error: invalid texture: unsupported sampling type ' + type;
         }
 
+        /**
+         *
+         * @param {int} n 1 = single-pass, 2 = two-pass
+         */
+        setRenderingType(n) {
+            this.gl.uniform1i(this._locationNPassRendering, n);
+        }
 
         /** Get vertex shader's glsl code.
          * @param {object} options
@@ -654,7 +661,7 @@ out vec2 v_texture_coords;
 
 uniform mat3 u_transform_matrix;
 
-const vec3 second_pass_viewport[4] = vec3[4] (
+const vec3 viewport[4] = vec3[4] (
     vec3(0.0, 0.0, 1.0),
     vec3(0.0, 1.0, 1.0),
     vec3(1.0, 0.0, 1.0),
@@ -665,14 +672,7 @@ void main() {
     v_texture_id = ${textureId};
     v_texture_coords = a_texture_coords;
 
-
-    // convert from 0->1 to 0->2
-    vec3 oneToTwo = second_pass_viewport[gl_VertexID] * 2.0;
-
-    // convert from 0->2 to -1->+1 (clipSpace coordinates)
-    vec3 clipSpace = oneToTwo - 1.0;
-
-    gl_Position = vec4(clipSpace, 1);
+    gl_Position = vec4(u_transform_matrix * viewport[gl_VertexID], 1);
 }`;
 
         return vertexShaderCode;
@@ -697,7 +697,7 @@ void main() {
 
             const fragmentShaderCode = `#version 300 es
     precision mediump float;
-    // precision mediump sampler2D;
+    precision mediump sampler2D;
     precision mediump sampler2DArray;
 
     uniform float u_pixel_size_in_fragments;
@@ -708,11 +708,23 @@ void main() {
 
     uniform int u_shaderLayerIndex;
 
+    // 1 = single-pass, 2 = two-pass
+    uniform int nPassRendering;
+
+    // for single-pass rendering
+    uniform sampler2D u_texture;
+
+    // for two-pass rendering
     uniform sampler2DArray u_textureArray;
     uniform int u_textureLayer;
 
+    // toto vymen a cekni preco nejde
     vec4 osd_texture(int index, vec2 coords) {
-        return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
+        if (nPassRendering == 1) {
+            return texture(u_texture, coords);
+        } else {
+            return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
+        }
     }
 
     // utility function
@@ -865,9 +877,14 @@ void main() {
             // FRAGMENT shader's locations
             this._locationPixelSize = gl.getUniformLocation(program, "u_pixel_size_in_fragments");
             this._locationZoomLevel = gl.getUniformLocation(program, "u_zoom_level");
+
             this._locationTextureArray = gl.getUniformLocation(program, "u_textureArray");
             this._locationTextureLayer = gl.getUniformLocation(program, "u_textureLayer");
+
             this._locationShaderLayerIndex = gl.getUniformLocation(program, "u_shaderLayerIndex");
+
+            this._locationNPassRendering = gl.getUniformLocation(program, "u_nPassRendering");
+            this._locationTexture = gl.getUniformLocation(program, "u_texture");
 
             // Initialize texture coords attribute
             this._bufferTextureCoords = gl.createBuffer();
@@ -878,6 +895,7 @@ void main() {
 
             // Initialize texture
             gl.uniform1i(this._locationTextureArray, 0);
+            gl.uniform1i(this._locationTexture, 1);
             gl.activeTexture(gl.TEXTURE0);
         }
 

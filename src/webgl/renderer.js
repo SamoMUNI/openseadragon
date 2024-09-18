@@ -934,6 +934,10 @@
             $.console.info("FRAGMENT SHADER\n", opts.fs);
         }
 
+        setRenderingType(n) {
+            this.webglContext.setRenderingType(n);
+        }
+
         /**
          * Iterate through specification's shaderObjects and create their corresponding instantions.
          * BuildSpec call begins creation of glsl code, webglcontext iterates through shaders and communicates with their instantions I guess.
