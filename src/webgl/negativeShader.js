@@ -27,7 +27,8 @@
         }
 
         getFragmentShaderExecution() {
-            return `return vec4(vec3(1, 1, 1) - ${this.sampleChannel("v_texture_coords")}.rgb, ${this.sampleChannel("v_texture_coords")}.a);`;
+            return `
+        return vec4(vec3(1, 1, 1) - ${this.sampleChannel("v_texture_coords")}.rgb, ${this.sampleChannel("v_texture_coords")}.a);`;
         }
     };
 

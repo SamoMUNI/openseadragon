@@ -747,10 +747,10 @@ void main() {
     }
 
 
-    // Definition of shaderLayers:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
+    // Definitions of shaderLayers:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
 
     void main() {
-        // Execution of shaderLayers:
+        // Executions of shaderLayers:
         switch (u_shaderLayerIndex) {${execution}
             default:
                 if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
@@ -770,8 +770,8 @@ void main() {
 
 
         /**
-         *
-         * @param {[ShaderLayer]} shaderLayers array of ShaderLayers to use
+         * Create WebGLProgram that uses shaderLayers defined in an input parameter.
+         * @param {[ShaderLayer]} shaderLayers array of shaderLayers to use
          * @returns {WebGLProgram}
          */
         programCreated(shaderLayers) {
@@ -784,14 +784,14 @@ void main() {
 
 
             shaderLayers.forEach((shaderLayer, shaderLayerIndex) => {
-                definition += `\n// Definition of ${shaderLayer.constructor.type()} shader:\n`;
+                definition += `\n    // Definition of ${shaderLayer.constructor.type()} shader:\n`;
                 // returns string which corresponds to glsl code
-                const fsd = shaderLayer.getFragmentShaderDefinition();
-                definition += fsd;
+                definition += shaderLayer.getFragmentShaderDefinition();
+                definition += '\n';
                 definition += `
-    vec4 ${shaderLayer.uid}_execution() {
-        ${shaderLayer.getFragmentShaderExecution()}
+    vec4 ${shaderLayer.uid}_execution() {${shaderLayer.getFragmentShaderExecution()}
     }`;
+                definition += '\n\n';
 
                 execution += `
             case ${shaderLayerIndex}:`;
