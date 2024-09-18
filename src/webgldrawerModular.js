@@ -113,7 +113,7 @@
             // OLD $.extend(this.options, rendererOptions) [this.options are options.options from DRAWERBASE]
             this.renderer = new $.WebGLModule(rendererOptions);
             //this.renderer._createSinglePassShader('TEXTURE_2D');
-            this.renderer.createDefaultProgram();
+            this.renderer.createProgram();
 
             /* returns $.Point */
             // const size = this._calculateCanvasSize();
@@ -134,7 +134,7 @@
             };
             this._offScreenBuffer = this._gl.createFramebuffer(); // buffer to be used with any texture from _offScreenTextures
 
-            // Rework with Texture2DArray
+            // Rework with Texture2DArray, NOW USED
             this._offscreenTextureArray = null;
             this._offscreenTextureArrayLayers = 0;
 
@@ -183,6 +183,8 @@
 
                 // tiledImage seen for the first time
                 if (e.item.source.drawers === undefined) {
+                    console.log('TiledImage seen for the very first time!');
+                    // this map here is created because tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap, maybe more in the future...)
                     e.item.source.drawers = {};
                 }
 
@@ -194,7 +196,7 @@
                         shaderType = "edge";
                     } else if (plants) {
                         shaderType = "negative";
-                    } else { // identity tiledImage
+                    } else {
                         shaderType = "identity";
                     }
                     spec = {
@@ -226,9 +228,15 @@
 
             this.viewer.world.addHandler("remove-item", (e) => {
                 console.log('REMOVE-ITEM EVENT !!!');
-                // treba spravit viac...
-                delete e.item.source.drawers[this._id];
 
+                const shaderType = e.item.source.drawers[this._id].shaders.renderShader.type;
+                this.renderer.removeShader(shaderType);
+
+                // these 4 lines are unnecessary because somehow when tiledImage is added again he does not have this .source.drawers parameter anyways (I do not know why tho)
+                delete e.item.source.drawers[this._id];
+                if (Object.keys(e.item.source.drawers).length === 0) {
+                    delete e.item.source.drawers;
+                }
             });
         }//end of constructor
 

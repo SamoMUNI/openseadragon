@@ -847,50 +847,13 @@
             return shaders;
         }
 
-        createDefaultProgram() {
-            // const defaultRenderingSpecification = {
-            //     shaders: {
-            //         renderShader: {
-            //             type: "identity",
-            //             dataReferences: [0],
-            //         }
-            //     }
-            // };
-            // this.addRenderingSpecifications(defaultRenderingSpecification);
-
-            // const PlainShader = $.WebGLModule.ShaderMediator.getClass("identity");
-            // //                  new Class      (uniqueId: string, options: object)
-            // const plainShader = new PlainShader('default_shader', {
-            //     shaderObject: defaultRenderingSpecification.shaders.renderShader,
-            //     webglContext: this.webglContext,
-            //     interactive: false,
-            //     invalidate: () => {},
-            //     rebuild: () => {},
-            //     refetch: () => {}
-            // });
-            // plainShader.construct();
-            // if (!plainShader.initialized()) {
-            //     throw new Error('renderer.js::createDefaultProgram(): Could not built default program!');
-            // }
-            // plainShader.init();
-
-            // const shaderObject = defaultRenderingSpecification.shaders.renderShader;
-            // shaderObject._index = 0;
-            // shaderObject._renderContext = plainShader;
-            // shaderObject.visible = true;
-            // shaderObject.rendering = true;
-
-            const program = this.webglContext.programCreated([]);
+        createProgram() {
+            const program = this.webglContext.programCreated(this._getShaders());
             this._program = 0;
             this._programs[0] = program;
 
             this.running = true;
-            //this.gl.useProgram(program);
-            //this.webglContext.programLoaded(program, defaultRenderingSpecification);
-
-            console.log('renderer.js::createDefaultProgram(): DEFAULT PROGRAM CREATED!');
         }
-
 
         updateProgram(specification, shaderType) {
             console.log('renderer:: updateProgram call!');
@@ -949,6 +912,20 @@
             }
 
             return this.shadersCounter[shaderType]["shaderLayer"];
+        }
+
+        removeShader(shaderType) {
+            // delete shader from the map and recreate the WebGLProgram without <shaderType> shader
+            if (this.shadersCounter[shaderType]["count"] === 1) {
+                delete this.shadersCounter[shaderType];
+                this.createProgram();
+
+            // not removing shader from the WebGLProgram because another tiledImage still uses it
+            } else {
+                this.shadersCounter[shaderType]["count"]--;
+            }
+
+            console.log('removeShader, this.shadersCounter po odobrati =', this.shadersCounter);
         }
 
         printWebglShadersOfCurrentProgram() {
