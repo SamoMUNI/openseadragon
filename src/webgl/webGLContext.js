@@ -637,14 +637,6 @@
             return 'Error: invalid texture: unsupported sampling type ' + type;
         }
 
-        /**
-         *
-         * @param {int} n 1 = single-pass, 2 = two-pass
-         */
-        setRenderingType(n) {
-            this.gl.uniform1i(this._locationNPassRendering, n);
-        }
-
         /** Get vertex shader's glsl code.
          * @param {object} options
          * @returns {string} vertex shader's glsl code
@@ -655,13 +647,24 @@
         const vertexShaderCode = `#version 300 es
 precision mediump float;
 
+// 1 = single-pass, 2 = two-pass
+uniform int u_nPassRendering;
+flat out int nPassRendering;
+
 flat out int v_texture_id;
 in vec2 a_texture_coords;
 out vec2 v_texture_coords;
 
 uniform mat3 u_transform_matrix;
 
-const vec3 viewport[4] = vec3[4] (
+const vec3 first_pass_viewport[4] = vec3[4] (
+    vec3(0.0, 1.0, 1.0),
+    vec3(0.0, 0.0, 1.0),
+    vec3(1.0, 1.0, 1.0),
+    vec3(1.0, 0.0, 1.0)
+);
+
+const vec3 second_pass_viewport[4] = vec3[4] (
     vec3(0.0, 0.0, 1.0),
     vec3(0.0, 1.0, 1.0),
     vec3(1.0, 0.0, 1.0),
@@ -671,8 +674,13 @@ const vec3 viewport[4] = vec3[4] (
 void main() {
     v_texture_id = ${textureId};
     v_texture_coords = a_texture_coords;
+    nPassRendering = u_nPassRendering;
 
-    gl_Position = vec4(u_transform_matrix * viewport[gl_VertexID], 1);
+    if (nPassRendering == 1) {
+        gl_Position = vec4(u_transform_matrix * first_pass_viewport[gl_VertexID], 1);
+    } else {
+        gl_Position = vec4(u_transform_matrix * second_pass_viewport[gl_VertexID], 1);
+    }
 }`;
 
         return vertexShaderCode;
@@ -709,7 +717,7 @@ void main() {
     uniform int u_shaderLayerIndex;
 
     // 1 = single-pass, 2 = two-pass
-    uniform int nPassRendering;
+    flat in int nPassRendering;
 
     // for single-pass rendering
     uniform sampler2D u_texture;
@@ -718,12 +726,13 @@ void main() {
     uniform sampler2DArray u_textureArray;
     uniform int u_textureLayer;
 
-    // toto vymen a cekni preco nejde
     vec4 osd_texture(int index, vec2 coords) {
         if (nPassRendering == 1) {
             return texture(u_texture, coords);
-        } else {
+        } else if (nPassRendering == 2) {
             return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
+        } else { // more-pass renderings not implemented
+            return vec4(0,1,0,0.5);
         }
     }
 
@@ -837,9 +846,20 @@ void main() {
             return program;
         }
 
+        /**
+         *
+         * @param {int} n 1 = single-pass, 2 = two-pass
+         */
+        setRenderingType(n) {
+            const gl = this.gl;
+            console.log('Nahravam do nPassRendering cislo', n);
+            gl.uniform1i(this._locationNPassRendering, n);
+            gl.activeTexture(gl.TEXTURE0 + n);
+        }
 
         /** Called when associated webgl program is switched to. Volane z forceswitchshader z rendereru alebo pri useCustomProgram z rendereru.
          * Prepaja atributy (definove touto classou) a atributy (definovane shaderami a ich controls) s ich odpovedajucimi glsl premennymi.
+         * Need to also call setRenderingType after this function call to prepare the program correctly.
          * @param {WebGLProgram} program WebGLProgram to use
          * @param {object|null} spec specification corresponding to program, null when using custom program not built on any specification
          */
@@ -893,10 +913,9 @@ void main() {
             gl.enableVertexAttribArray(this._locationTextureCoords);
             gl.vertexAttribPointer(this._locationTextureCoords, 2, gl.FLOAT, false, 0, 0);
 
-            // Initialize texture
-            gl.uniform1i(this._locationTextureArray, 0);
+            // Initialize textures
             gl.uniform1i(this._locationTexture, 1);
-            gl.activeTexture(gl.TEXTURE0);
+            gl.uniform1i(this._locationTextureArray, 2);
         }
 
 
@@ -904,7 +923,6 @@ void main() {
          * Why is this named programUsed?
          * Fill the glsl variables and draw.
          * @param {WebGLProgram} program currently being used with renderer
-         * @param {object} spec specification corresponding to program (from renderer._programSpecifications)
          * @param {WebGLTexture} textureArray to draw from
          * @param {object} tileInfo
          * @param {[Float]} tileInfo.transform 3*3 matrix that should be applied to tile vertices
@@ -912,7 +930,7 @@ void main() {
          * @param {number} tileInfo.pixelSize
          * @param {Float32Array} tileInfo.textureCoords 8 suradnic, (2 pre kazdy vrchol triangle stripu)
          */
-        programUsed(program, spec, shaderLayer, textureArray, textureLayer, shaderLayerIndex, tileInfo) {
+        programUsed(program, tileInfo, shaderLayer, texture, textureArray, textureLayer) {
             if (!this.renderer.running) {
                 throw new Error("webGLContext::programUsed: Renderer not running!");
             }
@@ -927,10 +945,10 @@ void main() {
             if (shaderLayer) {
                 //console.log('Calling glDrawing on shaderLayer', shaderLayer.constructor.name(), shaderLayer);
                 shaderLayer.glDrawing(program, gl);
-                const shaderLayerI = this._shadersMapping[shaderLayer.constructor.type()];
+                const shaderLayerIndex = this._shadersMapping[shaderLayer.constructor.type()];
                 // index of shaderLayer to use
-                console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerI);
-                gl.uniform1i(this._locationShaderLayerIndex, shaderLayerI);
+                console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerIndex);
+                gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
             }
 
             // fill FRAGMENT shader's uniforms (that are unused)
@@ -948,13 +966,13 @@ void main() {
             // transform matrix
             gl.uniformMatrix3fv(this._locationTransformMatrix, false, tileInfo.transform);
 
-            // texture
-            gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
-
-            // textureArray layer
-            console.log('programUsed: do textureLayer nahram cislo', textureLayer);
-            gl.uniform1i(this._locationTextureLayer, textureLayer);
-
+            if (texture) {
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+            }
+            if (textureArray) {
+                gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
+                gl.uniform1i(this._locationTextureLayer, textureLayer);
+            }
 
 
 

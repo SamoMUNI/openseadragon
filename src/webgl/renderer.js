@@ -568,7 +568,7 @@
          * @instance
          * @memberOf WebGLModule
          */
-        processData(spec, shader, textureArray, textureLayer, shaderLayerIndex, tileOpts) {
+        processData(tileOpts, shaderLayer, texture = null, textureArray = null, textureLayer = null) {
             //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
             // const spec = this._programSpecifications[this._program];
             //console.log('processData: spec=', spec);
@@ -576,9 +576,10 @@
             // if (!spec) {
             //     $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             // } else {
-                this.webglContext.programUsed(this.program, null, shader, textureArray, textureLayer, shaderLayerIndex, tileOpts);
+                this.webglContext.programUsed(this._programs[0], tileOpts, shaderLayer, texture, textureArray, textureLayer);
             // }
         }
+
         // CUSTOM program I guess DRAWING !
         processCustomData(texture, tileOpts) {
             this.webglContext.programUsed(this.program, null, texture, tileOpts);
@@ -886,13 +887,14 @@
             return shader;
         }
 
-        useDefaultProgram(shader) {
+        useDefaultProgram(numOfRenderPasses) {
             const program = this._programs[0];
             this.gl.useProgram(program);
             // for (const spec of this._programSpecifications) {
             //     this.webglContext.programLoaded(program, spec);
             // }
             this.webglContext.programLoaded(program, null, this._getShaders());
+            this.webglContext.setRenderingType(numOfRenderPasses);
         }
 
         /**

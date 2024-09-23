@@ -414,7 +414,7 @@
             let viewMatrix = scaleMatrix.multiply(rotMatrix).multiply(posMatrix);
 
             const gl = this._gl;
-            let twoPassRendering = true;
+            let twoPassRendering = false;
             // for (const tiledImage of tiledImages) {
             //     if (tiledImage.source.shader._utilizeLocalMethods ||
             //         tiledImage.getOpacity() < 1 ||
@@ -434,10 +434,10 @@
             } else {
                 this.enableStencilTest(false);
                 // this._resizeOffScreenTextures(tiledImages.length); podla mna to je zbytocne, naco su mi offscreentextury vo first passe?
-                this._drawSinglePass(tiledImages, view, viewMatrix);
+                this._drawSinglePassNew(tiledImages, view, viewMatrix);
             }
 
-            /* context2dPipeline was not used, data are still in _renderingCanvas */
+            /* data are still in this._renderingCanvas */
             if (this._renderingCanvasHasImageData) {
                 this._outputContext.drawImage(this._renderingCanvas, 0, 0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
@@ -1209,6 +1209,7 @@
             const gl = this._gl;
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.clear(gl.COLOR_BUFFER_BIT);
+            this.renderer.useDefaultProgram(1);
 
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 console.log('Vo for cykli cez tiledImages, TiledImage cislo', tiledImageIndex);
@@ -1225,6 +1226,7 @@
                     const canvasDrawer = this._getBackupCanvasDrawer();
                     canvasDrawer.draw([tiledImage]);
                     this._outputContext.drawImage(canvasDrawer.canvas, 0, 0);
+
                 } else {
                     let tilesToDraw = tiledImage.getTilesToDraw();
 
@@ -1239,29 +1241,7 @@
                         return;
                     }
 
-                    //todo better access to the rendering context
-                    /* plainshader je konkretna shader instancia (plain shader extends shaderLayer) */
-                    const plainShader = this.renderer.getSpecification(0).shaders.renderShader._renderContext;
-                    /* bere parameter name, spravi renderer.BLEND_MODE[name], ak to nieje undefined tak nastavi shader.blendMode na to,
-                    ak to je undefined tak nastavi shader.blendMode na renderer.BLEND_MODE["source-over"] */
-                    plainShader.setBlendMode(tiledImage.index === 0 ?
-                        "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
-                    //tile level opacity not supported with single pass rendering
-                    /* opacity is an IControl instantion */
-                    plainShader.opacity.set(tiledImage.opacity);
-
-                    const specificationObject = tiledImage.source.shader;
-                    /* this.renderer.getCompiled ti vytiahne z webglprogramu z jeho _osdOptions co je v "debug" parametri si myslim */
-                    // if (tiledImage.debugMode !== this.renderer.getCompiled("debug", specificationObject._programIndexTarget)) {
-                    //     this.renderer.buildOptions.debug = tiledImage.debugMode;
-                    //     //todo per image-level debug info :/
-                    //     this.renderer.buildProgram(specificationObject._programIndexTarget, null, true, this.renderer.buildOptions);
-                    // } po vykomentovani tohto tu som vyriesil error s tym cervenym stvorcom ktory sa tam daval naviac pri zapnuti debugu... inak netusim co to robi :((
-                    this.renderer.useProgram(specificationObject._programIndexTarget);
-                    // gl.clear(gl.STENCIL_BUFFER_BIT); neviem naco to tu je, skusim som odkomentovat a nic sa nestalo...
-
-
-                    /* to iste az na pixelSize ktory je tu navyse */
+                    /* MATRIX */
                     let overallMatrix = viewMatrix;
                     let imageRotation = tiledImage.getRotation(true);
                     // if needed, handle the tiledImage being rotated
@@ -1277,10 +1257,8 @@
                     }
                     let pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
 
-                    //batch rendering (artifacts)
-                    //let batchSize = 0;
 
-                    // iterate over tiles and add data for each one to the buffers
+                    // ITERATE over TILES
                     for (let tileIndex = 0; tileIndex < tilesToDraw.length; ++tileIndex) {
                         const tile = tilesToDraw[tileIndex].tile;
 
@@ -1294,23 +1272,39 @@
                             tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         }
                         if (tileInfo === null) {
-                            throw Error("webgldrawerModular::drawSinglePass: tile has no context!");
+                            throw Error("webgldrawerModular.js::drawSinglePass: tile has no context!");
                         }
 
-                        const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
+                        const renderInfo = {
+                            transform: this._getTileMatrix(tile, tiledImage, overallMatrix),
+                            zoom: viewport.zoom,
+                            pixelSize: pixelSize,
+                            textureCoords: tileInfo.position
+                        };
 
-                        plainShader.opacity.set(tile.opacity * tiledImage.opacity);
-                        //console.log('opacita pre plainshader =', tile.opacity * tiledImage.opacity);
+                        const shader = tiledImage.source.drawers[this._id].shaders.renderShader._renderContext;
+                        if (shader.opacity !== undefined) {
+                            shader.opacity.set(tiledImage.opacity);
+                        }
 
-
-                        /* DRAW */
-                        this.renderer.processData(tileInfo.texture, {
-                            transform: matrix,
-                            zoom: viewport.zoom, //asi cislo
-                            pixelSize: pixelSize, //asi cislo
-                            textureCoords: tileInfo.position,
-                        });
+                        this.renderer.processData(renderInfo, shader, tileInfo.texture, null, null);
                     }
+
+                    let useContext2dPipeline = (tiledImage.compositeOperation ||
+                        this.viewer.compositeOperation ||
+                        tiledImage._clip ||
+                        tiledImage._croppingPolygons ||
+                        tiledImage.debugMode
+                    );
+                    if (useContext2dPipeline) {
+                        // draw from the rendering canvas onto the output canvas, clipping/cropping if needed
+                        this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
+                    } else {
+                        this._outputContext.drawImage(this._renderingCanvas, 0, 0);
+                    }
+                    // clear the rendering canvas
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+                    this._renderingCanvasHasImageData = false;
                 } //end of tiledImage.isTainted condition
             }); //end of for tiledImage of tiledImages
         }
@@ -1394,8 +1388,7 @@
             // console.log('Second pass, need to change the program.');
             // this.renderer.printWebglShadersOfCurrentProgram();
             // this.renderer.useProgram(0);
-            this.renderer.useDefaultProgram();
-            this.renderer.setRenderingType(2);
+            this.renderer.useDefaultProgram(2);
 
             tiledImages.forEach((tiledImage, i) => {
                 //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
@@ -1405,13 +1398,14 @@
                     shader.opacity.set(tiledImage.opacity);
                 }
 
-                const pixelSize = this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom);
-                this.renderer.processData(null, shader, this._offscreenTextureArray, i, tiledImage.source.drawers[this._id]._programIndexTarget, {
-                    transform: new Float32Array([2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0]), // matrix to get clip space coords from unit coords (column-major order)
+                const renderInfo = {
+                    transform: new Float32Array([2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0]), // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                     zoom: viewport.zoom,
-                    pixelSize: pixelSize,
+                    pixelSize: this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom),
                     textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
-                });
+                };
+
+                this.renderer.processData(renderInfo, shader, null, this._offscreenTextureArray, i);
             });
 
             // flag that data need to be PUT to the output canvas and that the rendering canvas needs to be cleared
