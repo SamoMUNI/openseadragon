@@ -576,7 +576,7 @@
             // if (!spec) {
             //     $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             // } else {
-                this.webglContext.programUsed(this._programs[0], tileOpts, shaderLayer, texture, textureArray, textureLayer);
+                this.webglContext.programUsed(this._program, tileOpts, shaderLayer, texture, textureArray, textureLayer);
             // }
         }
 
@@ -727,16 +727,8 @@
                 }
 
                 // NAJDOLEZITEJSI riadok v tejto funkcii, vola pripravu WebGL programu
-                this.webglContext.programLoaded(program, specification);
+                this.webglContext.programLoaded(program, specification); // uz asi nefunguje lebo som prerobil funkciu programLoaded ze druhy parameter bere shaderLayers to use
             }
-        }
-
-        /**
-         * Switch to first or second rendering pass.
-         * @param {number} pass 1 = first pass, 2 = second pass
-         */
-        switchToRenderingPass(pass) {
-            this.webglContext.switchToRenderingPass(pass);
         }
 
         // called only from _forceSwitchProgram
@@ -850,19 +842,26 @@
 
         createProgram() {
             const program = this.webglContext.programCreated(this._getShaders());
-            this._program = 0;
-            this._programs[0] = program;
-
             this.running = true;
+
+            this._program = program;
+            // this._program = 0;
+            // this._programs[0] = program;
         }
 
-        updateProgram(specification, shaderType) {
+        /**
+         * Description:
+         * @param {object} spec json coming with tiledImage defining it's properties
+         * @param {string} shaderType eg.: identity, edge, negative,...
+         * @returns {ShaderLayer} instantion of newly created shaderLayer
+         */
+        updateProgram(spec, shaderType) {
             console.log('renderer:: updateProgram call!');
 
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
             const shader = new Shader(shaderType + '_shader', {
-                shaderObject: specification.shaders.renderShader,
+                shaderObject: spec.shaders.renderShader,
                 webglContext: this.webglContext,
                 interactive: false,
                 invalidate: () => {},
@@ -871,39 +870,34 @@
             });
             shader.construct();
             if (!shader.initialized()) {
-                throw new Error('renderer.js::updateProgram(): Could not construct shader from specification =', specification, '!');
+                throw new Error('renderer.js::updateProgram(): Could not construct shader from spec =', spec, '!');
             }
             shader.init();
 
             const program = this.webglContext.programCreated(this._getShaders().concat([shader]));
-            this._program = 0;
-            this._programs[0] = program;
-
-            // this.running = true;
-            // this.gl.useProgram(program);
-            // this.webglContext.programLoaded(program, specification);
+            this._program = program;
+            // this._program = 0;
+            // this._programs[0] = program;
 
             console.log('renderer.js::updateProgram(): PROGRAM UPDATED!');
             return shader;
         }
 
         useDefaultProgram(numOfRenderPasses) {
-            const program = this._programs[0];
+            const program = this._program;
             this.gl.useProgram(program);
-            // for (const spec of this._programSpecifications) {
-            //     this.webglContext.programLoaded(program, spec);
-            // }
-            this.webglContext.programLoaded(program, null, this._getShaders());
+
+            this.webglContext.programLoaded(program, this._getShaders());
             this.webglContext.setRenderingType(numOfRenderPasses);
         }
 
         /**
-         * Popis:
-         * @param {object} spec json coming with tiledImage defining it's settings
-         * @param {string} shaderType examples = identity, edge, negative,...
-         * @returns {ShaderLayer} instantion of shader to use with tiledImage
+         * Description:
+         * @param {object} spec json coming with tiledImage defining it's properties
+         * @param {string} shaderType eg.: identity, edge, negative,...
+         * @returns {ShaderLayer} instantion of shaderLayer to use with tiledImage
          */
-        getShader(spec, shaderType) {
+        createShader(spec, shaderType) {
             if (this.shadersCounter[shaderType] === undefined) {
                 const newShader = this.updateProgram(spec, shaderType);
                 this.shadersCounter[shaderType] = {};
@@ -916,6 +910,10 @@
             return this.shadersCounter[shaderType]["shaderLayer"];
         }
 
+        /**
+         * Remove shader from this.shadersCounter, if needed, recreate program.
+         * @param {string} shaderType eg.: identity, edge, negative,...
+         */
         removeShader(shaderType) {
             // delete shader from the map and recreate the WebGLProgram without <shaderType> shader
             if (this.shadersCounter[shaderType]["count"] === 1) {

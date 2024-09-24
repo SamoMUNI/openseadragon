@@ -304,7 +304,7 @@
 
         /** Get WebGL2RenderingContext (static used to avoid instantiation of this class in case of missing support)
          * @param canvas
-         * @param options desired options used in the canvas webgl context creation
+         * @param options desired options used in the canvas webgl2 context creation
          * @return {WebGL2RenderingContext}
          */
         static create(canvas, options) {
@@ -847,88 +847,82 @@ void main() {
         }
 
         /**
-         *
+         * Single-pass rendering uses gl.TEXTURE1 unit to which it binds TEXTURE_2D,
+         * two-pass rendering uses gl.TEXTURE2 unit to which it binds TEXTURE_2D_ARRAY.
          * @param {int} n 1 = single-pass, 2 = two-pass
          */
         setRenderingType(n) {
             const gl = this.gl;
-            console.log('Nahravam do nPassRendering cislo', n);
+            // console.log('Nahravam do nPassRendering cislo', n);
             gl.uniform1i(this._locationNPassRendering, n);
             gl.activeTexture(gl.TEXTURE0 + n);
         }
 
-        /** Called when associated webgl program is switched to. Volane z forceswitchshader z rendereru alebo pri useCustomProgram z rendereru.
-         * Prepaja atributy (definove touto classou) a atributy (definovane shaderami a ich controls) s ich odpovedajucimi glsl premennymi.
-         * Need to also call setRenderingType after this function call to prepare the program correctly.
-         * @param {WebGLProgram} program WebGLProgram to use
-         * @param {object|null} spec specification corresponding to program, null when using custom program not built on any specification
+        /**
+         * Load the locations of glsl variables and initialize buffers.
+         * Need to also call this.setRenderingType(n) after this function call to prepare the whole program correctly.
+         * @param {WebGLProgram} program WebGLProgram in use
+         * @param {[ShaderLayer]} shaderLayers shaderLayers to load
          */
-        programLoaded(program, spec = null, shaderLayers = null) {
-            // toto neviem ci je dobre lebo running hovori o tom ze renderer bezi s nejakou validnou specifikaciou...
-            // ked chcem pouzit customprogram tak ale nebude bezat podla nijakej specifikacie => ajtak sa zapne running?
-            // co ked este nebezal renderer a na supu chcem pouzit customprogram co potom ?
-            // console.log('PROGRAMLOADED called!');
-            if (!this.renderer.running) {
-                throw new Error("shit");
-            }
-
+        programLoaded(program, shaderLayers) {
             const gl = this.gl;
 
-            // Allow for custom loading
-            //gl.useProgram(program);
-            // if (spec) {
-            //     // for every shader and it's controls connect their attributes to their corresponding glsl variables
-            //     console.log('Calling glLoaded on specification', spec);
-            //     this.renderer.glLoaded(gl, program, spec);
-            //     // this.renderer.glDrawing(gl, program, spec);
-            // }
-            if (shaderLayers) {
-                for (const shaderLayer of shaderLayers) {
-                    //console.log('Calling glLoaded on shaderLayer', shaderLayer.constructor.name(), shaderLayer);
-                    shaderLayer.glLoaded(program, gl);
-                    //shaderLayer.glDrawing(program, gl);
-                }
+
+            for (const shaderLayer of shaderLayers) {
+                //console.log('Calling glLoaded on shaderLayer', shaderLayer.constructor.name(), shaderLayer);
+                shaderLayer.glLoaded(program, gl);
             }
+
 
             // VERTEX shader's locations
             this._locationTextureCoords = gl.getAttribLocation(program, "a_texture_coords");
             this._locationTransformMatrix = gl.getUniformLocation(program, "u_transform_matrix");
+            this._locationNPassRendering = gl.getUniformLocation(program, "u_nPassRendering");
+
 
             // FRAGMENT shader's locations
             this._locationPixelSize = gl.getUniformLocation(program, "u_pixel_size_in_fragments");
             this._locationZoomLevel = gl.getUniformLocation(program, "u_zoom_level");
 
+            this._locationTexture = gl.getUniformLocation(program, "u_texture");
             this._locationTextureArray = gl.getUniformLocation(program, "u_textureArray");
             this._locationTextureLayer = gl.getUniformLocation(program, "u_textureLayer");
 
             this._locationShaderLayerIndex = gl.getUniformLocation(program, "u_shaderLayerIndex");
 
-            this._locationNPassRendering = gl.getUniformLocation(program, "u_nPassRendering");
-            this._locationTexture = gl.getUniformLocation(program, "u_texture");
 
-            // Initialize texture coords attribute
+            // Initialize texture_coords attribute
             this._bufferTextureCoords = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
+            // Fill the buffer with initial thrash and then call vertexAttribPointer.
+            // This ensures correct buffer's initialization -> binds this._locationTextureCoords to this._bufferTextureCoords and tells webgl how to read the data from the buffer.
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
             gl.enableVertexAttribArray(this._locationTextureCoords);
             gl.vertexAttribPointer(this._locationTextureCoords, 2, gl.FLOAT, false, 0, 0);
 
-            // Initialize textures
+
+            // Initialize textures:
+            // Single-pass rendering uses gl.TEXTURE1 unit to which it binds TEXTURE_2D,
+            // two-pass rendering uses gl.TEXTURE2 unit to which it binds TEXTURE_2D_ARRAY.
             gl.uniform1i(this._locationTexture, 1);
             gl.uniform1i(this._locationTextureArray, 2);
         }
 
 
-        /** This is were drawing really happens...
-         * Why is this named programUsed?
+        /**
          * Fill the glsl variables and draw.
-         * @param {WebGLProgram} program currently being used with renderer
-         * @param {WebGLTexture} textureArray to draw from
+         * @param {WebGLProgram} program WebGLProgram in use
+
          * @param {object} tileInfo
          * @param {[Float]} tileInfo.transform 3*3 matrix that should be applied to tile vertices
          * @param {number} tileInfo.zoom
          * @param {number} tileInfo.pixelSize
          * @param {Float32Array} tileInfo.textureCoords 8 suradnic, (2 pre kazdy vrchol triangle stripu)
+
+         * @param {WebGLTexture} texture gl.TEXTURE_2D
+         * @param {WebGLTextureArray} textureArray gl.TEXTURE_2D_ARRAY
+         * @param {number} textureLayer which layer from textureArray to use
+         *
          */
         programUsed(program, tileInfo, shaderLayer, texture, textureArray, textureLayer) {
             if (!this.renderer.running) {
@@ -947,7 +941,7 @@ void main() {
                 shaderLayer.glDrawing(program, gl);
                 const shaderLayerIndex = this._shadersMapping[shaderLayer.constructor.type()];
                 // index of shaderLayer to use
-                console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerIndex);
+                // console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerIndex);
                 gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
             }
 
