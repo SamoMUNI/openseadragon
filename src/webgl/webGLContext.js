@@ -757,7 +757,8 @@ void main() {
             if (_last_mode == 0) {
                 final_color = pre_fg + (1.0-fg.a)*final_color;
             } else if (_last_mode == 1) {
-                final_color = vec4(pre_fg.rgb * final_color.rgb, pre_fg.a + final_color.a);
+                // final_color = vec4(pre_fg.rgb * final_color.rgb, pre_fg.a + final_color.a);
+                final_color = vec4(.0, 1.0, 1.0, 1.0);
             } else {
                 final_color = vec4(.0, .0, 1.0, 1.0);
             }
@@ -922,7 +923,6 @@ void main() {
          * @param {WebGLTexture} texture gl.TEXTURE_2D
          * @param {WebGLTextureArray} textureArray gl.TEXTURE_2D_ARRAY
          * @param {number} textureLayer which layer from textureArray to use
-         *
          */
         programUsed(program, tileInfo, shaderLayer, texture, textureArray, textureLayer) {
             if (!this.renderer.running) {

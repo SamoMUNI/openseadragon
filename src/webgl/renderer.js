@@ -61,7 +61,7 @@
          */
         constructor(incomingOptions) {
             super();
-            console.log('Robim renderer, options=', incomingOptions);
+            // console.log('Robim renderer, options=', incomingOptions);
 
             if (!this.constructor.idPattern.test(incomingOptions.uniqueId)) {
                 throw "$.WebGLModule::constructor: invalid ID! Id can contain only letters, numbers and underscore. ID: " + incomingOptions.uniqueId;
@@ -146,7 +146,7 @@
          * @returns {null|WebGLImplementation}
          */
         static determineContext(version) {
-            console.log("zistujem kontext, asi takym sposobom ze zas vsetko hladam hah ale z CLASSSSYYYYYYYYYY");
+            // console.log("zistujem kontext, asi takym sposobom ze zas vsetko hladam hah ale z CLASSSSYYYYYYYYYY");
             const namespace = OpenSeadragon.WebGLModule;
             for (let property in namespace) {
                 const context = namespace[ property ],

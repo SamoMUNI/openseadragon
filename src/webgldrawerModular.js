@@ -59,8 +59,8 @@
 
     OpenSeadragon.WebGLDrawerModular = class WebGLDrawer extends OpenSeadragon.DrawerBase{
         constructor(options){
-            console.log('Robim moju implementaciu, options =', options);
-            console.log('Robim moju implementaciu, extendnute options =', options);
+            // console.log('Robim moju implementaciu, options =', options);
+            // console.log('Robim moju implementaciu, extendnute options =', options);
             super(options);
 
             /**
@@ -168,7 +168,7 @@
 
             /* Pridane event handlery z draweru */
             this.viewer.world.addHandler("add-item", (e) => {
-                console.error('ADD-ITEM EVENT !!!, size =', this._size);
+                console.info('ADD-ITEM EVENT !!!, size =', this._size);
                 let duomo = false;
                 let plants = false;
                 if (e.item.source.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
@@ -956,7 +956,7 @@
         }
 
         /**
-         * Called only from draw function.
+         * Called only from draw function. Iterates over tiledImages, and the end od each cycle, data are drawn from this._renderingCanvas onto this._outputCanvas.
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          * @param {Object} viewport has bounds, center, rotation, zoom
          * @param {OpenSeadragon.Mat3} viewMatrix to apply
@@ -1066,7 +1066,7 @@
 
 
         /**
-         * Called only from draw function.
+         * Called only from draw function. Context2DPipeline not working with two-pass rendering, because everything is rendered onto this._renderingCanvas.
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          * @param {Object} viewport has bounds, center, rotation, zoom
          * @param {OpenSeadragon.Mat3} viewMatrix to apply
@@ -1082,7 +1082,7 @@
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 const tilesToDraw = tiledImage.getTilesToDraw();
                 if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
-                    console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
+                    // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
                     return;
                 }
 

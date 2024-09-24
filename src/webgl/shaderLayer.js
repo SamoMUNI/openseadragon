@@ -256,7 +256,7 @@
         glDrawing(program, gl) {
             if (this._blendUniform) {
                 // console.log(`shaderLayer ${this.constructor.name()} filling it's variables blend and clip!`);
-                // console.error(`shaderLayer ${this.constructor.name()} nastavuje blend_mode na ${this.blendMode}`);
+                // console.error(`shaderLayer ${this.constructor.name()} nastavuje blend_mode na ${this.blendMode}`); -> bolo undefined tak som zakomentoval dalsi riadok a dal ten pod nim
                 // gl.uniform1i(this._blendLoc, this.blendMode);
                 gl.uniform1i(this._blendLoc, 0);
                 gl.uniform1i(this._clipLoc, 0); //todo
@@ -489,7 +489,7 @@
                 const predefined = this.constructor.defaultControls[controlName];
 
                 if (options[controlName] || predefined) {
-                    console.log('idem aj cez if v resetchanelli', options[controlName], predefined);
+                    // console.log('idem aj cez if v resetchanelli', options[controlName], predefined);
                     /* ak je use_channel{i} v defaultControls, nastav podla toho channel (je, plainShader si ho tam prihodil pri definicii)
                         teda channel = "rgba" */
                     let channel = predefined ? (predefined.required ? predefined.required : predefined.default) : undefined;
@@ -523,7 +523,7 @@
             /* source = { acceptsChannelCount: (x) => x === 4, description: "4d texture to render AS-IS" } */
             this.__channels = this.constructor.sources().map((source, i) => parseChannel(`use_channel${i}`, "r", source));
             /* nastavuje __channels = ["rgba"] */
-            console.log('this.__channels = ', this.__channels);
+            // console.log('this.__channels = ', this.__channels);
         }
 
         /**
@@ -534,7 +534,7 @@
         /* options dojdu ako {} */
         resetMode(options) {
             const predefined = this.constructor.defaultControls.use_mode;
-            console.log('predefined in resetMode ->', predefined);
+            // console.log('predefined in resetMode ->', predefined);
 
             if (options["use_mode"]) {
                 this._mode = predefined && predefined.required;
@@ -565,11 +565,11 @@
                 console.warn(`Shader ${this.constructor.name()} overrides as a control name ${name} existing property!`);
             }
 
-            console.log('addControl, pred volanim UIControls.build');
+            // console.log('addControl, pred volanim UIControls.build');
             const controlObject = this.constructor.defaultControls[name];
             const control = $.WebGLModule.UIControls.build(this, name, controlObject, controlOptions);
             // create new attribute to shaderLayer class -> shaderLayer.<control name> = <control object>
-            console.log('addControl nastavuje shaderu', this.constructor.name(), 'atribut s nazvom controlu', name);
+            // console.log('addControl nastavuje shaderu', this.constructor.name(), 'atribut s nazvom controlu', name);
             this[name] = control;
             this._ownedControls.push(name);
         }
@@ -584,9 +584,9 @@
             let controls = this.constructor.defaultControls,
                 customParams = this.constructor.customParams;
 
-            console.log('this.constructor.defaultControls = ', controls);
+            // console.log('this.constructor.defaultControls = ', controls);
             for (let control in controls) {
-                console.log('som vo fori cez controls, control =', control);
+                // console.log('som vo fori cez controls, control =', control);
                 if (control.startsWith("use_")) {
                     continue;
                 }
@@ -594,7 +594,7 @@
                 let buildContext = controls[control];
                 /* ak sa nachadza control v this.defaultControls */
                 if (buildContext) {
-                    console.log('v prvom ife, control = ', control);
+                    // console.log('v prvom ife, control = ', control);
                     // creates this[control] = <SimpleUIControl>
                     this.addControl(control, options[control], buildContext);
                     continue;
@@ -603,7 +603,7 @@
                 let customContext = customParams[control];
                 /* ak sa nachadza control v this.customParams, VOBEC SOM NEPRESIEL TUTO CAST */
                 if (customContext) {
-                    console.log('v drugom ife');
+                    // console.log('v drugom ife');
                     let targetType;
                     const dType = typeof customContext.default,
                         rType = typeof customContext.required;
@@ -806,7 +806,7 @@
             // if control's type (eg.: opacity -> range) not already present in this._items
             /* VOBEC SOM NEPRESIEL TUTO CAST */
             if (!this._items[defaultParams.type]) {
-                console.log('UIControls:build - if vetva, typ =', defaultParams.type);
+                // console.log('UIControls:build - if vetva, typ =', defaultParams.type);
                 if (!this._impls[defaultParams.type]) {
                     return this._buildFallback(defaultParams.type, originalType,
                         owner, controlName, controlObject, params);
@@ -823,7 +823,7 @@
                 return this._buildFallback(defaultParams.type, originalType,
                     owner, controlName, controlObject, params);
             } else { // control's type (eg.: range/number/...) is present in this._items
-                console.log('UIControls:build - else vetva');
+                // console.log('UIControls:build - else vetva');
                 let controlTypeObject = this.getUiElement(defaultParams.type);
                 let comp = new $.WebGLModule.UIControls.SimpleUIControl(
                     owner, controlName, defaultParams, controlTypeObject
@@ -1116,14 +1116,14 @@
                         }
                     }
                 });
-                console.log('to = ', to);
+                // console.log('to = ', to);
                 return to;
             }
 
-            console.log('const t =', t);
-            console.log('this.supports.all', this.supportsAll);
-            console.log('this.supports = ', this.supports);
-            console.log('realne idem aj cez getParams, inak do params doslo: ', params);
+            // console.log('const t =', t);
+            // console.log('this.supports.all', this.supportsAll);
+            // console.log('this.supports = ', this.supports);
+            // console.log('realne idem aj cez getParams, inak do params doslo: ', params);
             /* params = Object { type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: ", interactive: false } */
             /* supports = Object { title: "Range", interactive: true, default: 0, min: 0, max: 100, step: 1 } */
             return mergeSafeType(this.supports, params, this.supportsAll);
