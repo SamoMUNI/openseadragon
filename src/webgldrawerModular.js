@@ -1187,6 +1187,7 @@
             this.renderer.useDefaultProgram(2);
 
             // let numOfSources = 0;
+            // TODO - this for loop can be done on GPU }instanced rendering VS on gpu loop
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
 
