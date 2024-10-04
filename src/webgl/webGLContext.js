@@ -646,6 +646,7 @@
 
         const vertexShaderCode = `#version 300 es
 precision mediump float;
+/* This program is used for single-pass rendering and for second pass during two-pass rendering. */
 
 // 1 = single-pass, 2 = two-pass
 uniform int u_nPassRendering;
@@ -657,7 +658,7 @@ out vec2 v_texture_coords;
 
 uniform mat3 u_transform_matrix;
 
-const vec3 first_pass_viewport[4] = vec3[4] (
+const vec3 single_pass_viewport[4] = vec3[4] (
     vec3(0.0, 1.0, 1.0),
     vec3(0.0, 0.0, 1.0),
     vec3(1.0, 1.0, 1.0),
@@ -677,7 +678,7 @@ void main() {
     nPassRendering = u_nPassRendering;
 
     if (nPassRendering == 1) {
-        gl_Position = vec4(u_transform_matrix * first_pass_viewport[gl_VertexID], 1);
+        gl_Position = vec4(u_transform_matrix * single_pass_viewport[gl_VertexID], 1);
     } else {
         gl_Position = vec4(u_transform_matrix * second_pass_viewport[gl_VertexID], 1);
     }

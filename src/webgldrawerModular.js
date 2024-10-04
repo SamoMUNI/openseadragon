@@ -137,7 +137,7 @@
             this._offScreenBuffer = this._gl.createFramebuffer();
 
             // rework with Texture2DArray, used with two-pass rendering
-            this._offscreenTextureArray = null;
+            this._offscreenTextureArray = this._gl.createTexture();
             this._offscreenTextureArrayLayers = 0;
 
 
@@ -169,6 +169,12 @@
             /* Pridane event handlery z draweru */
             this.viewer.world.addHandler("add-item", (e) => {
                 console.info('ADD-ITEM EVENT !!!, size =', this._size);
+
+
+                // update num of layers in TEXTURE_2D_ARRAY
+                ++this._offscreenTextureArrayLayers;
+
+
                 let duomo = false;
                 let plants = false;
                 if (e.item.source.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
@@ -234,6 +240,29 @@
                 if (Object.keys(e.item.source.drawers).length === 0) {
                     delete e.item.source.drawers;
                 }
+            });
+
+            this.viewer.world.addHandler("resize", (e) => {
+                if(this._outputCanvas !== this.viewer.drawer.canvas){
+                    this._outputCanvas.style.width = this.viewer.drawer.canvas.clientWidth + 'px';
+                    this._outputCanvas.style.height = this.viewer.drawer.canvas.clientHeight + 'px';
+                }
+
+                let viewportSize = this._calculateCanvasSize();
+                if( this._outputCanvas.width !== viewportSize.x ||
+                    this._outputCanvas.height !== viewportSize.y ) {
+                    this._outputCanvas.width = viewportSize.x;
+                    this._outputCanvas.height = viewportSize.y;
+                }
+
+                this._renderingCanvas.style.width = this._outputCanvas.clientWidth + 'px';
+                this._renderingCanvas.style.height = this._outputCanvas.clientHeight + 'px';
+                this._renderingCanvas.width = this._clippingCanvas.width = this._outputCanvas.width;
+                this._renderingCanvas.height = this._clippingCanvas.height = this._outputCanvas.height;
+
+                console.log('Resize event, new.width:new.height', viewportSize.x, viewportSize.y);
+                this.renderer.setDimensions(0, 0, viewportSize.x, viewportSize.y);
+                this._size = viewportSize;
             });
         }//end of constructor
 
@@ -448,7 +477,7 @@
             this._renderingCanvas.width = this._clippingCanvas.width = this._outputCanvas.width;
             this._renderingCanvas.height = this._clippingCanvas.height = this._outputCanvas.height;
 
-            this._registerResizeEventHandler();
+            // this._registerResizeEventHandler();
         }
 
         // nemenil som
@@ -730,6 +759,11 @@
             }
         }
 
+        /**
+         * Fires when "tile-ready" event happens.
+         * @param {Event} event
+         * @returns
+         */
         _tileReadyHandler(event) {
             let tile = event.tile;
             let tiledImage = event.tiledImage;
@@ -820,32 +854,32 @@
             }
         }
 
-        _registerResizeEventHandler() {
-            // make the additional canvas elements mirror size changes to the output canvas
-            const _this = this;
-            this.viewer.addHandler("resize", function() {
-                if(_this._outputCanvas !== _this.viewer.drawer.canvas){
-                    _this._outputCanvas.style.width = _this.viewer.drawer.canvas.clientWidth + 'px';
-                    _this._outputCanvas.style.height = _this.viewer.drawer.canvas.clientHeight + 'px';
-                }
+        // _registerResizeEventHandler() {
+        //     // make the additional canvas elements mirror size changes to the output canvas
+        //     const _this = this;
+        //     this.viewer.addHandler("resize", function() {
+        //         if(_this._outputCanvas !== _this.viewer.drawer.canvas){
+        //             _this._outputCanvas.style.width = _this.viewer.drawer.canvas.clientWidth + 'px';
+        //             _this._outputCanvas.style.height = _this.viewer.drawer.canvas.clientHeight + 'px';
+        //         }
 
-                let viewportSize = _this._calculateCanvasSize();
-                if( _this._outputCanvas.width !== viewportSize.x ||
-                    _this._outputCanvas.height !== viewportSize.y ) {
-                    _this._outputCanvas.width = viewportSize.x;
-                    _this._outputCanvas.height = viewportSize.y;
-                }
+        //         let viewportSize = _this._calculateCanvasSize();
+        //         if( _this._outputCanvas.width !== viewportSize.x ||
+        //             _this._outputCanvas.height !== viewportSize.y ) {
+        //             _this._outputCanvas.width = viewportSize.x;
+        //             _this._outputCanvas.height = viewportSize.y;
+        //         }
 
-                _this._renderingCanvas.style.width = _this._outputCanvas.clientWidth + 'px';
-                _this._renderingCanvas.style.height = _this._outputCanvas.clientHeight + 'px';
-                _this._renderingCanvas.width = _this._clippingCanvas.width = _this._outputCanvas.width;
-                _this._renderingCanvas.height = _this._clippingCanvas.height = _this._outputCanvas.height;
+        //         _this._renderingCanvas.style.width = _this._outputCanvas.clientWidth + 'px';
+        //         _this._renderingCanvas.style.height = _this._outputCanvas.clientHeight + 'px';
+        //         _this._renderingCanvas.width = _this._clippingCanvas.width = _this._outputCanvas.width;
+        //         _this._renderingCanvas.height = _this._clippingCanvas.height = _this._outputCanvas.height;
 
-                console.log('Resize event, new.width:new.height', viewportSize.x, viewportSize.y);
-                _this.renderer.setDimensions(0, 0, viewportSize.x, viewportSize.y);
-                _this._size = viewportSize;
-            });
-        }
+        //         console.log('Resize event, new.width:new.height', viewportSize.x, viewportSize.y);
+        //         _this.renderer.setDimensions(0, 0, viewportSize.x, viewportSize.y);
+        //         _this._size = viewportSize;
+        //     });
+        // }
 
 
         // Public API required by all Drawer implementations
@@ -917,10 +951,11 @@
 
         /**
          * Initialize this._offscreenTextureArray as gl.TEXTURE_2D_ARRAY to be used with two-pass rendering.
+         * Called during "add-item" and "resize" events.
          * @param {Number} numOfLayers number of layers in gl.TEXTURE_2D_ARRAY that will be used
          */
         _initializeOffScreenTextureArray(numOfLayers) {
-            //console.log('Pozdrav z initialize off screen texture array!');
+            // console.error('Pozdrav z initialize off screen texture array!');
             const gl = this._gl;
             if (this._offscreenTextureArray) {
                 gl.deleteTexture(this._offscreenTextureArray);
@@ -941,8 +976,6 @@
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-            this._offscreenTextureArrayLayers = numOfLayers;
         }
 
         /**
@@ -972,8 +1005,8 @@
                 // console.log('Vo for cykli cez tiledImages, TiledImage cislo', tiledImageIndex);
 
                 const tilesToDraw = tiledImage.getTilesToDraw();
-                if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
-                // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
+                if (tilesToDraw.length === 0) {
+                // console.log('Neni co kreslit , vyhadzujem sa z tohto tiledImage-u');
                 return;
                 }
 
@@ -996,7 +1029,8 @@
                         this._drawPlaceholder(tiledImage);
                     }
 
-                    /* MATRIX */
+
+                    // MATRIX
                     let overallMatrix = viewMatrix;
                     let imageRotation = tiledImage.getRotation(true);
                     // if needed, handle the tiledImage being rotated
@@ -1045,7 +1079,9 @@
                         this.renderer.processData(renderInfo, shader, tileInfo.texture, null, null);
                     }
 
-                    let useContext2dPipeline = (tiledImage.compositeOperation ||
+
+                    // CONTEXT2DPIPELINE
+                    const useContext2dPipeline = (tiledImage.compositeOperation ||
                         this.viewer.compositeOperation ||
                         tiledImage._clip ||
                         tiledImage._croppingPolygons ||
@@ -1054,12 +1090,14 @@
                     if (useContext2dPipeline) {
                         // draw from the rendering canvas onto the output canvas, clipping/cropping if needed
                         this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
+                        // clear the rendering canvas
+                        gl.clear(gl.COLOR_BUFFER_BIT);
+                        this._renderingCanvasHasImageData = false;
                     } else {
-                        this._outputContext.drawImage(this._renderingCanvas, 0, 0);
+                        // this._outputContext.drawImage(this._renderingCanvas, 0, 0);
+                        this._renderingCanvasHasImageData = true;
                     }
-                    // clear the rendering canvas
-                    gl.clear(gl.COLOR_BUFFER_BIT);
-                    this._renderingCanvasHasImageData = false;
+
                 } //end of tiledImage.isTainted condition
             }); //end of for tiledImage of tiledImages
         } // end of function
@@ -1077,7 +1115,9 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
-            this._initializeOffScreenTextureArray(tiledImages.length);
+            // this._initializeOffScreenTextureArray(tiledImages.length);
+            this._initializeOffScreenTextureArray(this._offscreenTextureArrayLayers);
+
             this.renderer.useFirstPassProgram();
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 const tilesToDraw = tiledImage.getTilesToDraw();
@@ -1110,6 +1150,7 @@
                     }
 
                     // FRAMEBUFFER
+                    // POKIAL bude mat kazda tile-a viac zdrojov toto sa premiestni do cyklu cez tile-y a bude sa prepinat tiledImageIndex + i kde i je index zdroja
                     this._bindFrameBufferToOffScreenTextureArray(tiledImageIndex);
 
                     // ITERATE over TILES
@@ -1142,10 +1183,14 @@
 
             // SECOND PASS (render from textures to output canvas)
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            // use program with two-pass rendering (=> parameter 2)
             this.renderer.useDefaultProgram(2);
 
-            tiledImages.forEach((tiledImage, i) => {
+            // let numOfSources = 0;
+            tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 //plainShader.setBlendMode(tiledImage.index === 0 ? "source-over" : tiledImage.compositeOperation || this.viewer.compositeOperation);
+
+                // tu bude for cyklus cez tiledImage sources, za kazdy cyklus sa spravi numOfSources++ a to sa potom bude posielat namiesto i ako texture_2d_array's layer index do processData
 
                 const shader = tiledImage.source.drawers[this._id].shaders.renderShader._renderContext;
                 if (shader.opacity !== undefined) {
@@ -1159,7 +1204,7 @@
                     textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
                 };
 
-                this.renderer.processData(renderInfo, shader, null, this._offscreenTextureArray, i);
+                this.renderer.processData(renderInfo, shader, null, this._offscreenTextureArray, tiledImageIndex);
             });
 
             // flag that data need to be PUT to the output canvas and that the rendering canvas needs to be cleared
