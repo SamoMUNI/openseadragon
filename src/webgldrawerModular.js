@@ -77,7 +77,7 @@
              */
 
             // private members
-            this._id = Math.random();
+            this._id = Date.now();
             console.log('Drawer ID =', this._id);
             this._destroyed = false;
             this._TextureMap = new Map();
@@ -95,21 +95,27 @@
             this.context = this._outputContext; // API required by tests
 
             /***** SETUP RENDERER *****/
-            const rendererOptions = {
-                uniqueId: "openseadragon", //todo OSD creates multiple drawers - navigator + main + possibly other - find way to differentiate
+            const rendererOptions = $.extend({
+                // Allow override:
                 webglPreferredVersion: "2.0",
                 webglOptions: {},
-                canvasOptions: {
-                    stencil: true
-                },
                 htmlControlsId: null,
                 htmlShaderPartHeader: (html, dataId, isVisible, layer, isControllable = true) => {
                     return `<div class="configurable-border"><div class="shader-part-name">${dataId}</div>${html}</div>`;
                 },
-                ready: () => { },
-                resetCallback: function() { },
-                debug: false
-            };
+                ready: () => {
+                },
+                resetCallback: function () {
+                },
+                debug: false,
+            }, options, {
+                // Do not allow override:
+                uniqueId: "osd_" + this._id,
+                canvasOptions: {
+                    stencil: true
+                }
+            });
+
             // OLD $.extend(this.options, rendererOptions) [this.options are options.options from DRAWERBASE]
             this.renderer = new $.WebGLModule(rendererOptions);
             //this.renderer._createSinglePassShader('TEXTURE_2D');

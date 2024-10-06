@@ -213,6 +213,7 @@
             /* only opacity in _ownedControls, dont know where is use_channel0 from plain shader ??? */
             for (let control of this._ownedControls) {
                 // `uniform controlGLtype controlGLname;`
+                // `uniform controlGLtype controlGLname;`
                 let code = this[control].define();
                 if (code) {
                     // trim removes whitespace from beggining and the end of the string
