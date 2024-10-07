@@ -72,11 +72,11 @@ $('#image-picker input.toggle').on('change',function(){
     let data = $(this).data();
     if(this.checked){
         addTileSource(viewer1, data.image, this);
-        addTileSource(viewer2, data.image, this);
+        // addTileSource(viewer2, data.image, this);
     } else {
         if(data.item1){
             viewer1.world.removeItem(data.item1);
-            viewer2.world.removeItem(data.item2);
+            // viewer2.world.removeItem(data.item2);
             $(this).data({item1: null, item2: null});
         }
     }

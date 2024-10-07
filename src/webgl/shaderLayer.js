@@ -157,6 +157,8 @@
                 console.error(`Invalid ID for the shader: ${id} does not match to the pattern`, $.WebGLModule.idPattern);
             }
 
+
+            this._controls = {}; // {opacity: {TII_sourceI: UIControl, ...}, color: {TII_sourceI: UIControl, ...}}
             //todo custom control names share namespace with this API - unique names or controls in seperate object?
 
             this.webglContext = privateOptions.webglContext;
@@ -188,6 +190,32 @@
             this.resetChannel(options);
             // nastavi this._mode a this.__mode na "show", inak by mohla aj do cache nastavovat...
             this.resetMode(options);
+        }
+
+        /**
+         *
+         * @param {string} controlId <tiledImageIndex>_<dataSourceIndex> to uniquely identify control
+         */
+        newConstruct(controlId) {
+            const defaultControls = this.constructor.defaultControls;
+            for (let controlName in defaultControls) {
+                const controlObject = defaultControls[controlName];
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, {});
+                this._controls[controlName][controlId] = control;
+            }
+        }
+
+        /**
+         *
+         * @param {string} controlId <tiledImageIndex>_<dataSourceIndex> to uniquely identify control
+         */
+        newAddControl(controlId) {
+            const defaultControls = this.constructor.defaultControls;
+            for (let controlName in defaultControls) {
+                const controlObject = defaultControls[controlName];
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, {});
+                this._controls[controlName][controlId] = control;
+            }
         }
 
         /**

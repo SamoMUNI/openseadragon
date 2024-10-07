@@ -99,7 +99,7 @@
                 // Allow override:
                 webglPreferredVersion: "2.0",
                 webglOptions: {},
-                htmlControlsId: null,
+                htmlControlsId: "drawer-controls",
                 htmlShaderPartHeader: (html, dataId, isVisible, layer, isControllable = true) => {
                     return `<div class="configurable-border"><div class="shader-part-name">${dataId}</div>${html}</div>`;
                 },
