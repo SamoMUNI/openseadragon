@@ -425,7 +425,10 @@
          *                  the reference is not valid
          */
         sampleChannel(textureCoords, otherDataIndex = 0, raw = false) {
-            let refs = this.__shaderObject.dataReferences;
+            // manualne zmenene pri pridavani podpory pre viac zdrojov
+            // let refs = this.__shaderObject.dataReferences;
+            let refs = [0];
+
             /* Array [ "rgba" ] */
             const chan = this.__channels[otherDataIndex];
 
@@ -1540,7 +1543,7 @@
         }
 
         glDrawing(program, gl) {
-            // console.log('Settujem', this.component.glUniformFunName(), 'odpovedajuci', this.webGLVariableName, 'na', this.value);
+            // console.log('Settujem', this.component.glUniformFunName(), 'odpovedajuci', this.webGLVariableName, 'na', this.value === 0.2 ? 0.05 : this.value);
             gl[this.component.glUniformFunName()](this.glLocation, this.value);
         }
 

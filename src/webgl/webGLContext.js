@@ -722,6 +722,8 @@ void main() {
 
     // for single-pass rendering
     uniform sampler2D u_texture;
+    uniform sampler2DArray u_textureArray1;
+    uniform int u_textureLayer1;
 
     // for two-pass rendering
     uniform sampler2DArray u_textureArray;
@@ -729,6 +731,7 @@ void main() {
 
     vec4 osd_texture(int index, vec2 coords) {
         if (nPassRendering == 1) {
+            // return texture(u_textureArray1, vec3(coords, float(u_textureLayer1)));
             return texture(u_texture, coords);
         } else if (nPassRendering == 2) {
             return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
@@ -887,6 +890,8 @@ void main() {
             this._locationZoomLevel = gl.getUniformLocation(program, "u_zoom_level");
 
             this._locationTexture = gl.getUniformLocation(program, "u_texture");
+            this._locationTextureArray1 = gl.getUniformLocation(program, "u_textureArray1");
+            this._locationTextureLayer1 = gl.getUniformLocation(program, "u_textureLayer1");
             this._locationTextureArray = gl.getUniformLocation(program, "u_textureArray");
             this._locationTextureLayer = gl.getUniformLocation(program, "u_textureLayer");
 
@@ -907,6 +912,7 @@ void main() {
             // Single-pass rendering uses gl.TEXTURE1 unit to which it binds TEXTURE_2D,
             // two-pass rendering uses gl.TEXTURE2 unit to which it binds TEXTURE_2D_ARRAY.
             gl.uniform1i(this._locationTexture, 1);
+            // gl.uniform1i(this._locationTextureArray1, 1);
             gl.uniform1i(this._locationTextureArray, 2);
         }
 
@@ -925,7 +931,7 @@ void main() {
          * @param {WebGLTextureArray} textureArray gl.TEXTURE_2D_ARRAY
          * @param {number} textureLayer which layer from textureArray to use
          */
-        programUsed(program, tileInfo, shaderLayer, texture, textureArray, textureLayer) {
+        programUsed(program, tileInfo, shaderLayer, textureArray1, textureLayer1, textureArray, textureLayer) {
             if (!this.renderer.running) {
                 throw new Error("webGLContext::programUsed: Renderer not running!");
             }
@@ -961,8 +967,11 @@ void main() {
             // transform matrix
             gl.uniformMatrix3fv(this._locationTransformMatrix, false, tileInfo.transform);
 
-            if (texture) {
-                gl.bindTexture(gl.TEXTURE_2D, texture);
+            if (textureLayer1) {
+                gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray1);
+                gl.uniform1i(this._locationTextureLayer1, textureLayer1);
+            } else {
+                gl.bindTexture(gl.TEXTURE_2D, textureArray1);
             }
             if (textureArray) {
                 gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
