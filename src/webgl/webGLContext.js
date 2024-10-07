@@ -968,7 +968,6 @@ void main() {
             gl.uniformMatrix3fv(this._locationTransformMatrix, false, tileInfo.transform);
 
             if (textureLayer1) {
-                // gl.activeTexture(gl.TEXTURE0 + 1);
                 gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray1);
                 gl.uniform1i(this._locationTextureLayer1, textureLayer1);
             } else {

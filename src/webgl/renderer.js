@@ -718,6 +718,7 @@
                 }
 
                 // this._loadDebugInfo(); este nerozumiem tomuto tak som vykomentoval
+                // inits the shaderLayers and their controls
                 if (!this._loadScript(i)) { //if not all shaders are valid
                     if (!_reset) {
                         throw "Could not build visualization";
@@ -734,6 +735,7 @@
         // called only from _forceSwitchProgram
         _loadHtml(program) {
             let htmlControls = document.getElementById(this.htmlControlsId);
+            // returns program._osdOptions["html"];
             htmlControls.innerHTML = this.webglContext.getCompiled(program, "html") || "";
         }
 
@@ -857,6 +859,7 @@
          */
         updateProgram(spec, shaderType) {
             console.log('renderer:: updateProgram call! New shader\'s type =', shaderType);
+            console.log('this.htmlControlsId =', this.htmlControlsId);
 
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
