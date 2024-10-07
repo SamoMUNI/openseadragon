@@ -157,6 +157,8 @@
                 console.error(`Invalid ID for the shader: ${id} does not match to the pattern`, $.WebGLModule.idPattern);
             }
 
+
+            this._controls = {}; // {opacity: {TII_sourceI: UIControl, ...}, color: {TII_sourceI: UIControl, ...}}
             //todo custom control names share namespace with this API - unique names or controls in seperate object?
 
             this.webglContext = privateOptions.webglContext;
@@ -191,6 +193,32 @@
         }
 
         /**
+         *
+         * @param {string} controlId <tiledImageIndex>_<dataSourceIndex> to uniquely identify control
+         */
+        newConstruct(controlId) {
+            const defaultControls = this.constructor.defaultControls;
+            for (let controlName in defaultControls) {
+                const controlObject = defaultControls[controlName];
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, {});
+                this._controls[controlName][controlId] = control;
+            }
+        }
+
+        /**
+         *
+         * @param {string} controlId <tiledImageIndex>_<dataSourceIndex> to uniquely identify control
+         */
+        newAddControl(controlId) {
+            const defaultControls = this.constructor.defaultControls;
+            for (let controlName in defaultControls) {
+                const controlObject = defaultControls[controlName];
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, {});
+                this._controls[controlName][controlId] = control;
+            }
+        }
+
+        /**
          * Code placed outside fragment shader's main(...).
          * By default, it includes all definitions of
          * controls you defined in defaultControls
@@ -212,6 +240,7 @@
             //console.log('shader controls', this._ownedControls);
             /* only opacity in _ownedControls, dont know where is use_channel0 from plain shader ??? */
             for (let control of this._ownedControls) {
+                // `uniform controlGLtype controlGLname;`
                 // `uniform controlGLtype controlGLname;`
                 let code = this[control].define();
                 if (code) {

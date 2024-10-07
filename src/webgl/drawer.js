@@ -1,5 +1,4 @@
 // 700 riadkov
-
 /*
  * OpenSeadragon - WebGLDrawer
  *

@@ -849,6 +849,11 @@
             this._program = program;
             // this._program = 0;
             // this._programs[0] = program;
+
+            if (this.supportsHtmlControls()) {
+                console.info('Creating program, loading html.');
+                this._loadHtml(program);
+            }
         }
 
         /**
@@ -857,12 +862,14 @@
          * @param {string} shaderType eg.: identity, edge, negative,...
          * @returns {ShaderLayer} instantion of newly created shaderLayer
          */
-        updateProgram(spec, shaderType) {
-            console.log('renderer:: updateProgram call! New shader\'s type =', shaderType);
-            console.log('this.htmlControlsId =', this.htmlControlsId);
+
+        addShader(spec, shaderType) {
+            console.log('renderer:: addShader call!');
+
 
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
+
             const shader = new Shader(shaderType + '_shader', {
                 shaderObject: spec.shaders[shaderType],
                 webglContext: this.webglContext,
@@ -873,7 +880,7 @@
             });
             shader.construct();
             if (!shader.initialized()) {
-                throw new Error('renderer.js::updateProgram(): Could not construct shader from spec =', spec, '!');
+                throw new Error('renderer.js::addShader(): Could not construct shader type =', shaderType, '!');
             }
             shader.init();
 
@@ -882,8 +889,17 @@
             // this._program = 0;
             // this._programs[0] = program;
 
-            console.log('renderer.js::updateProgram(): PROGRAM UPDATED!');
+            console.log('renderer.js::addShader(): PROGRAM UPDATED!');
             return shader;
+        }
+
+        /**
+         *
+         * @param {ShaderLayer} shader
+         */
+        addControlsToShader(shader) {
+            shader.newAddControl();
+            // tu som
         }
 
         useDefaultProgram(numOfRenderPasses) {
@@ -902,12 +918,13 @@
          */
         createShader(spec, shaderType) {
             if (this.shadersCounter[shaderType] === undefined) {
-                const newShader = this.updateProgram(spec, shaderType);
+                const newShader = this.addShader(spec, shaderType);
                 this.shadersCounter[shaderType] = {};
                 this.shadersCounter[shaderType]["count"] = 1;
                 this.shadersCounter[shaderType]["shaderLayer"] = newShader;
             } else {
                 this.shadersCounter[shaderType]["count"]++;
+                this.addControlsToShader(this.shadersCounter[shaderType]["shaderLayer"]);
             }
 
             return this.shadersCounter[shaderType]["shaderLayer"];
