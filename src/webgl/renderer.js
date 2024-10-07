@@ -568,7 +568,7 @@
          * @instance
          * @memberOf WebGLModule
          */
-        processData(tileOpts, shaderLayer, texture = null, textureArray = null, textureLayer = null) {
+        processData(tileOpts, shaderLayer, textureArray1 = null, textureLayer1 = null, textureArray = null, textureLayer = null) {
             //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
             // const spec = this._programSpecifications[this._program];
             //console.log('processData: spec=', spec);
@@ -576,7 +576,7 @@
             // if (!spec) {
             //     $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             // } else {
-                this.webglContext.programUsed(this._program, tileOpts, shaderLayer, texture, textureArray, textureLayer);
+                this.webglContext.programUsed(this._program, tileOpts, shaderLayer, textureArray1, textureLayer1, textureArray, textureLayer);
             // }
         }
 
@@ -820,7 +820,7 @@
             }
         }
 
-        // returns shaderLayer instantiations
+        // UNUSED returns shaderLayer instantiations
         _getRenderContextsFromSpecifications() {
             let contexts = [];
             for (const spec of this._programSpecifications) {
@@ -856,12 +856,12 @@
          * @returns {ShaderLayer} instantion of newly created shaderLayer
          */
         updateProgram(spec, shaderType) {
-            console.log('renderer:: updateProgram call!');
+            console.log('renderer:: updateProgram call! New shader\'s type =', shaderType);
 
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
             const shader = new Shader(shaderType + '_shader', {
-                shaderObject: spec.shaders.renderShader,
+                shaderObject: spec.shaders[shaderType],
                 webglContext: this.webglContext,
                 interactive: false,
                 invalidate: () => {},
@@ -895,7 +895,7 @@
          * Description:
          * @param {object} spec json coming with tiledImage defining it's properties
          * @param {string} shaderType eg.: identity, edge, negative,...
-         * @returns {ShaderLayer} instantion of shaderLayer to use with tiledImage
+         * @returns {ShaderLayer} instantion of shaderLayer
          */
         createShader(spec, shaderType) {
             if (this.shadersCounter[shaderType] === undefined) {
