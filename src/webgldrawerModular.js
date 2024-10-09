@@ -217,14 +217,17 @@
                         spec._utilizeLocalMethods = true;
                     }
 
-                    let shaderJSON = spec.shaders[shaderType] = {};
-                    shaderJSON._controls = {};
-                    shaderJSON._controlsCache = {};
-                    const shader = this.renderer.createShader(shaderJSON, shaderType, Number.toString(e.item.source.id) + Number.toString(sourceIndex));
-                    shaderJSON._renderContext = shader;
-                    shaderJSON._index = 0;
-                    shaderJSON.visible = true;
-                    shaderJSON.rendering = true;
+                    // let shaderJSON = spec.shaders[shaderType] = {};
+                    let sourceJSON = spec.shaders[sourceIndex] = {};
+                    sourceJSON.type = shaderType;
+                    sourceJSON._controls = {};
+                    sourceJSON._controlsCache = {};
+                    const shader = this.renderer.createShader(sourceJSON, shaderType,
+                        e.item.source.id.toString() + '_' + sourceIndex.toString());
+                    sourceJSON._renderContext = shader;
+                    sourceJSON._index = 0;
+                    sourceJSON.visible = true;
+                    sourceJSON.rendering = true;
                 }
                 spec._initialized = true;
                 e.item.source.drawers[this._id] = spec;
@@ -1149,7 +1152,9 @@
                         }
 
                         // console.log('kreslim z ', this._id, 'tento canvas by mal byt v texture:', tileContext.canvas);
-                        this.renderer.processData(renderInfo, shader, tileInfo.textures[0], null, null, null); // layer 0 because more sources not supported rn
+                        this.renderer.processData(renderInfo, shader,
+                            Number.toString(tiledImageIndex) + Number.toString(0),
+                            tileInfo.textures[0], null, null, null); // layer 0 because more sources not supported rn
                     }
 
                     this._renderingCanvasHasImageData = true;
@@ -1285,7 +1290,8 @@
                     textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
                 };
 
-                this.renderer.processData(renderInfo, shader, null, null, this._offscreenTextureArray, tiledImageIndex);
+                this.renderer.processData(renderInfo, shader,
+                    Number.toString(tiledImageIndex) + Number.toString(0), null, null, this._offscreenTextureArray, tiledImageIndex);
 
                 this._renderingCanvasHasImageData = true;
 

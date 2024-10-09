@@ -578,7 +578,7 @@
          * @instance
          * @memberOf WebGLModule
          */
-        processData(tileOpts, shaderLayer, textureArray1 = null, textureLayer1 = null, textureArray = null, textureLayer = null) {
+        processData(tileOpts, shaderLayer, controlId, textureArray1 = null, textureLayer1 = null, textureArray = null, textureLayer = null) {
             //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
             // const spec = this._programSpecifications[this._program];
             //console.log('processData: spec=', spec);
@@ -586,7 +586,7 @@
             // if (!spec) {
             //     $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             // } else {
-                this.webglContext.programUsed(this._program, tileOpts, shaderLayer, textureArray1, textureLayer1, textureArray, textureLayer);
+                this.webglContext.programUsed(this._program, tileOpts, shaderLayer, controlId, textureArray1, textureLayer1, textureArray, textureLayer);
             // }
         }
 
@@ -868,41 +868,42 @@
 
         /**
          * Description:
-         * @param {object} shaderJSON json coming with tiledImage defining it's properties
+         * @param {object} shaderObject object bind to concrete shaderLayer instantion
          * @param {string} shaderType eg.: identity, edge, negative,...
+         * @param {string} controlsId "<tiledImageIndex>_<sourceIndex>"
          * @returns {ShaderLayer} instantion of newly created shaderLayer
          */
 
-        addShader(shaderJSON, shaderType) {
+        addShader(shaderObject, shaderType, controlsId, dataSourceJSON) {
             console.log('renderer:: addShader call!');
 
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
 
             const shader = new Shader(shaderType + '_shader', {
-                shaderObject: shaderJSON,
+                shaderObject: shaderObject,
                 webglContext: this.webglContext,
                 interactive: false,
                 invalidate: () => {},
                 rebuild: () => {},
                 refetch: () => {}
             });
-            shader.construct();
-            if (!shader.initialized()) {
-                throw new Error('renderer.js::addShader(): Could not construct shader type =', shaderType, '!');
-            }
+            shader.newConstruct();
+            // if (!shader.initialized()) {
+            //     throw new Error('renderer.js::addShader(): Could not construct shader type =', shaderType, '!');
+            // }
+            // shader.init();
 
-            shader.init();
             // only for main drawer, not for the minimap
-            if (this.htmlControlsElement) {
-                console.log('renderer:: creating DOM controls!');
-                // creates DOM elements for shader's controls
-                for (const controlName of shader._ownedControls) {
-                    shader[controlName].createDOMElement(this.htmlControlsElement);
-                    shader[controlName].registerDOMElementEventHandler(this.resetCallback);
-                }
-            }
-
+            // if (this.htmlControlsElement) {
+            //     console.log('renderer:: creating DOM controls!');
+            //     // creates DOM elements for shader's controls
+            //     for (const controlName of shader._ownedControls) {
+            //         shader[controlName].createDOMElement(this.htmlControlsElement);
+            //         shader[controlName].registerDOMElementEventHandler(this.resetCallback);
+            //     }
+            // }
+            shader.newAddControl(dataSourceJSON, controlsId, this.htmlControlsElement, this.resetCallback);
 
             const program = this.webglContext.programCreated(this._getShaders().concat([shader]));
             this._program = program;
@@ -914,34 +915,17 @@
         }
 
         /**
-         *
-         * @param {ShaderLayer} shader
-         */
-        addControlsToShader(shader) {
-            shader.newAddControl();
-            // tu som
-        }
-
-        useDefaultProgram(numOfRenderPasses) {
-            const program = this._program;
-            this.gl.useProgram(program);
-
-            this.webglContext.programLoaded(program, this._getShaders());
-            this.webglContext.setRenderingType(numOfRenderPasses);
-        }
-
-        /**
          * Description:
-         * @param {object} shaderJSON json coming with tiledImage defining it's properties
+         * @param {object} sourceJSON json object corresponding to a concrete data source
          * @param {string} shaderType eg.: identity, edge, negative,...
-         * @param {string} shaderControlsId "<tiledImageIndex>_<sourceIndex>"
+         * @param {string} controlsId "<tiledImageIndex>_<sourceIndex>"
          * @returns {ShaderLayer} instantion of shaderLayer
          */
-        createShader(shaderJSON, shaderType, shaderControlsId) {
-            console.log('Createshader, shaderJSON =', shaderJSON);
+        createShader(sourceJSON, shaderType, controlsId) {
+            console.log('Createshader, sourceJSON =', sourceJSON, 'controlsID =', controlsId);
             const shaderObject = {};
             if (this.shadersCounter[shaderType] === undefined) {
-                const newShader = this.addShader(shaderObject, shaderType, shaderControlsId);
+                const newShader = this.addShader(shaderObject, shaderType, controlsId, sourceJSON);
                 this.shadersCounter[shaderType] = {
                     count: 1,
                     shaderLayer: newShader,
@@ -949,7 +933,7 @@
                 };
             } else {
                 this.shadersCounter[shaderType]["count"]++;
-                // this.addControlsToShader(this.shadersCounter[shaderType]["shaderLayer"]);
+                this.shadersCounter[shaderType]["shaderLayer"].newAddControl(sourceJSON, controlsId, this.htmlControlsElement, this.resetCallback);
             }
 
             return this.shadersCounter[shaderType]["shaderLayer"];
@@ -981,6 +965,14 @@
 
         setRenderingType(n) {
             this.webglContext.setRenderingType(n);
+        }
+
+        useDefaultProgram(numOfRenderPasses) {
+            const program = this._program;
+            this.gl.useProgram(program);
+
+            this.webglContext.programLoaded(program, this._getShaders());
+            this.webglContext.setRenderingType(numOfRenderPasses);
         }
 
         /**

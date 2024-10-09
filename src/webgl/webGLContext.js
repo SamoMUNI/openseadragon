@@ -932,7 +932,7 @@ void main() {
          * @param {WebGLTextureArray} textureArray gl.TEXTURE_2D_ARRAY
          * @param {number} textureLayer which layer from textureArray to use
          */
-        programUsed(program, tileInfo, shaderLayer, textureArray1, textureLayer1, textureArray, textureLayer) {
+        programUsed(program, tileInfo, shaderLayer, controlId, textureArray1, textureLayer1, textureArray, textureLayer) {
             if (!this.renderer.running) {
                 throw new Error("webGLContext::programUsed: Renderer not running!");
             }
@@ -946,7 +946,7 @@ void main() {
             // }
             if (shaderLayer) {
                 //console.log('Calling glDrawing on shaderLayer', shaderLayer.constructor.name(), shaderLayer);
-                shaderLayer.glDrawing(program, gl);
+                shaderLayer.glDrawing(program, gl, controlId);
                 const shaderLayerIndex = this._shadersMapping[shaderLayer.constructor.type()];
                 // index of shaderLayer to use
                 // console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerIndex);

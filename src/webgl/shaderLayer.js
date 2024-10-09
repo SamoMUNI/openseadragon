@@ -201,7 +201,7 @@
          * @param {string} options.use_mode: blending mode - default alpha ("show"), custom blending ("mask") and clipping mask blend ("mask_clip")
          * @param {[number]} dataReferences indexes of data being requested for this shader (this.__shaderObject.dataReferences)
          */
-        newConstruct(options) {
+        newConstruct(options = {}) {
             this._controls = {};
 
             // nastavi this.__channels na ["rgba"] plus do shaderObject.cache da use_channel0: "rgba" (opacity tam este neni!)
@@ -212,19 +212,36 @@
 
         /**
          *
-         * @param {string} dataSourceID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
          * @param {object} dataSourceJSON unique object bind to the dataSource
+         * @param {string} dataSourceID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
          * @param {HTMLElement} controlsParentHTMLElement
+         * @param {function} controlsChangeHandler
          */
-        newAddControl(dataSourceID, dataSourceJSON, controlsParentHTMLElement) {
+        newAddControl(dataSourceJSON, dataSourceID, controlsParentHTMLElement = null, controlsChangeHandler = null) {
             const defaultControls = this.constructor.defaultControls;
+            console.info('defContrls=', defaultControls);
             for (let controlName in defaultControls) {
+                if (controlName.startsWith("use_")) {
+                    continue;
+                }
+
+                console.log('newAddControl, prechadzam defaultControls, controlName =', controlName);
                 const controlObject = defaultControls[controlName];
-                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, dataSourceID + '_' + controlName, {});
-                control.createDOMElement(controlsParentHTMLElement);
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, dataSourceID, {});
+
+                control.init();
+                if (controlsParentHTMLElement && controlsChangeHandler) {
+                    console.log('robim taktiez html pre tento control');
+                    control.createDOMElement(controlsParentHTMLElement);
+                    control.registerDOMElementEventHandler(controlsChangeHandler);
+                }
 
                 // update shaderLayer's attributes
+                if (!this._controls[controlName]) {
+                    this._controls[controlName] = {};
+                }
                 this._controls[controlName][dataSourceID] = control;
+
                 // very disgusting fix -> every time new control of the same type comes, it rewrites this attribute
                 // to itself... Needed because Jirka's shaders use shaderLayer.shaderName.(...)
                 this[controlName] = control;
@@ -256,10 +273,10 @@
             let glsl = [`uniform int ${this._blendUniform};`, `uniform bool ${this._clipUniform};`];
             //console.log('shader controls', this._ownedControls);
             /* only opacity in _ownedControls, dont know where is use_channel0 from plain shader ??? */
-            for (let control of this._ownedControls) {
+            for (const controlName in this._controls) {
                 // `uniform controlGLtype controlGLname;`
                 // `uniform controlGLtype controlGLname;`
-                let code = this[control].define();
+                let code = this[controlName].define();
                 if (code) {
                     // trim removes whitespace from beggining and the end of the string
                     glsl.push(code.trim());
@@ -299,7 +316,7 @@
          * @param {WebGLProgram} program WebglProgram instance
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
-        glDrawing(program, gl) {
+        glDrawing(program, gl, controlId) {
             if (this._blendUniform) {
                 // console.log(`shaderLayer ${this.constructor.name()} filling it's variables blend and clip!`);
                 // console.error(`shaderLayer ${this.constructor.name()} nastavuje blend_mode na ${this.blendMode}`); -> bolo undefined tak som zakomentoval dalsi riadok a dal ten pod nim
@@ -308,11 +325,14 @@
                 gl.uniform1i(this._clipLoc, 0); //todo
             }
 
-            for (let control of this._ownedControls) {
-                // console.log(`shaderLayer ${this.constructor.name()} filling ${control}`);
+            // for (let control of this._ownedControls) {
+            //     // console.log(`shaderLayer ${this.constructor.name()} filling ${control}`);
 
-                //FIXME: dimension param
-                this[control].glDrawing(program, gl);
+            //     //FIXME: dimension param
+            //     this[control].glDrawing(program, gl);
+            // }
+            for (const controlName in this._controls) {
+                this._controls[controlName][controlId].glDrawing(program, gl);
             }
         }
 
@@ -334,9 +354,12 @@
                 // }
             }
 
-            for (let control of this._ownedControls) {
+            for (const controlName in this._controls) {
                 // console.log(`shaderLayer ${this.constructor.name()} loading ${control}`);
-                this[control].glLoaded(program, gl);
+                // this[control].glLoaded(program, gl);
+                for (const controlId in this._controls[controlName]) {
+                    this._controls[controlName][controlId].glLoaded(program, gl);
+                }
             }
         }
 
@@ -837,8 +860,6 @@
          * @return {OpenSeadragon.WebGLModule.UIControls.IControl}
          */
         static build(owner, controlName, controlObject, controlId, params) {
-            console.warn('Control id =', controlId);
-
             let defaultParams = controlObject.default,
                 accepts = controlObject.accepts,
                 requiredParams = controlObject.required === undefined ? {} : controlObject.required;
@@ -1512,13 +1533,13 @@
          */
         createDOMElement(parentElement) {
             const html = this.toHtml();
-            console.log('createDOMElement, html injection =', html);
+            // console.log('createDOMElement, html injection =', html);
             parentElement.insertAdjacentHTML('beforeend', html);
 
             this._htmlDOMElement = document.getElementById(this.id);
-            console.log('creatujem DOM element, pred value pridanim =', this._htmlDOMElement);
+            // console.log('creatujem DOM element, pred value pridanim =', this._htmlDOMElement);
             this._htmlDOMElement.setAttribute('value', this.encodedValue);
-            console.log('creatujem DOM element, po value pridanim =', this._htmlDOMElement);
+            // console.log('creatujem DOM element, po value pridanim =', this._htmlDOMElement);
 
             return this._htmlDOMElement;
         }
@@ -1590,19 +1611,20 @@
             // console.error(`UIControl ${this.name} INIT() -> value without normalizing`, this.component.decode(this.encodedValue));
             // console.error(`UIControl ${this.name} INIT() -> sets its value to ${this.value}`);
 
-            if (this.params.interactive) {
-                const _this = this;
-                let node = document.getElementById(this.id);
-                console.error('Init controlu, node=', node);
-                if (node) {
-                    let updater = function(e) {
-                        _this.set(e.target.value);
-                        _this.context.invalidate();
-                    };
-                    node.value = this.encodedValue;
-                    node.addEventListener('change', updater);
-                }
-            }
+            // vykomentovane pri nasadeni mojho prepojenia vsetkeho (bod 6)
+            // if (this.params.interactive) {
+            //     const _this = this;
+            //     let node = document.getElementById(this.id);
+            //     console.error('Init controlu, node=', node);
+            //     if (node) {
+            //         let updater = function(e) {
+            //             _this.set(e.target.value);
+            //             _this.context.invalidate();
+            //         };
+            //         node.value = this.encodedValue;
+            //         node.addEventListener('change', updater);
+            //     }
+            // }
         }
 
         set(encodedValue) {
