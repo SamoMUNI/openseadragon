@@ -162,6 +162,8 @@
             //todo custom control names share namespace with this API - unique names or controls in seperate object?
 
             this.webglContext = privateOptions.webglContext;
+
+            // DO NOT WANT TO USE THIS!
             this.__shaderObject = privateOptions.shaderObject;
             if (!this.__shaderObject.cache) {
                 this.__shaderObject.cache = {};
@@ -221,8 +223,12 @@
                 const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, dataSourceID + '_' + controlName, {});
                 control.createDOMElement(controlsParentHTMLElement);
 
-                // update shaderLayer's attribute
+                // update shaderLayer's attributes
                 this._controls[controlName][dataSourceID] = control;
+                // very disgusting fix -> every time new control of the same type comes, it rewrites this attribute
+                // to itself... Needed because Jirka's shaders use shaderLayer.shaderName.(...)
+                this[controlName] = control;
+
                 // update dataSource object attributes
                 dataSourceJSON._controls[this.constructor.name()] = control;
                 dataSourceJSON._controlsCache[this.constructor.name()] = control.createCacheObject();
@@ -753,6 +759,8 @@
      */
     $.WebGLModule.ShaderLayer.customParams = {};
 
+    $.WebGLModule.ShaderLayer.numOfInstantions = 0;
+
     /**
      * todo make blending more 'nice'
      * Available use_mode modes
@@ -829,6 +837,8 @@
          * @return {OpenSeadragon.WebGLModule.UIControls.IControl}
          */
         static build(owner, controlName, controlObject, controlId, params) {
+            console.warn('Control id =', controlId);
+
             let defaultParams = controlObject.default,
                 accepts = controlObject.accepts,
                 requiredParams = controlObject.required === undefined ? {} : controlObject.required;
@@ -1503,10 +1513,26 @@
         createDOMElement(parentElement) {
             const html = this.toHtml();
             console.log('createDOMElement, html injection =', html);
-            parentElement.insertAdjacentHTML("beforeend", html);
+            parentElement.insertAdjacentHTML('beforeend', html);
 
             this._htmlDOMElement = document.getElementById(this.id);
+            console.log('creatujem DOM element, pred value pridanim =', this._htmlDOMElement);
+            this._htmlDOMElement.setAttribute('value', this.encodedValue);
+            console.log('creatujem DOM element, po value pridanim =', this._htmlDOMElement);
+
             return this._htmlDOMElement;
+        }
+
+        registerDOMElementEventHandler(functionToCall) {
+            const _this = this;
+            const node = this._htmlDOMElement;
+
+            let handler = function(e) {
+                console.info('Control changed, calling set with value =', e.target.value, '.');
+                _this.set(e.target.value);
+                functionToCall();
+            };
+            node.addEventListener('change', handler);
         }
     };
 
@@ -1567,6 +1593,7 @@
             if (this.params.interactive) {
                 const _this = this;
                 let node = document.getElementById(this.id);
+                console.error('Init controlu, node=', node);
                 if (node) {
                     let updater = function(e) {
                         _this.set(e.target.value);

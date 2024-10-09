@@ -75,7 +75,12 @@
             this.canvasOptions = incomingOptions.canvasOptions;
 
             this.htmlControlsId = incomingOptions.htmlControlsId;
-            this.htmlControlsElement = document.getElementById(this.htmlControlsId);
+            if (this.supportsHtmlControls()) {
+                this.htmlControlsElement = document.getElementById(this.htmlControlsId);
+                if (!this.htmlControlsElement) {
+                    console.warn('$.WebGLModule::constructor: drawer should support HTML controls, but renderer could not find DOM element with id =', this.htmlControlsId);
+                }
+            }
             this.htmlShaderPartHeader = incomingOptions.htmlShaderPartHeader;
 
             this.ready = incomingOptions.ready;
@@ -887,14 +892,16 @@
                 throw new Error('renderer.js::addShader(): Could not construct shader type =', shaderType, '!');
             }
 
+            shader.init();
             // only for main drawer, not for the minimap
             if (this.htmlControlsElement) {
+                console.log('renderer:: creating DOM controls!');
                 // creates DOM elements for shader's controls
                 for (const controlName of shader._ownedControls) {
                     shader[controlName].createDOMElement(this.htmlControlsElement);
+                    shader[controlName].registerDOMElementEventHandler(this.resetCallback);
                 }
             }
-            shader.init();
 
 
             const program = this.webglContext.programCreated(this._getShaders().concat([shader]));
@@ -932,14 +939,17 @@
          */
         createShader(shaderJSON, shaderType, shaderControlsId) {
             console.log('Createshader, shaderJSON =', shaderJSON);
+            const shaderObject = {};
             if (this.shadersCounter[shaderType] === undefined) {
-                const newShader = this.addShader(shaderJSON, shaderType, shaderControlsId);
-                this.shadersCounter[shaderType] = {};
-                this.shadersCounter[shaderType]["count"] = 1;
-                this.shadersCounter[shaderType]["shaderLayer"] = newShader;
+                const newShader = this.addShader(shaderObject, shaderType, shaderControlsId);
+                this.shadersCounter[shaderType] = {
+                    count: 1,
+                    shaderLayer: newShader,
+                    shaderObject: shaderObject
+                };
             } else {
                 this.shadersCounter[shaderType]["count"]++;
-                this.addControlsToShader(this.shadersCounter[shaderType]["shaderLayer"]);
+                // this.addControlsToShader(this.shadersCounter[shaderType]["shaderLayer"]);
             }
 
             return this.shadersCounter[shaderType]["shaderLayer"];

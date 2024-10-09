@@ -59,9 +59,11 @@
 
     OpenSeadragon.WebGLDrawerModular = class WebGLDrawer extends OpenSeadragon.DrawerBase{
         constructor(options){
-            // console.log('Robim moju implementaciu, options =', options);
             // console.log('Robim moju implementaciu, extendnute options =', options);
             super(options);
+
+            // console.log('Robim moju implementaciu, volam manualne draw');
+
 
             /**
              * The HTML element (canvas) that this drawer uses for drawing
@@ -107,8 +109,8 @@
                 },
                 ready: () => {
                 },
-                resetCallback: function () {
-                },
+                resetCallback: () => { this.draw(this.lastDrawArray); },
+                // resetCallback: () => {},
                 debug: false,
             }, options, {
                 // Do not allow override:
@@ -216,10 +218,9 @@
                     }
 
                     let shaderJSON = spec.shaders[shaderType] = {};
-                    shaderJSON.controls = {};
-                    shaderJSON.controlsCache = {};
-                    const shader = this.renderer.createShader(shaderJSON, shaderType,
-                        Number.toString(e.item.source.id) + Number.toString(sourceIndex));
+                    shaderJSON._controls = {};
+                    shaderJSON._controlsCache = {};
+                    const shader = this.renderer.createShader(shaderJSON, shaderType, Number.toString(e.item.source.id) + Number.toString(sourceIndex));
                     shaderJSON._renderContext = shader;
                     shaderJSON._index = 0;
                     shaderJSON.visible = true;
@@ -421,6 +422,10 @@
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          */
         draw(tiledImages) {
+            // if (tiledImages.length) {
+            //     throw new Error("asd");
+            // }
+
             // clear the output canvas
             this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
 
@@ -468,6 +473,8 @@
                 gl.clear(gl.COLOR_BUFFER_BIT);
                 this._renderingCanvasHasImageData = false;
             }
+
+            this.lastDrawArray = tiledImages;
         }//end of draw function
 
         /**
