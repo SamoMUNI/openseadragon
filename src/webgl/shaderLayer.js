@@ -194,27 +194,38 @@
 
         /**
          *
-         * @param {string} controlId <tiledImageIndex>_<dataSourceIndex> to uniquely identify control
+         * @param {object} options this.__shaderObject.params
+         * @param {string} options.use_channel[X]: "r", "g" or "b" channel to sample index X, default "r"
+         * @param {string} options.use_mode: blending mode - default alpha ("show"), custom blending ("mask") and clipping mask blend ("mask_clip")
+         * @param {[number]} dataReferences indexes of data being requested for this shader (this.__shaderObject.dataReferences)
          */
-        newConstruct(controlId) {
-            const defaultControls = this.constructor.defaultControls;
-            for (let controlName in defaultControls) {
-                const controlObject = defaultControls[controlName];
-                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, {});
-                this._controls[controlName][controlId] = control;
-            }
+        newConstruct(options) {
+            this._controls = {};
+
+            // nastavi this.__channels na ["rgba"] plus do shaderObject.cache da use_channel0: "rgba" (opacity tam este neni!)
+            this.resetChannel(options);
+            // nastavi this._mode a this.__mode na "show", inak by mohla aj do cache nastavovat...
+            this.resetMode(options);
         }
 
         /**
          *
-         * @param {string} controlId <tiledImageIndex>_<dataSourceIndex> to uniquely identify control
+         * @param {string} dataSourceID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
+         * @param {object} dataSourceJSON unique object bind to the dataSource
+         * @param {HTMLElement} controlsParentHTMLElement
          */
-        newAddControl(controlId) {
+        newAddControl(dataSourceID, dataSourceJSON, controlsParentHTMLElement) {
             const defaultControls = this.constructor.defaultControls;
             for (let controlName in defaultControls) {
                 const controlObject = defaultControls[controlName];
-                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, {});
-                this._controls[controlName][controlId] = control;
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, dataSourceID + '_' + controlName, {});
+                control.createDOMElement(controlsParentHTMLElement);
+
+                // update shaderLayer's attribute
+                this._controls[controlName][dataSourceID] = control;
+                // update dataSource object attributes
+                dataSourceJSON._controls[this.constructor.name()] = control;
+                dataSourceJSON._controlsCache[this.constructor.name()] = control.createCacheObject();
             }
         }
 
@@ -599,7 +610,8 @@
 
             // console.log('addControl, pred volanim UIControls.build');
             const controlObject = this.constructor.defaultControls[name];
-            const control = $.WebGLModule.UIControls.build(this, name, controlObject, controlOptions);
+            const control = $.WebGLModule.UIControls.build(this, name, controlObject, "uniqueID", controlOptions);
+
             // create new attribute to shaderLayer class -> shaderLayer.<control name> = <control object>
             // console.log('addControl nastavuje shaderu', this.constructor.name(), 'atribut s nazvom controlu', name);
             this[name] = control;
@@ -809,13 +821,14 @@
 
         /**
          * Build UI control object based on given parameters
-         * @param {OpenSeadragon.WebGLModule.ShaderLayer} owner owner of the control (shader)
-         * @param {string} controlName name used for the control, should be unique among different shader types (meno controlu)
-         * @param {object} controlObject object defining control (eg.: opacity: <controlObject>)
+         * @param {OpenSeadragon.WebGLModule.ShaderLayer} owner owner of the control, shaderLayer
+         * @param {string} controlName name used for the control (eg.: opacity)
+         * @param {object} controlObject object from shaderLayer.defaultControls, defines control
+         * @param {string} controlId
          * @param {object|*} params parameters passed to the control (defined by the control) or set as default value if not object ({})
          * @return {OpenSeadragon.WebGLModule.UIControls.IControl}
          */
-        static build(owner, controlName, controlObject, params) {
+        static build(owner, controlName, controlObject, controlId, params) {
             let defaultParams = controlObject.default,
                 accepts = controlObject.accepts,
                 requiredParams = controlObject.required === undefined ? {} : controlObject.required;
@@ -856,15 +869,15 @@
                     owner, controlName, controlObject, params);
             } else { // control's type (eg.: range/number/...) is present in this._items
                 // console.log('UIControls:build - else vetva');
-                let controlTypeObject = this.getUiElement(defaultParams.type);
+                let intristicComponent = this.getUiElement(defaultParams.type);
                 let comp = new $.WebGLModule.UIControls.SimpleUIControl(
-                    owner, controlName, defaultParams, controlTypeObject
+                    owner, controlName, controlId, defaultParams, intristicComponent
                 );
                 /* comp.type === float, tuto naozaj pri range v _items je definovany type: float */
                 if (accepts(comp.type, comp)) {
                     return comp;
                 }
-                return this._buildFallback(controlTypeObject.glType, originalType,
+                return this._buildFallback(intristicComponent.glType, originalType,
                     owner, controlName, controlObject, params);
             }
         }
@@ -949,11 +962,13 @@
 
     //definitions of possible control's types -> kazdy shader ma definovane dake controls a podla ich type: sa niektory shit z tadeto prideli do SimpleUIControl.componentco ty
     //simple functionality
+    // intristic component for SimpleUIControl
     $.WebGLModule.UIControls._items = {
         number: {
             defaults: function() {
                 return {title: "Number", interactive: true, default: 0, min: 0, max: 100, step: 1};
             },
+            // returns string corresponding to html injection
             html: function(uniqueId, params, css = "") {
                 let title = params.title ? `<span> ${params.title}</span>` : "";
                 return `${title}<input class="form-control input-sm" style="${css}" min="${params.min}" max="${params.max}"
@@ -1097,10 +1112,12 @@
          * @param {string} name name of the control (key to the params in the shader configuration)
          * @param {string} uniq another element to construct the DOM id from, mostly for compound controls
          */
-        constructor(owner, name, uniq = "") {
+        constructor(owner, name, id, uniq = "") {
             this.owner = owner;
             this.name = name;
-            this.id = `${uniq}${name}-${owner.uid}`;
+            // this.id = `${uniq}${name}-${owner.uid}`;
+            this.id = id;
+            console.log(`V konstruktori controlu, owner=${owner.constructor.name()}, name=${name}, id=${id}`);
             this.webGLVariableName = `${name}_${owner.uid}`;
             this._params = {};
             this.__onchange = {};
@@ -1389,6 +1406,7 @@
             return "IControl";
         }
 
+        // POZRIET
         /**
          * Load a value from cache to support its caching - should be used on all values
          * that are available for the user to play around with and change using UI controls
@@ -1407,6 +1425,7 @@
             return this.getSafeParam(value, defaultValue, paramName === "" ? "default" : paramName);
         }
 
+        // POZRIET
         /**
          * Store a value from cache to support its caching - should be used on all values
          * that are available for the user to play around with and change using UI controls
@@ -1464,7 +1483,31 @@
             }
         }
 
+        /**
+         * Create cache attribute to store this control's values.
+         * @returns {object}
+         */
+        createCacheObject() {
+            this._cache = {
+                encodedValue: this.encoded,
+                value: this.raw
+            };
+            return this._cache;
+        }
 
+        /**
+         * Create HTML DOM element bind to this control.
+         * @param {HTMLElement} parentElement html element into which should this control's html code be placed into
+         * @returns {HTMLElement} this control's html element
+         */
+        createDOMElement(parentElement) {
+            const html = this.toHtml();
+            console.log('createDOMElement, html injection =', html);
+            parentElement.insertAdjacentHTML("beforeend", html);
+
+            this._htmlDOMElement = document.getElementById(this.id);
+            return this._htmlDOMElement;
+        }
     };
 
 
@@ -1490,13 +1533,13 @@
          *
          * @param {ShaderLayer} owner owner of the control (shaderLayer)
          * @param {string} name name of the control (eg. "opacity")
-         * @param {object} params controlObject.default
-         * @param {object} intristicComponent control's type, object from UIControls._items
-         * @param {*} uniq
+         * @param {string} id unique control's id, corresponds to it's DOM's element's id
+         * @param {object} params
+         * @param {object} intristicComponent control's object from UIControls._items, keyed with it's params.default.type?
          */
         //uses intristicComponent that holds all specifications needed to work with the component uniformly
-        constructor(owner, name, params, intristicComponent, uniq = "") {
-            super(owner, name, uniq);
+        constructor(owner, name, id, params, intristicComponent) {
+            super(owner, name, id);
             this.component = intristicComponent;
             // do _params da params s urcenym poradim properties (asi)
             this._params = this.getParams(params);
@@ -1552,10 +1595,11 @@
             this.glLocation = gl.getUniformLocation(program, this.webGLVariableName);
         }
 
+        // POZRIET
         toHtml(breakLine = true, controlCss = "") {
-            if (!this.params.interactive) {
-                return "";
-            }
+            // if (!this.params.interactive) {
+            //     return "";
+            // }
             const result = this.component.html(this.id, this.params, controlCss);
             return breakLine ? `<div>${result}</div>` : result;
         }

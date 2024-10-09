@@ -61,18 +61,23 @@
          */
         constructor(incomingOptions) {
             super();
-            // console.log('Robim renderer, options=', incomingOptions);
+            console.log('Robim renderer, htmlControlsId =', incomingOptions.htmlControlsId);
 
             if (!this.constructor.idPattern.test(incomingOptions.uniqueId)) {
                 throw "$.WebGLModule::constructor: invalid ID! Id can contain only letters, numbers and underscore. ID: " + incomingOptions.uniqueId;
             }
 
             this.uniqueId = incomingOptions.uniqueId;
+
             this.webglPreferredVersion = incomingOptions.webglPreferredVersion;
             this.webglOptions = incomingOptions.webglOptions;
+
             this.canvasOptions = incomingOptions.canvasOptions;
+
             this.htmlControlsId = incomingOptions.htmlControlsId;
+            this.htmlControlsElement = document.getElementById(this.htmlControlsId);
             this.htmlShaderPartHeader = incomingOptions.htmlShaderPartHeader;
+
             this.ready = incomingOptions.ready;
             this.resetCallback = incomingOptions.resetCallback;
             this.debug = incomingOptions.debug;
@@ -850,28 +855,27 @@
             // this._program = 0;
             // this._programs[0] = program;
 
-            if (this.supportsHtmlControls()) {
-                console.info('Creating program, loading html.');
-                this._loadHtml(program);
-            }
+            // if (this.supportsHtmlControls()) {
+            //     console.info('Creating program, loading html.');
+            //     this._loadHtml(program);
+            // }
         }
 
         /**
          * Description:
-         * @param {object} spec json coming with tiledImage defining it's properties
+         * @param {object} shaderJSON json coming with tiledImage defining it's properties
          * @param {string} shaderType eg.: identity, edge, negative,...
          * @returns {ShaderLayer} instantion of newly created shaderLayer
          */
 
-        addShader(spec, shaderType) {
+        addShader(shaderJSON, shaderType) {
             console.log('renderer:: addShader call!');
-
 
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
 
             const shader = new Shader(shaderType + '_shader', {
-                shaderObject: spec.shaders[shaderType],
+                shaderObject: shaderJSON,
                 webglContext: this.webglContext,
                 interactive: false,
                 invalidate: () => {},
@@ -882,7 +886,16 @@
             if (!shader.initialized()) {
                 throw new Error('renderer.js::addShader(): Could not construct shader type =', shaderType, '!');
             }
+
+            // only for main drawer, not for the minimap
+            if (this.htmlControlsElement) {
+                // creates DOM elements for shader's controls
+                for (const controlName of shader._ownedControls) {
+                    shader[controlName].createDOMElement(this.htmlControlsElement);
+                }
+            }
             shader.init();
+
 
             const program = this.webglContext.programCreated(this._getShaders().concat([shader]));
             this._program = program;
@@ -912,13 +925,15 @@
 
         /**
          * Description:
-         * @param {object} spec json coming with tiledImage defining it's properties
+         * @param {object} shaderJSON json coming with tiledImage defining it's properties
          * @param {string} shaderType eg.: identity, edge, negative,...
+         * @param {string} shaderControlsId "<tiledImageIndex>_<sourceIndex>"
          * @returns {ShaderLayer} instantion of shaderLayer
          */
-        createShader(spec, shaderType) {
+        createShader(shaderJSON, shaderType, shaderControlsId) {
+            console.log('Createshader, shaderJSON =', shaderJSON);
             if (this.shadersCounter[shaderType] === undefined) {
-                const newShader = this.addShader(spec, shaderType);
+                const newShader = this.addShader(shaderJSON, shaderType, shaderControlsId);
                 this.shadersCounter[shaderType] = {};
                 this.shadersCounter[shaderType]["count"] = 1;
                 this.shadersCounter[shaderType]["shaderLayer"] = newShader;

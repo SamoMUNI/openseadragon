@@ -822,6 +822,7 @@ void main() {
                 execution += `
             case ${shaderLayerIndex}:`;
                 // ak ma opacity shaderLayer tak zavolaj jeho execution a prenasob alpha channel opacitou a to posli do blend funkcie, inak tam posli rovno jeho execution
+                //TODO ZMENA PRI CONTROLS
                 if (shaderLayer.opacity) {
                     execution += `
                 vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();

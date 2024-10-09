@@ -101,7 +101,7 @@
                 // Allow override:
                 webglPreferredVersion: "2.0",
                 webglOptions: {},
-                htmlControlsId: "drawer-controls",
+                htmlControlsId: ++this.constructor.numOfDrawers === 1 ? "drawer-controls" : undefined,
                 htmlShaderPartHeader: (html, dataId, isVisible, layer, isControllable = true) => {
                     return `<div class="configurable-border"><div class="shader-part-name">${dataId}</div>${html}</div>`;
                 },
@@ -216,7 +216,10 @@
                     }
 
                     let shaderJSON = spec.shaders[shaderType] = {};
-                    const shader = this.renderer.createShader(spec, shaderType);
+                    shaderJSON.controls = {};
+                    shaderJSON.controlsCache = {};
+                    const shader = this.renderer.createShader(shaderJSON, shaderType,
+                        Number.toString(e.item.source.id) + Number.toString(sourceIndex));
                     shaderJSON._renderContext = shader;
                     shaderJSON._index = 0;
                     shaderJSON.visible = true;
@@ -272,7 +275,6 @@
                 this._size = viewportSize;
             });
         }//end of constructor
-
 
         // Public API required by all Drawer implementations
         /**
@@ -2254,4 +2256,6 @@
         }
 
     };
+
+    OpenSeadragon.WebGLDrawerModular.numOfDrawers = 0;
 }( OpenSeadragon ));
