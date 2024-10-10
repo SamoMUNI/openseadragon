@@ -256,7 +256,7 @@
                 }
             });
 
-            this.viewer.world.addHandler("resize", (e) => {
+            this.viewer.addHandler("resize", (e) => {
                 if(this._outputCanvas !== this.viewer.drawer.canvas){
                     this._outputCanvas.style.width = this.viewer.drawer.canvas.clientWidth + 'px';
                     this._outputCanvas.style.height = this.viewer.drawer.canvas.clientHeight + 'px';
@@ -274,7 +274,7 @@
                 this._renderingCanvas.width = this._clippingCanvas.width = this._outputCanvas.width;
                 this._renderingCanvas.height = this._clippingCanvas.height = this._outputCanvas.height;
 
-                console.log('Resize event, new.width:new.height', viewportSize.x, viewportSize.y);
+                console.info('Resize event, new.width:new.height', viewportSize.x, viewportSize.y);
                 this.renderer.setDimensions(0, 0, viewportSize.x, viewportSize.y);
                 this._size = viewportSize;
             });
