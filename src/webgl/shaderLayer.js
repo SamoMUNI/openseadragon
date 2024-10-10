@@ -1168,7 +1168,7 @@
             this.name = name;
             // this.id = `${uniq}${name}-${owner.uid}`;
             this.id = id;
-            console.log(`V konstruktori controlu, owner=${owner.constructor.name()}, name=${name}, id=${id}`);
+            // console.log(`V konstruktori controlu, owner=${owner.constructor.name()}, name=${name}, id=${id}`);
             this.webGLVariableName = `${name}_${owner.uid}`;
             this._params = {};
             this.__onchange = {};

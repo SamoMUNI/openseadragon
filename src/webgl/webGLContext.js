@@ -261,7 +261,7 @@
                         "Linking of WebGLProgram failed. For more information, see logs in the $.console.");
                 } else { //if (this.renderer.debug) { //todo uncomment in production
                     // $.console.info("VERTEX SHADER\n", numberLines( opts.vs ));
-                    // $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs ));
+                    $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs ));
                 }
             }
         }
@@ -356,14 +356,24 @@
             const fsource = `#version 300 es
     precision mediump float;
     precision mediump sampler2D;
+    precision mediump sampler2DArray;
 
     in vec2 v_texCoord;
-    uniform sampler2D u_texture;
+    // uniform sampler2D u_texture;
+
+    uniform sampler2DArray u_textureArray;
+    uniform int u_textureLayer;
 
     out vec4 outColor;
 
     void main() {
-        outColor = texture(u_texture, v_texCoord);
+        // if (u_textureLayer == 333) {
+        //     outColor = texture(u_texture, v_texCoord);
+        // } else {
+        //     outColor = texture(u_textureArray, vec3(v_texCoord, float(u_textureLayer)));
+        // }
+
+        outColor = texture(u_textureArray, vec3(v_texCoord, float(u_textureLayer)));
     }
 `;
             const gl = this.gl;
@@ -398,6 +408,8 @@
             this._firstPassProgramTexcoordLocation = gl.getAttribLocation(program, "a_texCoord");
             this._firstPassProgramTransformMatrixLocation = gl.getUniformLocation(program, "u_transform_matrix");
             this._firstPassProgramTextureLocation = gl.getUniformLocation(program, "u_texture");
+            this._firstPassProgramTextureArrayLocation = gl.getUniformLocation(program, "u_textureArray");
+            this._firstPassProgramTextureLayerLocation = gl.getUniformLocation(program, "u_textureLayer");
 
             // Initialize texture coords attribute
             this._firstPassProgramTexcoordBuffer = gl.createBuffer();
@@ -407,8 +419,9 @@
             gl.vertexAttribPointer(this._firstPassProgramTexcoordBuffer, 2, gl.FLOAT, false, 0, 0);
 
             // Initialize texture
-            gl.uniform1i(this._firstPassProgramTextureLocation, 0);
-            gl.activeTexture(gl.TEXTURE0);
+            gl.uniform1i(this._firstPassProgramTextureLocation, 1);
+            gl.uniform1i(this._firstPassProgramTextureArrayLocation, 2);
+            // gl.activeTexture(gl.TEXTURE0);
         }
 
         /** Draw using firstPassProgram.
@@ -416,7 +429,7 @@
          * @param {Float32Array} textureCoords
          * @param {Array} transformMatrix
          */
-        drawFirstPassProgram(texture, textureCoords, transformMatrix) {
+        drawFirstPassProgram(texture, textureArray, textureLayer, textureCoords, transformMatrix) {
             const gl = this.gl;
 
             // Texture coords
@@ -427,7 +440,17 @@
             gl.uniformMatrix3fv(this._firstPassProgramTransformMatrixLocation, false, transformMatrix);
 
             // Texture
-            gl.bindTexture(gl.TEXTURE_2D, texture);
+            if (texture) {
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.uniform1i(this._firstPassProgramTextureLayerLocation, 333);
+            } else {
+                console.log('Pouzivam textureArray');
+                gl.activeTexture(gl.TEXTURE2);
+                gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
+                gl.uniform1i(this._firstPassProgramTextureLayerLocation, textureLayer);
+            }
+
 
             // Draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -731,8 +754,8 @@ void main() {
 
     vec4 osd_texture(int index, vec2 coords) {
         if (nPassRendering == 1) {
-            // return texture(u_textureArray1, vec3(coords, float(u_textureLayer1)));
-            return texture(u_texture, coords);
+            return texture(u_textureArray1, vec3(coords, float(u_textureLayer1)));
+            // return texture(u_texture, coords);
         } else if (nPassRendering == 2) {
             return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
         } else { // more-pass renderings not implemented
@@ -912,8 +935,8 @@ void main() {
             // Initialize textures:
             // Single-pass rendering uses gl.TEXTURE1 unit to which it binds TEXTURE_2D,
             // two-pass rendering uses gl.TEXTURE2 unit to which it binds TEXTURE_2D_ARRAY.
-            gl.uniform1i(this._locationTexture, 1);
-            // gl.uniform1i(this._locationTextureArray1, 1);
+            // gl.uniform1i(this._locationTexture, 1);
+            gl.uniform1i(this._locationTextureArray1, 1);
             gl.uniform1i(this._locationTextureArray, 2);
         }
 
@@ -968,7 +991,7 @@ void main() {
             // transform matrix
             gl.uniformMatrix3fv(this._locationTransformMatrix, false, tileInfo.transform);
 
-            if (textureLayer1) {
+            if (textureArray1) {
                 gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray1);
                 gl.uniform1i(this._locationTextureLayer1, textureLayer1);
             } else {
@@ -1045,7 +1068,9 @@ void main() {
             //     console.error("edgeThicknessLOcE je undefined");
             // }
 
-            // draw triangle strip (two triangles) from a static array defined in the vertex shader
+            // draw triangle strip (two triangles) from a static array defined in the vertex shader,
+            // 0: start reading vertex data from the first vertex,
+            // 4: use 4 vertices per instance (to form one triangle strip)
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
     };

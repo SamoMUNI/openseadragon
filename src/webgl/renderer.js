@@ -456,8 +456,8 @@
             this.webglContext.loadFirstPassProgram();
         }
 
-        drawFirstPassProgram(texture, textureCoords, transformMatrix) {
-            this.webglContext.drawFirstPassProgram(texture, textureCoords, transformMatrix);
+        drawFirstPassProgram(texture, textureArray, textureLayer, textureCoords, transformMatrix) {
+            this.webglContext.drawFirstPassProgram(texture, textureArray, textureLayer, textureCoords, transformMatrix);
         }
 
         /**
@@ -875,7 +875,7 @@
          */
 
         addShader(shaderObject, shaderType, controlsId, dataSourceJSON) {
-            console.log('renderer:: addShader call!');
+            // console.log('renderer:: addShader call!');
 
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
@@ -910,7 +910,7 @@
             // this._program = 0;
             // this._programs[0] = program;
 
-            console.log('renderer.js::addShader(): PROGRAM UPDATED!');
+            // console.log('renderer.js::addShader(): PROGRAM UPDATED!');
             return shader;
         }
 
@@ -922,7 +922,7 @@
          * @returns {ShaderLayer} instantion of shaderLayer
          */
         createShader(sourceJSON, shaderType, controlsId) {
-            console.log('Createshader, sourceJSON =', sourceJSON, 'controlsID =', controlsId);
+            // console.log('Createshader, sourceJSON =', sourceJSON, 'controlsID =', controlsId);
             const shaderObject = {};
             if (this.shadersCounter[shaderType] === undefined) {
                 const newShader = this.addShader(shaderObject, shaderType, controlsId, sourceJSON);

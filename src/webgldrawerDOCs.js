@@ -243,6 +243,7 @@
 
       //iterate over tiled images and draw each one using a two-pass rendering pipeline if needed
       tiledImages.forEach((tiledImage, tiledImageIndex) => {
+        // console.error('ORIGINAL - tiledImage cycle =', tiledImageIndex);
 
         /* get array of Tiles that make up the current view */
         let tilesToDraw = tiledImage.getTilesToDraw();
@@ -383,7 +384,7 @@
         //console.log('Dokreslene do textury');
 
         if (useTwoPassRendering) {
-          console.log('TwoPassR3ndering being used');
+        //   console.log('TwoPassR3ndering being used');
             // Second rendering pass: Render the tiled image from the framebuffer into the back buffer
           gl.useProgram(this._secondPass.shaderProgram);
 
@@ -412,6 +413,8 @@
 
         if (useContext2dPipeline) {
           // draw from the rendering canvas onto the output canvas, clipping/cropping if needed.
+        //   console.warn('ORIGINAL - Calling apply pipeline from draw call.');
+
           this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
           renderingBufferHasImageData = false;
           // clear the buffer
@@ -478,6 +481,8 @@
     * @param {Array} tilesToDraw - array of objects containing tiles that were drawn
     */
     _applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex) {
+        // console.log('ORIGINAL - applyContext2DPipeline, viewportsize =', this._calculateCanvasSize());
+
       // composite onto the output canvas, clipping if necessary
       this._outputContext.save();
 
@@ -857,6 +862,7 @@
 
       //make the additional canvas elements mirror size changes to the output canvas
       this.viewer.addHandler("resize", function () {
+        // console.error('ORIGINAL - Resize event.');
         if (_this._outputCanvas !== _this.viewer.drawer.canvas) {
           _this._outputCanvas.style.width = _this.viewer.drawer.canvas.clientWidth + 'px';
           _this._outputCanvas.style.height = _this.viewer.drawer.canvas.clientHeight + 'px';
@@ -1118,6 +1124,8 @@
 
       var tileCenterX = (tile.position.x + (tile.size.x / 2)) * $.pixelDensityRatio;
       var tileCenterY = (tile.position.y + (tile.size.y / 2)) * $.pixelDensityRatio;
+    //   console.info('ORIGINAL - drawDebugInfoOnTile: tileCenterX =', tileCenterX, ', tileCenterY =', tileCenterY);
+
 
       // Rotate the text the right way around.
       context.translate(tileCenterX, tileCenterY);
