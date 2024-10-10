@@ -219,19 +219,19 @@
          */
         newAddControl(dataSourceJSON, dataSourceID, controlsParentHTMLElement = null, controlsChangeHandler = null) {
             const defaultControls = this.constructor.defaultControls;
-            console.info('defContrls=', defaultControls);
+            // console.info('defContrls=', defaultControls);
             for (let controlName in defaultControls) {
                 if (controlName.startsWith("use_")) {
                     continue;
                 }
 
-                console.log('newAddControl, prechadzam defaultControls, controlName =', controlName);
+                // console.log('newAddControl, prechadzam defaultControls, controlName =', controlName);
                 const controlObject = defaultControls[controlName];
-                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, dataSourceID, {});
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, dataSourceID + '_' + controlName, {});
 
                 control.init();
                 if (controlsParentHTMLElement && controlsChangeHandler) {
-                    console.log('robim taktiez html pre tento control');
+                    // console.log('robim taktiez html pre tento control');
                     control.createDOMElement(controlsParentHTMLElement);
                     control.registerDOMElementEventHandler(controlsChangeHandler);
                 }
@@ -247,8 +247,24 @@
                 this[controlName] = control;
 
                 // update dataSource object attributes
-                dataSourceJSON._controls[this.constructor.name()] = control;
-                dataSourceJSON._controlsCache[this.constructor.name()] = control.createCacheObject();
+                dataSourceJSON._controls[controlName] = control;
+                dataSourceJSON._controlsCache[controlName] = control.createCacheObject();
+            }
+        }
+
+        /**
+         * @param {object} dataSourceJSON unique object bind to the dataSource
+         * @param {string} dataSourceID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
+         *
+         */
+        newRemoveControl(dataSourceJSON, dataSourceID) {
+            for (const controlName in this._controls) {
+                const control = this._controls[controlName][dataSourceID];
+                control.destroy();
+                delete this._controls[controlName][dataSourceID];
+
+                delete dataSourceJSON._controls[controlName];
+                delete dataSourceJSON._controlsCache[controlName];
             }
         }
 
@@ -332,6 +348,10 @@
             //     this[control].glDrawing(program, gl);
             // }
             for (const controlName in this._controls) {
+                // console.log('shaderLayer gl drawing, this._controls =', this._controls);
+                // console.log('shaderLayer gl drawing, controlName =', controlName);
+                // console.log('shaderLayer gl drawing, controlId =', controlId);
+
                 this._controls[controlName][controlId].glDrawing(program, gl);
             }
         }
@@ -1532,11 +1552,15 @@
          * @returns {HTMLElement} this control's html element
          */
         createDOMElement(parentElement) {
-            const html = this.toHtml();
+            const html = this.toHtml(true);
             // console.log('createDOMElement, html injection =', html);
             parentElement.insertAdjacentHTML('beforeend', html);
 
             this._htmlDOMElement = document.getElementById(this.id);
+            // call to this.toHtml(true) returns html elements for control wrapped in one more <div> element,
+            // this element is now pointed onto with this._parentContainer
+            this._parentContainer = this._htmlDOMElement.parentElement;
+
             // console.log('creatujem DOM element, pred value pridanim =', this._htmlDOMElement);
             this._htmlDOMElement.setAttribute('value', this.encodedValue);
             // console.log('creatujem DOM element, po value pridanim =', this._htmlDOMElement);
@@ -1549,11 +1573,19 @@
             const node = this._htmlDOMElement;
 
             let handler = function(e) {
-                console.info('Control changed, calling set with value =', e.target.value, '.');
+                // console.info('from event handler, calling set on control with value =', e.target.value, '.');
+                node.setAttribute('value', e.target.value);
                 _this.set(e.target.value);
                 functionToCall();
             };
             node.addEventListener('change', handler);
+        }
+
+        destroy() {
+            if (this._htmlDOMElement) {
+                this._htmlDOMElement.remove();
+                this._parentContainer.remove();
+            }
         }
     };
 
@@ -1628,6 +1660,7 @@
         }
 
         set(encodedValue) {
+            // console.warn('control\'s set call, value =', encodedValue);
             this.encodedValue = encodedValue;
             this.value = this.component.normalize(this.component.decode(this.encodedValue), this.params);
             this.changed("default", this.value, this.encodedValue, this);

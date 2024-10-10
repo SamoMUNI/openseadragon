@@ -233,7 +233,7 @@
                 e.item.source.drawers[this._id] = spec;
 
 
-                // update num of layers in TEXTURE_2D_ARRAY
+                // update num of layers for TEXTURE_2D_ARRAY
                 e.item.source.drawers[this._id].firstTextureLayerIndex = this._offscreenTextureArrayLayers;
                 e.item.source.drawers[this._id].lastTextureLayerIndex = this._offscreenTextureArrayLayers + e.item.source.sources.length - 1;
                 this._offscreenTextureArrayLayers += e.item.source.sources.length;
@@ -242,17 +242,17 @@
             this.viewer.world.addHandler("remove-item", (e) => {
                 console.log('REMOVE-ITEM EVENT !!! event =', e);
 
-                // toto este bude tazsie lebo bude treba rusit controls pre shader-e
-                for (const shaderType of Object.keys(e.item.source.drawers[this._id].shaders)) {
+                for (const sourceIndex of Object.keys(e.item.source.drawers[this._id].shaders)) {
                     // console.log('Mazem shaderType =', shaderType);
-                    this.renderer.removeShader(shaderType);
+                    const sourceJSON = e.item.source.drawers[this._id].shaders[sourceIndex];
+                    this.renderer.removeShader(sourceJSON, e.item.source.id.toString() + '_' + sourceIndex.toString());
                 }
 
                 // these lines are unnecessary because somehow when tiledImage is added again he does not have this .source.drawers parameter anyways (I do not know why tho)
                 delete e.item.source.drawers[this._id];
                 if (Object.keys(e.item.source.drawers).length === 0) {
-                    delete e.item.source.drawers;
                     delete e.item.source.id;
+                    delete e.item.source.drawers;
                 }
             });
 
@@ -1147,13 +1147,14 @@
 
                         const shaders = tiledImage.source.drawers[this._id].shaders;
                         const shader = shaders[Object.keys(shaders)[0]]._renderContext;
-                        if (shader.opacity !== undefined) {
-                            shader.opacity.set(tiledImage.opacity);
-                        }
+                        // if (shader.opacity !== undefined) {
+                        //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
+                        //     shader.opacity.set(tiledImage.opacity);
+                        // }
 
                         // console.log('kreslim z ', this._id, 'tento canvas by mal byt v texture:', tileContext.canvas);
                         this.renderer.processData(renderInfo, shader,
-                            Number.toString(tiledImageIndex) + Number.toString(0),
+                            tiledImage.source.id.toString() + '_0',
                             tileInfo.textures[0], null, null, null); // layer 0 because more sources not supported rn
                     }
 
@@ -1279,9 +1280,10 @@
 
                 const shaders = tiledImage.source.drawers[this._id].shaders;
                 const shader = shaders[Object.keys(shaders)[0]]._renderContext;
-                if (shader.opacity !== undefined) {
-                    shader.opacity.set(tiledImage.opacity);
-                }
+                // if (shader.opacity !== undefined) {
+                //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
+                //     shader.opacity.set(tiledImage.opacity);
+                // }
 
                 const renderInfo = {
                     transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
@@ -1291,7 +1293,7 @@
                 };
 
                 this.renderer.processData(renderInfo, shader,
-                    Number.toString(tiledImageIndex) + Number.toString(0), null, null, this._offscreenTextureArray, tiledImageIndex);
+                    tiledImage.source.id.toString() + '_0', null, null, this._offscreenTextureArray, tiledImageIndex);
 
                 this._renderingCanvasHasImageData = true;
 

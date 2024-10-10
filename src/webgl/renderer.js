@@ -940,20 +940,21 @@
         }
 
         /**
-         * Remove shader from this.shadersCounter, if needed, recreate program.
-         * @param {string} shaderType eg.: identity, edge, negative,...
+         * Remove shader's controls corresponding to dataSource. If needed, remove shader from this.shadersCounter and recreate program.
+         * @param {object} sourceJSON json object corresponding to a concrete data source
+         * @param {string} controlsId "<tiledImageIndex>_<sourceIndex>"
          */
-        removeShader(shaderType) {
+        removeShader(sourceJSON, controlsId) {
+            const shaderType = sourceJSON.type;
+            const shader = this.shadersCounter[shaderType]["shaderLayer"];
+            shader.newRemoveControl(sourceJSON, controlsId);
+
+            this.shadersCounter[shaderType]["count"]--;
             // delete shader from the map and recreate the WebGLProgram without <shaderType> shader
-            if (this.shadersCounter[shaderType]["count"] === 1) {
+            if (this.shadersCounter[shaderType]["count"] === 0) {
                 delete this.shadersCounter[shaderType];
                 this.createProgram();
-
-            // not removing shader from the WebGLProgram because another tiledImage still uses it
-            } else {
-                this.shadersCounter[shaderType]["count"]--;
             }
-
             console.log('removeShader, this.shadersCounter po odobrati =', this.shadersCounter);
         }
 
