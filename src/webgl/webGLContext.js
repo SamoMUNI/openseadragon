@@ -261,7 +261,7 @@
                         "Linking of WebGLProgram failed. For more information, see logs in the $.console.");
                 } else { //if (this.renderer.debug) { //todo uncomment in production
                     // $.console.info("VERTEX SHADER\n", numberLines( opts.vs ));
-                    $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs ));
+                    // $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs ));
                 }
             }
         }
@@ -359,7 +359,6 @@
     precision mediump sampler2DArray;
 
     in vec2 v_texCoord;
-    // uniform sampler2D u_texture;
 
     uniform sampler2DArray u_textureArray;
     uniform int u_textureLayer;
@@ -367,12 +366,6 @@
     out vec4 outColor;
 
     void main() {
-        // if (u_textureLayer == 333) {
-        //     outColor = texture(u_texture, v_texCoord);
-        // } else {
-        //     outColor = texture(u_textureArray, vec3(v_texCoord, float(u_textureLayer)));
-        // }
-
         outColor = texture(u_textureArray, vec3(v_texCoord, float(u_textureLayer)));
     }
 `;
@@ -407,9 +400,9 @@
             // Locations
             this._firstPassProgramTexcoordLocation = gl.getAttribLocation(program, "a_texCoord");
             this._firstPassProgramTransformMatrixLocation = gl.getUniformLocation(program, "u_transform_matrix");
-            this._firstPassProgramTextureLocation = gl.getUniformLocation(program, "u_texture");
             this._firstPassProgramTextureArrayLocation = gl.getUniformLocation(program, "u_textureArray");
             this._firstPassProgramTextureLayerLocation = gl.getUniformLocation(program, "u_textureLayer");
+
 
             // Initialize texture coords attribute
             this._firstPassProgramTexcoordBuffer = gl.createBuffer();
@@ -419,9 +412,8 @@
             gl.vertexAttribPointer(this._firstPassProgramTexcoordBuffer, 2, gl.FLOAT, false, 0, 0);
 
             // Initialize texture
-            gl.uniform1i(this._firstPassProgramTextureLocation, 1);
-            gl.uniform1i(this._firstPassProgramTextureArrayLocation, 2);
-            // gl.activeTexture(gl.TEXTURE0);
+            gl.uniform1i(this._firstPassProgramTextureArrayLocation, 0);
+            gl.activeTexture(gl.TEXTURE0);
         }
 
         /** Draw using firstPassProgram.
@@ -440,17 +432,8 @@
             gl.uniformMatrix3fv(this._firstPassProgramTransformMatrixLocation, false, transformMatrix);
 
             // Texture
-            if (texture) {
-                gl.activeTexture(gl.TEXTURE1);
-                gl.bindTexture(gl.TEXTURE_2D, texture);
-                gl.uniform1i(this._firstPassProgramTextureLayerLocation, 333);
-            } else {
-                console.log('Pouzivam textureArray');
-                gl.activeTexture(gl.TEXTURE2);
-                gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
-                gl.uniform1i(this._firstPassProgramTextureLayerLocation, textureLayer);
-            }
-
+            gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
+            gl.uniform1i(this._firstPassProgramTextureLayerLocation, textureLayer);
 
             // Draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

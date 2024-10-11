@@ -183,16 +183,13 @@
 
                 // tiledImage seen for the first time
                 if (e.item.source.id === undefined) {
-                    // console.log('TiledImage seen for the very first time!');
                     e.item.source.id = Math.random();
 
-                    // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap, maybe more in the future...)
-                    // every instantion can put it's own data here with it's id representing the key into the map
+                    // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap,...),
+                    // so every instantion can put it's own data here with it's id representing the key into the map
                     e.item.source.drawers = {};
 
-
-
-                    // manualne nastavenie teraz -> malo by dojst ZVONKA v buducnosti uz nastavene podla toho co user chce
+                    // MANUALNE nastavenie teraz -> malo by dojst ZVONKA v buducnosti uz nastavene podla toho co user chce
                     let shaderType;
                     if (e.item.source.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
                         shaderType = "edge";
@@ -201,7 +198,10 @@
                     }
                     e.item.source.sources = [0]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
                     e.item.source.shaders = {0: shaderType}; // index zdroja: akym shaderom sa ma renderovat
-                    // assure that every source has defined shader to be rendered with, using identity as default value if shader for soure is not present
+                    // KONIEC MANUALNEHO nastavenia
+
+                    // assure that every source has defined shader to be rendered with,
+                    // using identity as default value if shader for source is not present
                     for (let i = 0; i < e.item.source.sources.length; ++i) {
                         if (e.item.source.shaders[i] === undefined) {
                             e.item.source.shaders[i] = "identity";
@@ -209,7 +209,7 @@
                     }
                 }
 
-
+                // spec is object holding data about how the tiledImage's sources are rendered
                 let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
                 for (let sourceIndex = 0; sourceIndex < e.item.source.sources.length; ++sourceIndex) {
                     const shaderType = e.item.source.shaders[sourceIndex];
@@ -217,26 +217,25 @@
                         spec._utilizeLocalMethods = true;
                     }
 
-                    // let shaderJSON = spec.shaders[shaderType] = {};
+                    // sourceJSON is object holding data about how the concrete source is rendered
                     let sourceJSON = spec.shaders[sourceIndex] = {};
                     sourceJSON.type = shaderType;
+
                     sourceJSON._controls = {};
                     sourceJSON._controlsCache = {};
+
                     const shader = this.renderer.createShader(sourceJSON, shaderType,
                         e.item.source.id.toString() + '_' + sourceIndex.toString());
                     sourceJSON._renderContext = shader;
+                    sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
+
                     sourceJSON._index = 0;
                     sourceJSON.visible = true;
                     sourceJSON.rendering = true;
                 }
+
                 spec._initialized = true;
                 e.item.source.drawers[this._id] = spec;
-
-
-                // update num of layers for TEXTURE_2D_ARRAY
-                e.item.source.drawers[this._id].firstTextureLayerIndex = this._offscreenTextureArrayLayers;
-                e.item.source.drawers[this._id].lastTextureLayerIndex = this._offscreenTextureArrayLayers + e.item.source.sources.length - 1;
-                this._offscreenTextureArrayLayers += e.item.source.sources.length;
             });
 
             this.viewer.world.addHandler("remove-item", (e) => {
@@ -863,7 +862,7 @@
 
             const numOfDataSources = tiledImage.source.sources.length;
             const tileInfo = {
-                sources: numOfDataSources,
+                numOfDataSources: numOfDataSources,
                 position: position,
                 textures: undefined, // used with WebGL 1, [TEXTURE_2D]
                 texture2DArray: undefined // used with WebGL 2, TEXTURE_2D_ARRAY, NOT FUNCTIONING!
@@ -913,7 +912,7 @@
 
                 // fill the data
                 for (let i = 0; i < numOfDataSources; ++i) {
-                    console.log('tileReadyHandler, nahravam to textureArray-u canvas');
+                    // console.log('tileReadyHandler, nahravam to textureArray-u canvas');
                     gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, x, y, 1, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
                 }
 
@@ -1234,10 +1233,6 @@
                         overallMatrix = viewMatrix.multiply(localMatrix);
                     }
 
-                    // FRAMEBUFFER
-                    // POKIAL bude mat kazda tile-a viac zdrojov toto sa premiestni do cyklu cez tile-y a bude sa prepinat tiledImageIndex + i kde i je index zdroja
-                    this._bindFrameBufferToOffScreenTextureArray(tiledImageIndex);
-
                     // ITERATE over TILES
                     for (let tileIndex = 0; tileIndex < tilesToDraw.length; ++tileIndex) {
                         //console.log('Kreslim tile cislo', tileIndex);
@@ -1259,21 +1254,26 @@
 
                         const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
 
+                        for (let i = 0; i < tileInfo.numOfDataSources; ++i) {
+                            // bind framebuffer to correct layer
+                            this._bindFrameBufferToOffScreenTextureArray(
+                                tiledImage.source.drawers[this._id].shaders[i]._textureLayerIndex
+                            );
 
-                        if (this.webGLVersion === "1.0") {
-                            // index 0 because more sources not supported rn
-                            this.renderer.drawFirstPassProgram(tileInfo.textures[0], null, null, tileInfo.position, matrix);
-                        } else {
-                            this.renderer.drawFirstPassProgram(null, tileInfo.texture2DArray, 0, tileInfo.position, matrix);
+                            if (this.webGLVersion === "1.0") {
+                                this.renderer.drawFirstPassProgram(tileInfo.textures[i], null, null, tileInfo.position, matrix);
+                            } else {
+                                this.renderer.drawFirstPassProgram(null, tileInfo.texture2DArray, i, tileInfo.position, matrix);
+                            }
                         }
                     } // end of TILES iteration
                 }
             }); // end of TILEDIMAGES iteration
 
 
-            // SECOND PASS (render from textures to output canvas)
+            // SECOND PASS (render from texture array to output canvas)
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-            // use program with two-pass rendering (=> parameter 2)
+            // use program for two-pass rendering => parameter 2
             this.renderer.useDefaultProgram(2);
 
             const useContext2DPipeline = this.viewer.compositeOperation || tiledImages.some(
@@ -1284,18 +1284,11 @@
                 tiledImage.debugMode
             );
 
-            // useContext2DPipeline or else use instanced rendering
+            // useContext2DPipeline or else TODO - use instanced rendering ???
             if (useContext2DPipeline) {
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
-                    // tu bude for cyklus cez tiledImage sources, za kazdy cyklus sa spravi numOfSources++ a to sa potom bude posielat namiesto i ako texture_2d_array's layer index do processData
 
                     const shaders = tiledImage.source.drawers[this._id].shaders;
-                    const shader = shaders[Object.keys(shaders)[0]]._renderContext;
-                    // if (shader.opacity !== undefined) {
-                    //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
-                    //     shader.opacity.set(tiledImage.opacity);
-                    // }
-
                     const renderInfo = {
                         transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                         zoom: viewport.zoom,
@@ -1303,10 +1296,20 @@
                         textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
                     };
 
-                    this.renderer.processData(renderInfo, shader,
-                        tiledImage.source.id.toString() + '_0', null, null, this._offscreenTextureArray, tiledImageIndex);
+                    for (const shaderKey of tiledImage.source.sources) {
+                        const shader = shaders[shaderKey]._renderContext;
+                        // if (shader.opacity !== undefined) {
+                        //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
+                        //     shader.opacity.set(tiledImage.opacity);
+                        // }
 
+                        this.renderer.processData(renderInfo, shader,
+                            tiledImage.source.id.toString() + '_' + shaderKey.toString(), // controlId
+                            null, null,
+                            this._offscreenTextureArray, tiledImage.source.drawers[this._id].shaders[shaderKey]._textureLayerIndex);
+                    }
 
+                    // TODO - apply context2dpipeline for every source?
                     // draw from the rendering canvas onto the output canvas
                     this._applyContext2dPipeline(tiledImage, tiledImage.getTilesToDraw(), tiledImageIndex);
                     // clear the rendering canvas
@@ -1315,17 +1318,10 @@
 
                 // flag that the data was already put to the output canvas and that the rendering canvas was cleared
                 this._renderingCanvasHasImageData = false;
+
             } else {
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
-                    // tu bude for cyklus cez tiledImage sources, za kazdy cyklus sa spravi numOfSources++ a to sa potom bude posielat namiesto i ako texture_2d_array's layer index do processData
-
                     const shaders = tiledImage.source.drawers[this._id].shaders;
-                    const shader = shaders[Object.keys(shaders)[0]]._renderContext;
-                    // if (shader.opacity !== undefined) {
-                    //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
-                    //     shader.opacity.set(tiledImage.opacity);
-                    // }
-
                     const renderInfo = {
                         transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                         zoom: viewport.zoom,
@@ -1333,14 +1329,25 @@
                         textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
                     };
 
-                    this.renderer.processData(renderInfo, shader,
-                        tiledImage.source.id.toString() + '_0', null, null, this._offscreenTextureArray, tiledImageIndex);
+                    for (const shaderKey of tiledImage.source.sources) {
+                        const shader = shaders[shaderKey]._renderContext;
+                        // if (shader.opacity !== undefined) {
+                        //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
+                        //     shader.opacity.set(tiledImage.opacity);
+                        // }
+
+                        this.renderer.processData(renderInfo, shader,
+                            tiledImage.source.id.toString() + '_' + shaderKey.toString(), // controlId
+                            null, null,
+                            this._offscreenTextureArray, tiledImage.source.drawers[this._id].shaders[shaderKey]._textureLayerIndex);
+                    }
 
                 }); // end of tiledImages for cycle
 
                 // flag that the data needs to be put to the output canvas and that the rendering canvas needs to be cleared
                 this._renderingCanvasHasImageData = true;
-            } // end of instanced rendering
+            } // end of not using context2DPipeline method
+
         } // end of function
 
 
