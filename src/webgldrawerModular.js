@@ -159,7 +159,6 @@
             // Add listeners for events that require modifying the scene or camera
             this._boundToTileReady = ev => this._tileReadyHandler(ev);
             this._boundToImageUnloaded = ev => {
-                console.log('IMAGE-UNLOADED EVENT! event =', ev);
                 this._cleanupImageData(ev.context2D.canvas);
             };
             this.viewer.addHandler("tile-ready", this._boundToTileReady);
@@ -230,7 +229,7 @@
             });
 
             this.viewer.world.addHandler("remove-item", (e) => {
-                console.log('REMOVE-ITEM EVENT !!! event =', e);
+                console.log('REMOVE-ITEM EVENT !!!');
 
                 for (const sourceIndex of Object.keys(e.item.source.drawers[this._id].shaders)) {
                     // console.log('Mazem shaderType =', shaderType);
