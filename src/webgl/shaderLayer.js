@@ -1557,13 +1557,11 @@
             parentElement.insertAdjacentHTML('beforeend', html);
 
             this._htmlDOMElement = document.getElementById(this.id);
+            this._htmlDOMElement.setAttribute('value', this.encodedValue);
+
             // call to this.toHtml(true) returns html elements for control wrapped in one more <div> element,
             // this element is now pointed onto with this._parentContainer
             this._parentContainer = this._htmlDOMElement.parentElement;
-
-            // console.log('creatujem DOM element, pred value pridanim =', this._htmlDOMElement);
-            this._htmlDOMElement.setAttribute('value', this.encodedValue);
-            // console.log('creatujem DOM element, po value pridanim =', this._htmlDOMElement);
 
             return this._htmlDOMElement;
         }
@@ -1586,6 +1584,8 @@
                 this._htmlDOMElement.remove();
                 this._parentContainer.remove();
             }
+
+            // maybe something more??
         }
     };
 

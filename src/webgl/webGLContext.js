@@ -278,6 +278,8 @@
             // console.log("konstruujem webgl20 implementaciu");
             super(renderer, gl, "2.0", options); // sets this.renderer, this.gl, this.webglVersion, this.options
 
+            this._renderingType = 0;
+
             // SECOND PASS PROGRAM
             this._secondPassProgram = null;
             this._shadersMapping = {default: -1}; // {identity: 0, edge: 1, ...} maps shaderType to u_shaderLayerIndex
@@ -288,8 +290,12 @@
 
             this._locationPixelSize = null; // u_pixel_size_in_fragments ?
             this._locationZoomLevel = null; // u_zoom_level ?
-            this._locationTextureArray = null; // u_textureArray TEXTURE_2D_ARRAY
-            this._locationTextureLayer = null; // u_textureLayer which layer from TEXTURE_2D_ARRAY to use
+
+            this._locationTextureArray1 = null; // u_textureArray1 TEXTURE_2D_ARRAY to use during single-pass rendering
+            this._locationTextureLayer1 = null; // u_textureLayer1 which layer from TEXTURE_2D_ARRAY to use
+            this._locationTextureArray2 = null; // u_textureArray2 TEXTURE_2D_ARRAY to use during two-pass rendering
+            this._locationTextureLayer2 = null; // u_textureLayer2 which layer from TEXTURE_2D_ARRAY to use
+
             this._locationShaderLayerIndex = null; // u_shaderLayerIndex which shaderLayer to use for rendering
 
 
@@ -297,7 +303,8 @@
             this._firstPassProgram = null;
             this._firstPassProgramTexcoordLocation = null;
             this._firstPassProgramTransformMatrixLocation = null;
-            this._firstPassProgramTextureLocation = null;
+            this._firstPassProgramTextureArrayLocation = null;
+            this._firstPassProgramTextureLayerLocation = null;
             this._firstPassProgramTexcoordBuffer = null;
             this._createFirstPassProgram(); // sets this._firstPassProgram to WebGL program
         }
@@ -390,7 +397,7 @@
         }
 
         /** gl.useProgram(firstPassProgram) + initialize firstPassProgram's attributes.
-         *
+         * Load the first pass program.
          */
         loadFirstPassProgram() {
             const gl = this.gl;
@@ -417,9 +424,11 @@
         }
 
         /** Draw using firstPassProgram.
-         * @param {WebGLTexture} texture
+         * @param {WebGLTexture} texture unused
+         * @param {WebGLTexture} textureArray gl.TEXTURE_2D_ARRAY used as source of data for rendering
+         * @param {number} textureLayer index to layer in textureArray to use
          * @param {Float32Array} textureCoords
-         * @param {Array} transformMatrix
+         * @param {[Float]} transformMatrix
          */
         drawFirstPassProgram(texture, textureArray, textureLayer, textureCoords, transformMatrix) {
             const gl = this.gl;
@@ -701,15 +710,6 @@ void main() {
          * @returns {string} fragment shader's glsl code
          */
         compileFragmentShader(definition, execution, options) {
-    //         const debug = options.debug ? `
-    //     float twoPixels = 1.0 / float(osd_texture_size().x) * 2.0;
-    //     vec2 distance = abs(osd_texture_bounds - osd_texture_coords);
-    //     if (distance.x <= twoPixels || distance.y <= twoPixels) {
-    //         final_color = vec4(1.0, .0, .0, 1.0);
-    //         return;
-    //     }
-    // ` : "";
-
             const fragmentShaderCode = `#version 300 es
     precision mediump float;
     precision mediump sampler2D;
@@ -727,20 +727,18 @@ void main() {
     flat in int nPassRendering;
 
     // for single-pass rendering
-    uniform sampler2D u_texture;
     uniform sampler2DArray u_textureArray1;
     uniform int u_textureLayer1;
 
     // for two-pass rendering
-    uniform sampler2DArray u_textureArray;
-    uniform int u_textureLayer;
+    uniform sampler2DArray u_textureArray2;
+    uniform int u_textureLayer2;
 
     vec4 osd_texture(int index, vec2 coords) {
         if (nPassRendering == 1) {
             return texture(u_textureArray1, vec3(coords, float(u_textureLayer1)));
-            // return texture(u_texture, coords);
         } else if (nPassRendering == 2) {
-            return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
+            return texture(u_textureArray2, vec3(coords, float(u_textureLayer2)));
         } else { // more-pass renderings not implemented
             return vec4(0,1,0,0.5);
         }
@@ -859,8 +857,8 @@ void main() {
         }
 
         /**
-         * Single-pass rendering uses gl.TEXTURE1 unit to which it binds TEXTURE_2D,
-         * two-pass rendering uses gl.TEXTURE2 unit to which it binds TEXTURE_2D_ARRAY.
+         * Single-pass rendering uses gl.TEXTURE1 unit,
+         * two-pass rendering uses gl.TEXTURE2 unit.
          * @param {int} n 1 = single-pass, 2 = two-pass
          */
         setRenderingType(n) {
@@ -868,6 +866,7 @@ void main() {
             // console.log('Nahravam do nPassRendering cislo', n);
             gl.uniform1i(this._locationNPassRendering, n);
             gl.activeTexture(gl.TEXTURE0 + n);
+            this._renderingType = n;
         }
 
         /**
@@ -879,7 +878,7 @@ void main() {
         programLoaded(program, shaderLayers) {
             const gl = this.gl;
 
-
+            // load clip and blend shaderLayer's glsl locations, load shaderLayer's control's glsl locations
             for (const shaderLayer of shaderLayers) {
                 //console.log('Calling glLoaded on shaderLayer', shaderLayer.constructor.name(), shaderLayer);
                 shaderLayer.glLoaded(program, gl);
@@ -899,8 +898,8 @@ void main() {
             this._locationTexture = gl.getUniformLocation(program, "u_texture");
             this._locationTextureArray1 = gl.getUniformLocation(program, "u_textureArray1");
             this._locationTextureLayer1 = gl.getUniformLocation(program, "u_textureLayer1");
-            this._locationTextureArray = gl.getUniformLocation(program, "u_textureArray");
-            this._locationTextureLayer = gl.getUniformLocation(program, "u_textureLayer");
+            this._locationTextureArray2 = gl.getUniformLocation(program, "u_textureArray2");
+            this._locationTextureLayer2 = gl.getUniformLocation(program, "u_textureLayer2");
 
             this._locationShaderLayerIndex = gl.getUniformLocation(program, "u_shaderLayerIndex");
 
@@ -915,12 +914,11 @@ void main() {
             gl.vertexAttribPointer(this._locationTextureCoords, 2, gl.FLOAT, false, 0, 0);
 
 
-            // Initialize textures:
-            // Single-pass rendering uses gl.TEXTURE1 unit to which it binds TEXTURE_2D,
+            // Initialize texture arrays
+            // single-pass rendering uses gl.TEXTURE1 unit to which it binds TEXTURE_2D_ARRAY,
             // two-pass rendering uses gl.TEXTURE2 unit to which it binds TEXTURE_2D_ARRAY.
-            // gl.uniform1i(this._locationTexture, 1);
             gl.uniform1i(this._locationTextureArray1, 1);
-            gl.uniform1i(this._locationTextureArray, 2);
+            gl.uniform1i(this._locationTextureArray2, 2);
         }
 
 
@@ -933,39 +931,29 @@ void main() {
          * @param {number} tileInfo.zoom
          * @param {number} tileInfo.pixelSize
          * @param {Float32Array} tileInfo.textureCoords 8 suradnic, (2 pre kazdy vrchol triangle stripu)
-
-         * @param {WebGLTexture} texture gl.TEXTURE_2D
-         * @param {WebGLTextureArray} textureArray gl.TEXTURE_2D_ARRAY
-         * @param {number} textureLayer which layer from textureArray to use
+         *
+         * @param {ShaderLayer} shaderLayer shaderLayer
+         * @param {WebGLTexture} singlePassTextureArray gl.TEXTURE_2D_ARRAY used for single-pass rendering
+         * @param {number} singlePassTextureLayer index to layer in texture array to use
+         * @param {WebGLTexture} textureArray gl.TEXTURE_2D_ARRAY used for second pass render during two-pass rendering
+         * @param {number} secondPassTextureLayer index to layer in texture array to use
          */
-        programUsed(program, tileInfo, shaderLayer, controlId, textureArray1, textureLayer1, textureArray, textureLayer) {
-            if (!this.renderer.running) {
-                throw new Error("webGLContext::programUsed: Renderer not running!");
-            }
-            // console.log('PROGRAMUSED call!');
+        programUsed(program, tileInfo, shaderLayer, controlId,
+            singlePassTextureArray, singlePassTextureLayer, secondPassTextureArray, secondPassTextureLayer) {
 
             const gl = this.gl;
-            // if (spec) {
-            //     console.log('spec =', spec);
-            //     // fill shader's control's uniforms
-            //     this.renderer.glDrawing(gl, program, spec);
-            // }
-            if (shaderLayer) {
-                //console.log('Calling glDrawing on shaderLayer', shaderLayer.constructor.name(), shaderLayer);
-                shaderLayer.glDrawing(program, gl, controlId);
-                const shaderLayerIndex = this._shadersMapping[shaderLayer.constructor.type()];
-                // index of shaderLayer to use
-                // console.log('programUsed: do shaderLayerIndexu nahram cislo', shaderLayerIndex);
-                gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
-            }
+
+            // tell the control to fill it's uniforms
+            shaderLayer.glDrawing(program, gl, controlId);
+            // tell glsl which shaderLayer to use
+            const shaderLayerIndex = this._shadersMapping[shaderLayer.constructor.type()];
+            gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
 
             // fill FRAGMENT shader's uniforms (that are unused)
             gl.uniform1f(this._locationPixelSize, tileInfo.pixelSize || 1);
             gl.uniform1f(this._locationZoomLevel, tileInfo.zoom || 1);
 
-            // const textureType = program._osdOptions.textureType; // nechal som aby som videl ze existuju nejake _osdOptions a v nich shity
-            // const instanceCount = program._osdOptions.instanceCount;
-            // gl.clear(gl.COLOR_BUFFER_BIT); //-> vzdy uvidim len poslednu vec co som drawoval potom hihi
+            // const textureType = program._osdOptions.textureType; // nechal som aby som videl ze existuju nejake _osdOptions
 
             // texture coords
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
@@ -974,82 +962,14 @@ void main() {
             // transform matrix
             gl.uniformMatrix3fv(this._locationTransformMatrix, false, tileInfo.transform);
 
-            if (textureArray1) {
-                gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray1);
-                gl.uniform1i(this._locationTextureLayer1, textureLayer1);
-            } else {
-                gl.bindTexture(gl.TEXTURE_2D, textureArray1);
+            if (this._renderingType === 1) {
+                gl.bindTexture(gl.TEXTURE_2D_ARRAY, singlePassTextureArray);
+                gl.uniform1i(this._locationTextureLayer1, singlePassTextureLayer);
             }
-            if (textureArray) {
-                gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
-                gl.uniform1i(this._locationTextureLayer, textureLayer);
+            else if (this._renderingType === 2) {
+                gl.bindTexture(gl.TEXTURE_2D_ARRAY, secondPassTextureArray);
+                gl.uniform1i(this._locationTextureLayer2, secondPassTextureLayer);
             }
-
-
-
-            // CONTROLS debugging
-            // const blendLocE = gl.getUniformLocation(program, "edge_shader_blend");
-            // const blendLocD = gl.getUniformLocation(program, "default_shader_blend");
-            // console.error(blendLocD, blendLocE);
-            // if (blendLocD !== null) {
-            //     // gl.uniform1i(blendLocD, 0);
-            // } else {
-            //     console.error("blendLOcD je undefined");
-            // }
-            // if(blendLocE !== null) {
-            //     // gl.uniform1i(blendLocE, 0);
-            //     console.error(`blendE = ${gl.getUniform(program, blendLocE)}, blendD = ${gl.getUniform(program, blendLocD)}`);
-
-            // } else {
-            //     console.error("blendLOcE je undefined");
-            // }
-
-
-            // const colorLocE = gl.getUniformLocation(program, "color_edge_shader");
-            // const colorLocD = gl.getUniformLocation(program, "color_default_shader");
-            // console.error(colorLocD, colorLocE);
-            // if (colorLocD !== null) {
-            //     // gl.uniform3f(colorLocD, 0.0, 1.0, 0.0);
-            // } else {
-            //     console.error("colorLOcD je undefined");
-            // }
-            // if(colorLocE !== null) {
-            //     // gl.uniform3f(colorLocE, 0.0, 1.0, 0.0);
-            //     console.error(`colorE = ${gl.getUniform(program, colorLocE)}, colorD = ${gl.getUniform(program, colorLocD)}`);
-            // } else {
-            //     console.error("colorLOcE je undefined");
-            // }
-
-            // const thresholdLocE = gl.getUniformLocation(program, "threshold_edge_shader");
-            // const thresholdLocD = gl.getUniformLocation(program, "threshold_default_shader");
-            // console.error(thresholdLocD, thresholdLocE);
-            // if (thresholdLocD !== null) {
-            //     // gl.uniform1f(thresholdLocD, 0.5);
-            // } else {
-            //     console.error("thresholdLOcD je undefined");
-            // }
-            // if(thresholdLocE !== null) {
-            //     // gl.uniform1f(thresholdLocE, 0.5);
-            //     console.error(`thresholdE = ${gl.getUniform(program, thresholdLocE)}, thresholdD = ${gl.getUniform(program, thresholdLocD)}`);
-
-            // } else {
-            //     console.error("thresholdLOcE je undefined");
-            // }
-
-            // const edgeThicknessLocE = gl.getUniformLocation(program, "edgeThickness_edge_shader");
-            // const edgeThicknessLocD = gl.getUniformLocation(program, "edgeThickness_default_shader");
-            // console.error(edgeThicknessLocD, edgeThicknessLocE);
-            // if (edgeThicknessLocD !== null) {
-            //     // gl.uniform1f(edgeThicknessLocD, 0.2);
-            // } else {
-            //     console.error("edgeThicknessLOcD je undefined");
-            // }
-            // if(edgeThicknessLocE !== null) {
-            //     // gl.uniform1f(edgeThicknessLocE, 0.2);
-            //     console.error(`edgeThicknessE = ${gl.getUniform(program, edgeThicknessLocE)}, edgeThicknessD = ${gl.getUniform(program, edgeThicknessLocD)}`);
-            // } else {
-            //     console.error("edgeThicknessLOcE je undefined");
-            // }
 
             // draw triangle strip (two triangles) from a static array defined in the vertex shader,
             // 0: start reading vertex data from the first vertex,

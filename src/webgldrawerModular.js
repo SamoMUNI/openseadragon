@@ -119,18 +119,10 @@
                     stencil: true
                 }
             });
-
-            // OLD $.extend(this.options, rendererOptions) [this.options are options.options from DRAWERBASE]
             this.renderer = new $.WebGLModule(rendererOptions);
-            //this.renderer._createSinglePassShader('TEXTURE_2D');
             this.renderer.createProgram();
-
-            /* returns $.Point */
-            // const size = this._calculateCanvasSize();
-            // console.log('Som v konstruktori draweru, renderer canvasu a this._size nastavujem na', this.canvas.width, this.canvas.height);
-            this.renderer.init(this.canvas.width, this.canvas.height);
+            this.renderer.setDimensions(0, 0, this.canvas.width, this.canvas.height);
             this._size = new $.Point(this.canvas.width, this.canvas.height); // current viewport size, changed during resize event
-
             this.renderer.setDataBlendingEnabled(true); // enable blending
 
 
@@ -145,7 +137,6 @@
             // };
 
             this._offScreenBuffer = this._gl.createFramebuffer();
-
             // rework with Texture2DArray, used with two-pass rendering
             this._offscreenTextureArray = this._gl.createTexture();
             // one layer for every tiledImage's source
@@ -153,7 +144,7 @@
 
 
             // disable cull face, this solved flipping error
-            this._gl.disable(this._gl.CULL_FACE);
+            // this._gl.disable(this._gl.CULL_FACE);
             // const maxArrayLayers = this._gl.getParameter(this._gl.MAX_ARRAY_TEXTURE_LAYERS);
             // console.log('Max textureArray layers', maxArrayLayers);
             // const maxTextureUnits = this._gl.getParameter(this._gl.MAX_TEXTURE_IMAGE_UNITS);
@@ -464,9 +455,11 @@
             //this.enableStencilTest(false);
 
             if (!twoPassRendering) {
-                // this._drawSinglePassNew(tiledImages, view, viewMatrix);
-                this._drawTwoPassNew(tiledImages, view, viewMatrix);
+                console.log('Single pass.');
+                this._drawSinglePassNew(tiledImages, view, viewMatrix);
+                // this._drawTwoPassNew(tiledImages, view, viewMatrix);
             } else {
+                console.log('Two pass.');
                 // this._drawSinglePassNew(tiledImages, view, viewMatrix);
 
                 this._drawTwoPassNew(tiledImages, view, viewMatrix);
@@ -1064,7 +1057,6 @@
          * @param {OpenSeadragon.Mat3} viewMatrix to apply
          */
         _drawSinglePassNew(tiledImages, viewport, viewMatrix) {
-            console.log('Single pass');
             const gl = this._gl;
             gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -1145,6 +1137,7 @@
                             throw Error("webgldrawerModular.js::drawSinglePass: tile has no context!");
                         }
 
+                        const shaders = tiledImage.source.drawers[this._id].shaders;
                         const renderInfo = {
                             transform: this._getTileMatrix(tile, tiledImage, overallMatrix),
                             zoom: viewport.zoom,
@@ -1152,22 +1145,24 @@
                             textureCoords: tileInfo.position
                         };
 
-                        const shaders = tiledImage.source.drawers[this._id].shaders;
-                        const shader = shaders[Object.keys(shaders)[0]]._renderContext;
-                        // if (shader.opacity !== undefined) {
-                        //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
-                        //     shader.opacity.set(tiledImage.opacity);
-                        // }
+                        // need to render in correct order
+                        for (const shaderKey of tiledImage.source.sources) {
+                            const shader = shaders[shaderKey]._renderContext;
+                            // if (shader.opacity !== undefined) {
+                            //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
+                            //     shader.opacity.set(tiledImage.opacity);
+                            // }
 
-                        // console.log('kreslim z ', this._id, 'tento canvas by mal byt v texture:', tileContext.canvas);
-                        if (this.webGLVersion === "1.0") {
-                            this.renderer.processData(renderInfo, shader,
-                                tiledImage.source.id.toString() + '_0',
-                                tileInfo.textures[0], null, null, null); // index 0 because more sources not supported rn
-                        } else {
-                            this.renderer.processData(renderInfo, shader,
-                                tiledImage.source.id.toString() + '_0',
-                                tileInfo.texture2DArray, 0, null, null); // layer 0 because more sources not supported rn
+                            // won't work now because webgl 1.0 is not implemented yet
+                            if (this.webGLVersion === "1.0") {
+                                this.renderer.processData(renderInfo, shader,
+                                    tiledImage.source.id.toString() + '_' + shaderKey.toString(), // controlId
+                                    tileInfo.textures[shaderKey], null, null, null);
+                            } else {
+                                this.renderer.processData(renderInfo, shader,
+                                    tiledImage.source.id.toString() + '_' + shaderKey.toString(), // controlId
+                                    tileInfo.texture2DArray, shaderKey, null, null);
+                            }
                         }
                     }
 
@@ -1261,6 +1256,7 @@
                             );
 
                             if (this.webGLVersion === "1.0") {
+                                // won't work now because webgl 1.0 is not implemented yet
                                 this.renderer.drawFirstPassProgram(tileInfo.textures[i], null, null, tileInfo.position, matrix);
                             } else {
                                 this.renderer.drawFirstPassProgram(null, tileInfo.texture2DArray, i, tileInfo.position, matrix);
@@ -1375,6 +1371,8 @@
             ]);
 
             if (tile.flipped) {
+                this._gl.disable(this._gl.CULL_FACE);
+
                 // flips the tile so that we see it's back
                 const flipLeftAroundTileOrigin = $.Mat3.makeScaling(-1, 1);
                 // tile's geometry stays the same so when looking at it's back we gotta reverse the logic we would normally use

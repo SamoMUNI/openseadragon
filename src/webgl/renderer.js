@@ -578,7 +578,7 @@
          * @instance
          * @memberOf WebGLModule
          */
-        processData(tileOpts, shaderLayer, controlId, textureArray1 = null, textureLayer1 = null, textureArray = null, textureLayer = null) {
+        processData(tileOpts, shaderLayer, controlId, tileSourcesTextureArray = null, tileSourcesTextureLayer = null, secondPassTextureArray = null, secondPassTextureLayer = null) {
             //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
             // const spec = this._programSpecifications[this._program];
             //console.log('processData: spec=', spec);
@@ -586,7 +586,9 @@
             // if (!spec) {
             //     $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
             // } else {
-                this.webglContext.programUsed(this._program, tileOpts, shaderLayer, controlId, textureArray1, textureLayer1, textureArray, textureLayer);
+                this.webglContext.programUsed(this._program, tileOpts, shaderLayer, controlId,
+                    tileSourcesTextureArray, tileSourcesTextureLayer, secondPassTextureArray, secondPassTextureLayer
+                );
             // }
         }
 
