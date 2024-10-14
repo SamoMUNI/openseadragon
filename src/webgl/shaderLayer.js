@@ -248,7 +248,12 @@
 
                 // update dataSource object attributes
                 dataSourceJSON._controls[controlName] = control;
-                dataSourceJSON._controlsCache[controlName] = control.createCacheObject();
+                const sourceControlsCache = dataSourceJSON._controlsCache;
+                if (sourceControlsCache[controlName]) {
+                    control.loadCacheObject(sourceControlsCache[controlName]);
+                } else {
+                    sourceControlsCache[controlName] = control.createCacheObject();
+                }
             }
         }
 
@@ -1535,7 +1540,7 @@
         }
 
         /**
-         * Create cache attribute to store this control's values.
+         * Create cache object to store this control's values.
          * @returns {object}
          */
         createCacheObject() {
@@ -1544,6 +1549,15 @@
                 value: this.raw
             };
             return this._cache;
+        }
+
+        /**
+         *
+         * @param {object} cache object to serve as control's cache
+         */
+        loadCacheObject(cache) {
+            this._cache = cache;
+            this.set(cache.encodedValue);
         }
 
         /**
@@ -1663,8 +1677,10 @@
             // console.warn('control\'s set call, value =', encodedValue);
             this.encodedValue = encodedValue;
             this.value = this.component.normalize(this.component.decode(this.encodedValue), this.params);
-            this.changed("default", this.value, this.encodedValue, this);
-            this.store(this.encodedValue);
+            //this.changed("default", this.value, this.encodedValue, this);
+            //this.store(this.encodedValue);
+            this._cache.encodedValue = this.encodedValue;
+            this._cache.value = this.value;
         }
 
         glDrawing(program, gl) {

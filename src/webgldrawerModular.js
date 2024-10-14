@@ -168,6 +168,7 @@
             this.viewer.rejectEventHandler("tile-drawn", "The WebGLDrawer does not raise the tile-drawn event");
             this.viewer.rejectEventHandler("tile-drawing", "The WebGLDrawer does not raise the tile-drawing event");
 
+            this._export = {};
             this.viewer.world.addHandler("add-item", (e) => {
                 console.info('ADD-ITEM EVENT !!!, size =', this._size);
 
@@ -226,10 +227,23 @@
 
                 spec._initialized = true;
                 e.item.source.drawers[this._id] = spec;
+
+                // object to export session settings
+                const tI = this._export[e.item.source.id] = {};
+                tI.sources = e.item.source.sources;
+                tI.shaders = e.item.source.shaders;
+                tI.controlsCaches = {};
+                for (const sourceId in e.item.source.drawers[this._id].shaders) {
+                    tI.controlsCaches[sourceId] = e.item.source.drawers[this._id].shaders[sourceId]._controlsCache;
+                }
             });
 
             this.viewer.world.addHandler("remove-item", (e) => {
                 console.log('REMOVE-ITEM EVENT !!!');
+
+                // delete export info about this tiledImage
+                delete this._export[e.item.source.id];
+                this.export();
 
                 for (const sourceIndex of Object.keys(e.item.source.drawers[this._id].shaders)) {
                     // console.log('Mazem shaderType =', shaderType);
@@ -268,6 +282,14 @@
                 this._size = viewportSize;
             });
         }//end of constructor
+
+        /**
+         * @returns {string}
+         */
+        export() {
+            // console.info('Exportujem:\n', this._export);
+            return JSON.stringify(this._export);
+        }
 
         // Public API required by all Drawer implementations
         /**
