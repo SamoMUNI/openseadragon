@@ -101,16 +101,10 @@
                 // Allow override:
                 webglPreferredVersion: "2.0",
                 webglOptions: {},
-                htmlControlsId: "drawer-controls",
                 htmlShaderPartHeader: (html, dataId, isVisible, layer, isControllable = true) => {
                     return `<div class="configurable-border"><div class="shader-part-name">${dataId}</div>${html}</div>`;
                 },
-                ready: () => {
-                },
-                resetCallback: function () {
-                },
-                debug: false,
-            }, options, {
+            }, options.options, {
                 // Do not allow override:
                 uniqueId: "osd_" + this._id,
                 canvasOptions: {
@@ -273,7 +267,8 @@
                 item.drawers = {};
 
                 // manualne nastavenie teraz -> malo by dojst ZVONKA v buducnosti uz nastavene podla toho co user chce
-                let shaderType = shaders && shaders.length && shaders[0].type; // FIXME: deal properly with objects as discussed
+                let keys = shaders && Object.keys(shaders),
+                    shaderType = keys && keys.length && shaders[keys[0]].type; // FIXME: deal properly with objects as discussed
                 if (!shaderType) {
                     if (item.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
                         shaderType = "edge";
