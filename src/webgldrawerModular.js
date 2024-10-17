@@ -173,13 +173,12 @@
             this.viewer.world.addHandler("add-item", (e) => {
                 console.info('ADD-ITEM EVENT !!!, size =', this._size);
 
-                const item = e.item.source;
-                this.configureTiledImage(item); //to be sure
+                const tileSource = this.configureTiledImage(e.item);
 
                 // spec is object holding data about how the tiledImage's sources are rendered
                 let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
-                for (let sourceIndex = 0; sourceIndex < item.sources.length; ++sourceIndex) {
-                    const shaderType = item.shaders[sourceIndex];
+                for (let sourceIndex = 0; sourceIndex < tileSource.sources.length; ++sourceIndex) {
+                    const shaderType = tileSource.shaders[sourceIndex];
                     if (shaderType === "edge") {
                         spec._utilizeLocalMethods = true;
                     }
@@ -192,7 +191,7 @@
                     sourceJSON._controlsCache = {};
 
                     const shader = this.renderer.createShader(sourceJSON, shaderType,
-                        e.item.source.id.toString() + '_' + sourceIndex.toString());
+                        tileSource.id.toString() + '_' + sourceIndex.toString());
                     sourceJSON._renderContext = shader;
                     sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
 
@@ -202,15 +201,15 @@
                 }
 
                 spec._initialized = true;
-                item.drawers[this._id] = spec;
+                tileSource.drawers[this._id] = spec;
 
                 // object to export session settings
-                const tI = this._export[e.item.source.id] = {};
-                tI.sources = e.item.source.sources;
-                tI.shaders = e.item.source.shaders;
+                const tI = this._export[tileSource.id] = {};
+                tI.sources = tileSource.sources;
+                tI.shaders = tileSource.shaders;
                 tI.controlsCaches = {};
-                for (const sourceId in e.item.source.drawers[this._id].shaders) {
-                    tI.controlsCaches[sourceId] = e.item.source.drawers[this._id].shaders[sourceId]._controlsCache;
+                for (const sourceId in tileSource.drawers[this._id].shaders) {
+                    tI.controlsCaches[sourceId] = tileSource.drawers[this._id].shaders[sourceId]._controlsCache;
                 }
             }, null, -Infinity);
 
@@ -268,15 +267,18 @@
         }
 
         // FIXME: for thinking: there could be built-in functionality for reseting the whole system & re-rendering output
-        configureTiledImage(item, shaders = undefined) {
-            if (item instanceof Number) {
-                item = this.viewer.world.getItemAt(item);
+        configureTiledImage(tiledImage, shaders = undefined) {
+            let tileSource;
+            if (tiledImage instanceof Number) {
+                tileSource = this.viewer.world.getItemAt(tiledImage);
             }
-            if (item instanceof OpenSeadragon.TiledImage) {
-                item = item.source;
+            else if (tiledImage instanceof OpenSeadragon.TiledImage) {
+                console.log('Idem tadeto');
+                tileSource = tiledImage.source;
+                console.log('tilesource =', tileSource);
             }
-            if (!(item instanceof OpenSeadragon.TileSource)) {
-                throw new Error(`Invalid argument ${item}!`);
+            else if (!(tiledImage instanceof OpenSeadragon.TileSource)) {
+                throw new Error(`Invalid argument ${tiledImage}!`);
             }
 
 
@@ -284,29 +286,32 @@
             //FIXME: be careful about custom properties with such names on existing components! this might break things
             // rather use item.__shaders or similar.. better store the object given to the shader together with a custom id inside it,
             // try to pollute external objects with custom props as little as possible
-            if (item.id === undefined) {
+            if (tileSource.id === undefined) {
                 // console.log('TiledImage seen for the very first time!');
-                item.id = Date.now();
+                tileSource.id = Date.now();
 
                 // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap, maybe more in the future...)
                 // every instantion can put it's own data here with it's id representing the key into the map
-                item.drawers = {};
+                tileSource.drawers = {};
 
                 // manualne nastavenie teraz -> malo by dojst ZVONKA v buducnosti uz nastavene podla toho co user chce
                 let keys = shaders && Object.keys(shaders),
                     shaderType = keys && keys.length && shaders[keys[0]].type; // FIXME: deal properly with objects as discussed
                 if (!shaderType) {
-                    if (item.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
+                    if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
                         shaderType = "edge";
-                    } else if (item._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
+                    } else if (tileSource._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
                         shaderType = "negative";
                     } else {
                         shaderType = "identity";
                     }
                 }
-                item.sources = [0]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
-                item.shaders = {0: shaderType}; // index zdroja: akym shaderom sa ma renderovat
+                tileSource.sources = [0]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
+                tileSource.shaders = {0: shaderType}; // index zdroja: akym shaderom sa ma renderovat
             }
+
+            console.log('tilesource =', tileSource);
+            return tileSource;
         }
 
 
