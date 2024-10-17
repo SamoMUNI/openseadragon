@@ -177,7 +177,6 @@
                 this.configureTiledImage(item); //to be sure
 
                 // spec is object holding data about how the tiledImage's sources are rendered
-
                 let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
                 for (let sourceIndex = 0; sourceIndex < item.sources.length; ++sourceIndex) {
                     const shaderType = item.shaders[sourceIndex];
@@ -267,6 +266,7 @@
             // console.info('Exportujem:\n', this._export);
             return JSON.stringify(this._export);
         }
+
         // FIXME: for thinking: there could be built-in functionality for reseting the whole system & re-rendering output
         configureTiledImage(item, shaders = undefined) {
             if (item instanceof Number) {
@@ -300,18 +300,12 @@
                         shaderType = "edge";
                     } else if (item._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
                         shaderType = "negative";
+                    } else {
+                        shaderType = "identity";
                     }
                 }
                 item.sources = [0]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
                 item.shaders = {0: shaderType}; // index zdroja: akym shaderom sa ma renderovat
-                // assure that every source has defined shader to be rendered with, using identity as default value if shader for soure is not present
-
-                //FIXME what is purpose of this function? if you set both shaders and sources above, this does practically nothing
-                for (let i = 0; i < item.sources.length; ++i) {
-                    if (item.shaders[i] === undefined) {
-                        item.shaders[i] = "identity";
-                    }
-                }
             }
         }
 
@@ -1618,9 +1612,8 @@
                     gl.clear(gl.COLOR_BUFFER_BIT);
                     this._renderingCanvasHasImageData = false;
 
-
                     // Fire tiled-image-drawn event.
-                    // TODO: the image data may not be on the output canvas yet!!
+                    // the image data may not be on the output canvas yet!!
                     if( this.viewer ){
                         /**
                          * Raised when a tiled image is drawn to the canvas. Only valid
