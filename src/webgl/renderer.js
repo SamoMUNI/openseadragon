@@ -48,16 +48,29 @@
         /**
          * @constructor
          * @param {object} incomingOptions
-         * @param {string} incomingOptions.uniqueId
-         * @param {string} incomingOptions.webglPreferredVersion prefered WebGL version, for now "1.0" or "2.0"
-         * @param {object} incomingOptions.webglOptions
+         *
          * @param {object} incomingOptions.canvasOptions
+         * @param {boolean} incomingOptions.canvasOptions.alpha
+         * @param {boolean} incomingOptions.canvasOptions.premultipliedAlpha
+         * @param {boolean} incomingOptions.canvasOptions.stencil
+         *
+         * @param {boolean} incomingOptions.debug debug mode default false
+         *
          * @param {string} incomingOptions.htmlControlsId where to render html controls
          * @param {OpenSeadragon.WebGLModule.UIControlsRenderer} incomingOptions.htmlShaderPartHeader function that generates particular layer HTML
-         * @param {function} incomingOptions.ready function called when ready
-         * @param {function} incomingOptions.resetCallback function called when user input changed, e.g. changed output of the current rendering
-         * signature f({WebGLModule.VisualizationConfig} oldVisualisation,{WebGLModule.VisualizationConfig} newVisualisation)
-         * @param {boolean} incomingOptions.debug debug mode default false
+
+         * @param {function} incomingOptions.onError (error) => {}, function called when error occurs -> continue rendering
+         * @param {function} incomingOptions.onFatalError (error) => {}, function called when fatal error occurs -> stops the rendering
+         * @param {function} incomingOptions.ready () => {}, function called when ready
+         * @param {function} incomingOptions.resetCallback () => {}, function called when user input changed, e.g. changed output of the current rendering
+
+         * @param {string} incomingOptions.uniqueId
+
+         * @param {function} incomingOptions.visualisationChanged (oldVisualisation, newVisualisation) => {}
+         * @param {function} incomingOptions.visualisationInUse (visualisation) => {}
+
+         * @param {object} incomingOptions.webGLOptions
+         * @param {string} incomingOptions.webGLPreferredVersion prefered WebGL version, "1.0" or "2.0"
          */
         constructor(incomingOptions) {
             super();
@@ -69,8 +82,8 @@
 
             this.uniqueId = incomingOptions.uniqueId;
 
-            this.webglPreferredVersion = incomingOptions.webglPreferredVersion;
-            this.webglOptions = incomingOptions.webglOptions;
+            this.webGLPreferredVersion = incomingOptions.webGLPreferredVersion;
+            this.webGLOptions = incomingOptions.webGLOptions;
 
             this.canvasOptions = incomingOptions.canvasOptions;
 
@@ -109,13 +122,13 @@
             try {
                 const canvas = document.createElement("canvas");
 
-                const WebGLImplementation = this.constructor.determineContext(this.webglPreferredVersion);
+                const WebGLImplementation = this.constructor.determineContext(this.webGLPreferredVersion);
 
                 const WebGLRenderingContext = WebGLImplementation && WebGLImplementation.create(canvas, this.canvasOptions);
 
                 if (WebGLRenderingContext) {
                     const readGlProp = (prop, defaultValue) => {
-                        if (this.webglOptions[prop] !== undefined) {
+                        if (this.webGLOptions[prop] !== undefined) {
                             return WebGLRenderingContext[this.webglContext[prop]] || WebGLRenderingContext[defaultValue];
                         }
                         return WebGLRenderingContext[defaultValue];

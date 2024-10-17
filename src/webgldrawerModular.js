@@ -53,16 +53,17 @@
     * @param {Object} options - Options for this Drawer.
     * @param {OpenSeadragon.Viewer} options.viewer - The Viewer that owns this Drawer.
     * @param {OpenSeadragon.Viewport} options.viewport - Reference to Viewer viewport.
-    * @param {Element} options.element - Parent element.
-    * @param {[String]} [options.debugGridColor] - See debugGridColor in {@link OpenSeadragon.Options} for details.
+    * @param {HTMLElement} options.element - Parent element.
+    * @param {[String]} options.debugGridColor - See debugGridColor in {@link OpenSeadragon.Options} for details.
+    * @param {Object} options.options - Optional
     */
 
     OpenSeadragon.WebGLDrawerModular = class WebGLDrawer extends OpenSeadragon.DrawerBase{
         constructor(options){
-            // console.log('Robim moju implementaciu, extendnute options =', options);
+            console.log('Robim moju implementaciu, options =', options);
+            // sets this.viewer, this.viewport, this.container <- options.element, this.debugGridColor, this.options <- options.options
             super(options);
-
-            // console.log('Robim moju implementaciu, volam manualne draw');
+            this.webGLOptions = options.options;
 
 
             /**
@@ -83,6 +84,7 @@
             console.log('Drawer ID =', this._id);
             this.webGLVersion = "2.0";
 
+
             this._destroyed = false;
             this._TextureMap = new Map();
             this._TileMap = new Map(); //unused
@@ -101,8 +103,8 @@
             /***** SETUP RENDERER *****/
             const rendererOptions = $.extend({
                 // Allow override:
-                webglPreferredVersion: "2.0",
-                webglOptions: {},
+                webGLPreferredVersion: "2.0",
+                webGLOptions: {},
                 htmlControlsId: ++this.constructor.numOfDrawers === 1 ? "drawer-controls" : undefined,
                 htmlShaderPartHeader: (html, dataId, isVisible, layer, isControllable = true) => {
                     return `<div class="configurable-border"><div class="shader-part-name">${dataId}</div>${html}</div>`;
@@ -112,14 +114,14 @@
                 resetCallback: () => { this.draw(this.lastDrawArray); },
                 // resetCallback: () => {},
                 debug: false,
-            }, options, {
-            }, options.options, {
+            }, this.webGLOptions, {
                 // Do not allow override:
                 uniqueId: "osd_" + this._id,
                 canvasOptions: {
                     stencil: true
                 }
             });
+            console.log('Renderer options =', rendererOptions);
             this.renderer = new $.WebGLModule(rendererOptions);
             this.renderer.createProgram();
             this.renderer.setDimensions(0, 0, this.canvas.width, this.canvas.height);
@@ -273,9 +275,7 @@
                 tileSource = this.viewer.world.getItemAt(tiledImage);
             }
             else if (tiledImage instanceof OpenSeadragon.TiledImage) {
-                console.log('Idem tadeto');
                 tileSource = tiledImage.source;
-                console.log('tilesource =', tileSource);
             }
             else if (!(tiledImage instanceof OpenSeadragon.TileSource)) {
                 throw new Error(`Invalid argument ${tiledImage}!`);
@@ -310,7 +310,6 @@
                 tileSource.shaders = {0: shaderType}; // index zdroja: akym shaderom sa ma renderovat
             }
 
-            console.log('tilesource =', tileSource);
             return tileSource;
         }
 
