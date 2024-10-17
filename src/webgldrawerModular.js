@@ -282,10 +282,23 @@
             }
 
 
-            // tiledImage seen for the first time
+            // "shader_id_1": {
+            //         "name": "Layer 1",
+            //         "type": "identity",
+            //         "visible": 1,
+            //         "fixed": false,
+            //         "dataReferences":  ["0[1]", 5, "5"],
+            //          "params": {
+            //              "opacity": {
+            //                  default: 3
+            //              }
+            //         }
+            //     },
+
             //FIXME: be careful about custom properties with such names on existing components! this might break things
             // rather use item.__shaders or similar.. better store the object given to the shader together with a custom id inside it,
             // try to pollute external objects with custom props as little as possible
+            // tiledImage seen for the first time
             if (tileSource.id === undefined) {
                 // console.log('TiledImage seen for the very first time!');
                 tileSource.id = Date.now();
