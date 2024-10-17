@@ -579,17 +579,9 @@
          * @memberOf WebGLModule
          */
         processData(tileOpts, shaderLayer, controlId, tileSourcesTextureArray = null, tileSourcesTextureLayer = null, secondPassTextureArray = null, secondPassTextureLayer = null) {
-            //console.log('processData: idem kreslit s maticou:', tileOpts.transform);
-            // const spec = this._programSpecifications[this._program];
-            //console.log('processData: spec=', spec);
-            // console.log('processData, tileOpts =', tileOpts);
-            // if (!spec) {
-            //     $.console.error("Cannot render using invalid specification: did you call useCustomProgram?", this._program);
-            // } else {
-                this.webglContext.programUsed(this._program, tileOpts, shaderLayer, controlId,
-                    tileSourcesTextureArray, tileSourcesTextureLayer, secondPassTextureArray, secondPassTextureLayer
-                );
-            // }
+            this.webglContext.programUsed(this._program, tileOpts, shaderLayer, controlId,
+                tileSourcesTextureArray, tileSourcesTextureLayer, secondPassTextureArray, secondPassTextureLayer
+            );
         }
 
         // CUSTOM program I guess DRAWING !
@@ -747,9 +739,6 @@
         // called only from _forceSwitchProgram
         _loadHtml(program) {
             let htmlControls = document.getElementById(this.htmlControlsId);
-            if (!htmlControls) {
-                throw new Error(`Controls container ${this.htmlControlsId} not available: is the DOM ready?`);
-            }
             // returns program._osdOptions["html"];
             htmlControls.innerHTML = this.webglContext.getCompiled(program, "html") || "";
         }
@@ -837,17 +826,6 @@
             }
         }
 
-        // UNUSED returns shaderLayer instantiations
-        _getRenderContextsFromSpecifications() {
-            let contexts = [];
-            for (const spec of this._programSpecifications) {
-                if (spec !== undefined) {
-                    contexts.push(spec.shaders.renderShader._renderContext);
-                }
-            }
-
-            return contexts;
-        }
 
         _getShaders() {
             let shaders = [];
@@ -859,16 +837,8 @@
 
         createProgram() {
             const program = this.webglContext.programCreated(this._getShaders());
-            this.running = true;
-
             this._program = program;
-            // this._program = 0;
-            // this._programs[0] = program;
-
-            // if (this.supportsHtmlControls()) {
-            //     console.info('Creating program, loading html.');
-            //     this._loadHtml(program);
-            // }
+            this.running = true;
         }
 
         /**
@@ -878,13 +848,11 @@
          * @param {string} controlsId "<tiledImageIndex>_<sourceIndex>"
          * @returns {ShaderLayer} instantion of newly created shaderLayer
          */
-
         addShader(shaderObject, shaderType, controlsId, dataSourceJSON) {
             // console.log('renderer:: addShader call!');
 
+            // shaderType = "identity" for example
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
-            // const Shader = $.WebGLModule.ShaderMediator.getClass("edge");
-
             const shader = new Shader(shaderType + '_shader', {
                 shaderObject: shaderObject,
                 webglContext: this.webglContext,
@@ -894,26 +862,10 @@
                 refetch: () => {}
             });
             shader.newConstruct();
-            // if (!shader.initialized()) {
-            //     throw new Error('renderer.js::addShader(): Could not construct shader type =', shaderType, '!');
-            // }
-            // shader.init();
-
-            // only for main drawer, not for the minimap
-            // if (this.htmlControlsElement) {
-            //     console.log('renderer:: creating DOM controls!');
-            //     // creates DOM elements for shader's controls
-            //     for (const controlName of shader._ownedControls) {
-            //         shader[controlName].createDOMElement(this.htmlControlsElement);
-            //         shader[controlName].registerDOMElementEventHandler(this.resetCallback);
-            //     }
-            // }
             shader.newAddControl(dataSourceJSON, controlsId, this.htmlControlsElement, this.resetCallback);
 
             const program = this.webglContext.programCreated(this._getShaders().concat([shader]));
             this._program = program;
-            // this._program = 0;
-            // this._programs[0] = program;
 
             // console.log('renderer.js::addShader(): PROGRAM UPDATED!');
             return shader;
@@ -980,6 +932,8 @@
             this.webglContext.programLoaded(program, this._getShaders());
             this.webglContext.setRenderingType(numOfRenderPasses);
         }
+
+
 
         /**
          * Iterate through specification's shaderObjects and create their corresponding instantions.
@@ -1095,7 +1049,7 @@
                 rebuild: this.rebuildCurrentProgram.bind(this, undefined),
                 refetch: function() {
                     _this._updateRequiredDataSources(spec);
-                    //TODO: how to tell openseadragon to invalidate the whole data source?
+                    //how to tell openseadragon to invalidate the whole data source?
                     // !!implement!!
                     // used to call: _this.visualisationChanged(visualization, visualization);
                     //  --> no longer part of api
@@ -1190,9 +1144,6 @@
                 this.gl.disable(this.gl.BLEND);
             }
         }
-
-
-
     };
     /**
      * ID pattern allowed for module, ID's are used in GLSL
