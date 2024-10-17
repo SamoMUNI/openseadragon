@@ -747,6 +747,9 @@
         // called only from _forceSwitchProgram
         _loadHtml(program) {
             let htmlControls = document.getElementById(this.htmlControlsId);
+            if (!htmlControls) {
+                throw new Error(`Controls container ${this.htmlControlsId} not available: is the DOM ready?`);
+            }
             // returns program._osdOptions["html"];
             htmlControls.innerHTML = this.webglContext.getCompiled(program, "html") || "";
         }

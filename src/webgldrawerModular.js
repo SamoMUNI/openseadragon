@@ -113,6 +113,7 @@
                 // resetCallback: () => {},
                 debug: false,
             }, options, {
+            }, options.options, {
                 // Do not allow override:
                 uniqueId: "osd_" + this._id,
                 canvasOptions: {
@@ -172,38 +173,14 @@
             this.viewer.world.addHandler("add-item", (e) => {
                 console.info('ADD-ITEM EVENT !!!, size =', this._size);
 
-                // tiledImage seen for the first time
-                if (e.item.source.id === undefined) {
-                    e.item.source.id = Math.random();
-
-                    // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap,...),
-                    // so every instantion can put it's own data here with it's id representing the key into the map
-                    e.item.source.drawers = {};
-
-                    // MANUALNE nastavenie teraz -> malo by dojst ZVONKA v buducnosti uz nastavene podla toho co user chce
-                    let shaderType;
-                    if (e.item.source.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
-                        shaderType = "edge";
-                    } else if (e.item.source._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
-                        shaderType = "negative";
-                    }
-                    e.item.source.sources = [0]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
-                    e.item.source.shaders = {0: shaderType}; // index zdroja: akym shaderom sa ma renderovat
-                    // KONIEC MANUALNEHO nastavenia
-
-                    // assure that every source has defined shader to be rendered with,
-                    // using identity as default value if shader for source is not present
-                    for (let i = 0; i < e.item.source.sources.length; ++i) {
-                        if (e.item.source.shaders[i] === undefined) {
-                            e.item.source.shaders[i] = "identity";
-                        }
-                    }
-                }
+                const item = e.item.source;
+                this.configureTiledImage(item); //to be sure
 
                 // spec is object holding data about how the tiledImage's sources are rendered
+
                 let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
-                for (let sourceIndex = 0; sourceIndex < e.item.source.sources.length; ++sourceIndex) {
-                    const shaderType = e.item.source.shaders[sourceIndex];
+                for (let sourceIndex = 0; sourceIndex < item.sources.length; ++sourceIndex) {
+                    const shaderType = item.shaders[sourceIndex];
                     if (shaderType === "edge") {
                         spec._utilizeLocalMethods = true;
                     }
@@ -226,7 +203,7 @@
                 }
 
                 spec._initialized = true;
-                e.item.source.drawers[this._id] = spec;
+                item.drawers[this._id] = spec;
 
                 // object to export session settings
                 const tI = this._export[e.item.source.id] = {};
@@ -236,7 +213,7 @@
                 for (const sourceId in e.item.source.drawers[this._id].shaders) {
                     tI.controlsCaches[sourceId] = e.item.source.drawers[this._id].shaders[sourceId]._controlsCache;
                 }
-            });
+            }, null, -Infinity);
 
             this.viewer.world.addHandler("remove-item", (e) => {
                 console.log('REMOVE-ITEM EVENT !!!');
@@ -290,6 +267,54 @@
             // console.info('Exportujem:\n', this._export);
             return JSON.stringify(this._export);
         }
+        // FIXME: for thinking: there could be built-in functionality for reseting the whole system & re-rendering output
+        configureTiledImage(item, shaders = undefined) {
+            if (item instanceof Number) {
+                item = this.viewer.world.getItemAt(item);
+            }
+            if (item instanceof OpenSeadragon.TiledImage) {
+                item = item.source;
+            }
+            if (!(item instanceof OpenSeadragon.TileSource)) {
+                throw new Error(`Invalid argument ${item}!`);
+            }
+
+
+            // tiledImage seen for the first time
+            //FIXME: be careful about custom properties with such names on existing components! this might break things
+            // rather use item.__shaders or similar.. better store the object given to the shader together with a custom id inside it,
+            // try to pollute external objects with custom props as little as possible
+            if (item.id === undefined) {
+                // console.log('TiledImage seen for the very first time!');
+                item.id = Date.now();
+
+                // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap, maybe more in the future...)
+                // every instantion can put it's own data here with it's id representing the key into the map
+                item.drawers = {};
+
+                // manualne nastavenie teraz -> malo by dojst ZVONKA v buducnosti uz nastavene podla toho co user chce
+                let keys = shaders && Object.keys(shaders),
+                    shaderType = keys && keys.length && shaders[keys[0]].type; // FIXME: deal properly with objects as discussed
+                if (!shaderType) {
+                    if (item.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
+                        shaderType = "edge";
+                    } else if (item._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
+                        shaderType = "negative";
+                    }
+                }
+                item.sources = [0]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
+                item.shaders = {0: shaderType}; // index zdroja: akym shaderom sa ma renderovat
+                // assure that every source has defined shader to be rendered with, using identity as default value if shader for soure is not present
+
+                //FIXME what is purpose of this function? if you set both shaders and sources above, this does practically nothing
+                for (let i = 0; i < item.sources.length; ++i) {
+                    if (item.shaders[i] === undefined) {
+                        item.shaders[i] = "identity";
+                    }
+                }
+            }
+        }
+
 
         // Public API required by all Drawer implementations
         /**
