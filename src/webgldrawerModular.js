@@ -213,6 +213,8 @@
                 for (const sourceId in tileSource.drawers[this._id].shaders) {
                     tI.controlsCaches[sourceId] = tileSource.drawers[this._id].shaders[sourceId]._controlsCache;
                 }
+
+                this._initializeOffScreenTextureArray();
             }, null, -Infinity);
 
             this.viewer.world.addHandler("remove-item", (e) => {
@@ -220,13 +222,16 @@
 
                 // delete export info about this tiledImage
                 delete this._export[e.item.source.id];
-                this.export();
+                // this.export();
 
                 for (const sourceIndex of Object.keys(e.item.source.drawers[this._id].shaders)) {
                     // console.log('Mazem shaderType =', shaderType);
                     const sourceJSON = e.item.source.drawers[this._id].shaders[sourceIndex];
                     this.renderer.removeShader(sourceJSON, e.item.source.id.toString() + '_' + sourceIndex.toString());
                 }
+
+                --this._offscreenTextureArrayLayers;
+                this._initializeOffScreenTextureArray();
 
                 // these lines are unnecessary because somehow when tiledImage is added again he does not have this .source.drawers parameter anyways (I do not know why tho)
                 delete e.item.source.drawers[this._id];
@@ -257,6 +262,8 @@
                 console.info('Resize event, new.width:new.height', viewportSize.x, viewportSize.y);
                 this.renderer.setDimensions(0, 0, viewportSize.x, viewportSize.y);
                 this._size = viewportSize;
+
+                this._initializeOffScreenTextureArray();
             });
         }//end of constructor
 
@@ -1073,18 +1080,19 @@
          * Called during "add-item" and "resize" events.
          * @param {Number} numOfLayers number of layers in gl.TEXTURE_2D_ARRAY that will be used
          */
-        _initializeOffScreenTextureArray(numOfLayers) {
+        _initializeOffScreenTextureArray() {
             // console.error('Pozdrav z initialize off screen texture array!');
             const gl = this._gl;
-            if (this._offscreenTextureArray) {
-                gl.deleteTexture(this._offscreenTextureArray);
-            }
+            const numOfLayers = this._offscreenTextureArrayLayers;
+
+            gl.deleteTexture(this._offscreenTextureArray);
             this._offscreenTextureArray = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._offscreenTextureArray);
 
             const x = this._size.x;
             const y = this._size.y;
-            // once you allocate storage with gl.texStorage3D, you cannot change the texture's size or format, which helps optimize performance and ensures consistency
+            // once you allocate storage with gl.texStorage3D, you cannot change the texture's size
+            // or format, which helps optimize performance and ensures consistency
             gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, x, y, numOfLayers);
 
             const initialData = new Uint8Array(x * y * 4);
@@ -1095,6 +1103,15 @@
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        }
+
+        _clearOffScreenTextureArray() {
+            const gl = this._gl;
+            for (let i = 0; i < this._offscreenTextureArrayLayers; ++i) {
+                this._bindFrameBufferToOffScreenTextureArray(i);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+            }
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         }
 
         /**
@@ -1251,9 +1268,7 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
-            // this._initializeOffScreenTextureArray(tiledImages.length);
-            this._initializeOffScreenTextureArray(this._offscreenTextureArrayLayers);
-
+            this._clearOffScreenTextureArray();
             this.renderer.useFirstPassProgram();
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 const tilesToDraw = tiledImage.getTilesToDraw();
@@ -1325,6 +1340,7 @@
 
 
             // SECOND PASS (render from texture array to output canvas)
+            gl.finish();
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             // use program for two-pass rendering => parameter 2
             this.renderer.useDefaultProgram(2);

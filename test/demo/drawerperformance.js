@@ -17,6 +17,7 @@ const drawers = {
     canvas: "Context2d drawer (default in OSD &lt;= 4.1.0)",
     webgl: "New WebGL drawer",
     myImplementation: "New WebGL (Modular)",
+    // universalWebgl: "Jirka",
     html: ""
 }
 
