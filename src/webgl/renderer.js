@@ -851,6 +851,10 @@
         createProgram() {
             const program = this.webglContext.programCreated(this._getShaders());
             this._program = program;
+            if (!this.running) {
+                //TODO: might not be the best place to call, timeout necessary to allow finish initialization of OSD before called
+                setTimeout(() => this.ready());
+            }
             this.running = true;
         }
 
