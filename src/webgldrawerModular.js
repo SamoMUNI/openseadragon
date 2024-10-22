@@ -302,10 +302,6 @@
             //         }
             //     },
 
-            //FIXME: be careful about custom properties with such names on existing components! this might break things
-            // rather use item.__shaders or similar.. better store the object given to the shader together with a custom id inside it,
-            // try to pollute external objects with custom props as little as possible
-            // tiledImage seen for the first time
             if (tileSource.__renderInfo === undefined) {
                 tileSource.__renderInfo = {};
                 // console.log('TiledImage seen for the very first time!');
