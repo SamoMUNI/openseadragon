@@ -870,6 +870,9 @@
 
             // shaderType = "identity" for example
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
+            if (!Shader) {
+                throw new Error(`$.WebGLModule::addShader: Unknown shader type '${shaderType}'!`);
+            }
             const shader = new Shader(shaderType + '_shader', {
                 shaderObject: shaderObject,
                 webglContext: this.webglContext,

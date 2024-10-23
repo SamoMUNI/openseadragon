@@ -176,26 +176,28 @@
             this.viewer.world.addHandler("add-item", (e) => {
                 console.info('ADD-ITEM EVENT !!!, size =', this._size);
 
-                console.log('tiledImage info =', e.item);
                 const tiledImageInfo = this.configureTiledImage(e.item);
 
                 // spec is object holding data about how the tiledImage's sources are rendered
                 let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
                 for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
-                    const shaderType = tiledImageInfo.shaders[sourceIndex];
+                    const originalShaderDefinition = tiledImageInfo.shaders[sourceIndex].originalShaderDefinition;
+                    const shaderID = tiledImageInfo.shaders[sourceIndex].shaderID;
+
+                    const shaderType = originalShaderDefinition.type;
                     if (shaderType === "edge") {
                         spec._utilizeLocalMethods = true;
                     }
 
                     // sourceJSON is object holding data about how the concrete source is rendered
                     let sourceJSON = spec.shaders[sourceIndex] = {};
+                    sourceJSON.originalShaderDefinition = originalShaderDefinition;
                     sourceJSON.type = shaderType;
 
                     sourceJSON._controls = {};
                     sourceJSON._controlsCache = {};
 
-                    const shader = this.renderer.createShader(sourceJSON, shaderType,
-                        tiledImageInfo.id.toString() + '_' + sourceIndex.toString());
+                    const shader = this.renderer.createShader(sourceJSON, shaderType, shaderID);
                     sourceJSON._renderContext = shader;
                     sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
 
@@ -290,58 +292,93 @@
                 throw new Error(`Invalid argument ${item}!`);
             }
 
-
-
-
-            if (tileSource.__renderInfo === undefined) {
-                tileSource.__renderInfo = {};
-                // console.log('TiledImage seen for the very first time!');
-
-                const info = tileSource.__renderInfo;
-                info.id = Date.now();
-
-                // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap, maybe more in the future...)
-                // every instantion can put it's own data here with it's id representing the key into the map
-                info.drawers = {};
-
-                let shaderType;
-                if (!shaders) {
-                    if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
-                        shaderType = "edge";
-                    } else if (tileSource._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
-                        shaderType = "negative";
-                    } else {
-                        shaderType = "identity";
-                    }
-                } else {
-                    // SHADERS: {
-                    // "shader_id": {
-                    //         "name": "Layer 1",
-                    //         "type": "identity",
-                    //         "visible": 1,
-                    //         "fixed": false,
-                    //         "dataReferences":  ["0[1]", 5, "5"],
-                    //         "params": {
-                    //             "opacity": {
-                    //                 default: 3
-                    //             }
-                    //         }
-                    //         "cache": {}
-                    //         "_cacheApplied": undefined
-                    // },
-                    // "shader_id2": {
-                    //       ...
-                    // }
-                    // }
-                    let keys = shaders && Object.keys(shaders),
-                        shaderType = keys && keys.length && shaders[keys[0]].type; // FIXME: deal properly with objects as discussed
-                }
-
-                info.sources = [0]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
-                info.shaders = {0: shaderType}; // index zdroja: akym shaderom sa ma renderovat
+            if (tileSource.__renderInfo !== undefined) {
+                return tileSource.__renderInfo;
             }
 
-            return tileSource.__renderInfo;
+
+            // console.log('TiledImage seen for the very first time!');
+            const info = tileSource.__renderInfo = {};
+            info.id = Date.now();
+
+            // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap, maybe more in the future...)
+            // every instantion can put it's own data here with it's id representing the key into the map
+            info.drawers = {};
+
+            // set info.sources and info.shaders;
+            // if !shaders -> set manually, else set from the parameter
+            if (!shaders) {
+                let shaderType;
+                if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
+                    shaderType = "edge";
+                } else if (tileSource._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
+                    shaderType = "negative";
+                } else {
+                    shaderType = "identity";
+                }
+
+                const sourceIndex = 0;
+                info.sources = [sourceIndex]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
+                info.shaders = {};
+                info.shaders[sourceIndex] = {
+                    originalShaderDefinition: {
+                        name: shaderType + " shader",
+                        type: shaderType,
+                        visible: 1,
+                        fixed: false,
+                        dataReferences: [sourceIndex],
+                        params: {},
+                        cache: {},
+                        _cacheApplied: undefined
+                    },
+                    shaderID: info.id.toString() + '_' + sourceIndex.toString(),
+                };
+
+            } else {
+                // SHADERS: {
+                // "shader_id": {
+                //         "name": "Layer 1",
+                //         "type": "identity",
+                //         "visible": 1,
+                //         "fixed": false,
+                //         "dataReferences":  ["0[1]", 5, "5"], FOR NOW I ASSUME JUST NUMBERS
+                //         "params": {
+                //             "opacity": {
+                //                 default: 3
+                //             }
+                //         }
+                //         "cache": {}
+                //         "_cacheApplied": undefined
+                // },
+                // "shader_id2": {
+                //       ...
+                // }
+                // }
+
+                // TODO: Object.keys does not guarantee that the order in which keys were added will be preserved!
+                for (const shaderID of Object.keys(shaders)) {
+                    if (shaderID.instanceOf(String)) {
+                        throw new Error(`Invalid shaderID ${shaderID} type! Not string!`);
+                    }
+
+                    const shaderDefinition = shaders[shaderID];
+
+                    for (const sourceIndex of shaderDefinition.dataReferences) {
+                        // set the rendering order of the source
+                        info.sources.push(sourceIndex);
+
+                        // set which shader to use for the source
+                        info.shaders[sourceIndex] = {
+                            originalShaderDefinition: shaderDefinition,
+                            shaderID: shaderID
+                        };
+                    }
+
+                }
+            }
+
+            console.log('COnfigurol som TI, vraciam info=', info);
+            return info;
         }
 
 
