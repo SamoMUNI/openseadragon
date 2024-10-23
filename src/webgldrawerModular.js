@@ -176,49 +176,53 @@
             this.viewer.world.addHandler("add-item", (e) => {
                 console.info('ADD-ITEM EVENT !!!, size =', this._size);
 
-                const tiledImageInfo = this.configureTiledImage(e.item);
+                //TODO: comment this setTimeout what the hell is it doing here?
+                setTimeout(() => {
+                    const tiledImageInfo = this.configureTiledImage(e.item);
+                    // console.debug('Pockal som, TiledImageInfo =', tiledImageInfo);
 
-                // spec is object holding data about how the tiledImage's sources are rendered
-                let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
-                for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
-                    const originalShaderDefinition = tiledImageInfo.shaders[sourceIndex].originalShaderDefinition;
-                    const shaderID = tiledImageInfo.shaders[sourceIndex].shaderID;
+                    // spec is object holding data about how the tiledImage's sources are rendered
+                    let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
+                    for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
+                        const originalShaderDefinition = tiledImageInfo.shaders[sourceIndex].originalShaderDefinition;
+                        const shaderID = tiledImageInfo.shaders[sourceIndex].shaderID;
 
-                    const shaderType = originalShaderDefinition.type;
-                    if (shaderType === "edge") {
-                        spec._utilizeLocalMethods = true;
+                        const shaderType = originalShaderDefinition.type;
+                        if (shaderType === "edge") {
+                            spec._utilizeLocalMethods = true;
+                        }
+
+                        // sourceJSON is object holding data about how the concrete source is rendered
+                        let sourceJSON = spec.shaders[sourceIndex] = {};
+                        sourceJSON.originalShaderDefinition = originalShaderDefinition;
+                        sourceJSON.type = shaderType;
+
+                        sourceJSON._controls = {};
+                        sourceJSON._controlsCache = {};
+
+                        const shader = this.renderer.createShader(sourceJSON, shaderType, shaderID);
+                        sourceJSON._renderContext = shader;
+                        sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
+
+                        sourceJSON._index = 0;
+                        sourceJSON.visible = true;
+                        sourceJSON.rendering = true;
                     }
 
-                    // sourceJSON is object holding data about how the concrete source is rendered
-                    let sourceJSON = spec.shaders[sourceIndex] = {};
-                    sourceJSON.originalShaderDefinition = originalShaderDefinition;
-                    sourceJSON.type = shaderType;
+                    spec._initialized = true;
+                    tiledImageInfo.drawers[this._id] = spec;
 
-                    sourceJSON._controls = {};
-                    sourceJSON._controlsCache = {};
+                    // object to export session settings
+                    const tI = this._export[tiledImageInfo.id] = {};
+                    tI.sources = tiledImageInfo.sources;
+                    tI.shaders = tiledImageInfo.shaders;
+                    tI.controlsCaches = {};
+                    for (const sourceId in tiledImageInfo.drawers[this._id].shaders) {
+                        tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._controlsCache;
+                    }
 
-                    const shader = this.renderer.createShader(sourceJSON, shaderType, shaderID);
-                    sourceJSON._renderContext = shader;
-                    sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
-
-                    sourceJSON._index = 0;
-                    sourceJSON.visible = true;
-                    sourceJSON.rendering = true;
-                }
-
-                spec._initialized = true;
-                tiledImageInfo.drawers[this._id] = spec;
-
-                // object to export session settings
-                const tI = this._export[tiledImageInfo.id] = {};
-                tI.sources = tiledImageInfo.sources;
-                tI.shaders = tiledImageInfo.shaders;
-                tI.controlsCaches = {};
-                for (const sourceId in tiledImageInfo.drawers[this._id].shaders) {
-                    tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._controlsCache;
-                }
-
-                this._initializeOffScreenTextureArray();
+                    this._initializeOffScreenTextureArray();
+                }); // end of setTimeout
             }, null, -Infinity);
 
             this.viewer.world.addHandler("remove-item", (e) => {
@@ -292,23 +296,21 @@
                 throw new Error(`Invalid argument ${item}!`);
             }
 
-            console.debug('drawer.id =', this._id);
             if (tileSource.__renderInfo !== undefined) {
-                console.debug('TiledImage already seen, returning its info. Shaders=', shaders);
                 return tileSource.__renderInfo;
             }
 
 
-            console.debug('TiledImage seen for the very first time! Shaders =', shaders);
             const info = tileSource.__renderInfo = {};
             info.id = Date.now();
 
             // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap, maybe more in the future...)
-            // every instantion can put it's own data here with it's id representing the key into the map
+            // every instantion can put it's own data here with it's id serving as the key into the map
             info.drawers = {};
 
-            // set info.sources and info.shaders;
-            // if !shaders -> set manually, else set from the parameter
+            // set info.sources and info.shaders, if !shaders -> set manually, else set from the parameter
+            info.sources = [];
+            info.shaders = {};
             if (!shaders) {
                 let shaderType;
                 if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
@@ -359,13 +361,11 @@
 
                 // TODO: Object.keys does not guarantee that the order in which keys were added will be preserved!
                 for (const shaderID of Object.keys(shaders)) {
-                    if (shaderID.instanceOf(String)) {
-                        throw new Error(`Invalid shaderID ${shaderID} type! Not string!`);
-                    }
-
                     const shaderDefinition = shaders[shaderID];
 
-                    for (const sourceIndex of shaderDefinition.dataReferences) {
+                    // FIXME: dataReferences comes as [1] but should be [0] because it is the first source!!!
+                    for (const badSourceIndex of shaderDefinition.dataReferences) {
+                        const sourceIndex = badSourceIndex - 1;
                         // set the rendering order of the source
                         info.sources.push(sourceIndex);
 
@@ -379,7 +379,6 @@
                 }
             }
 
-            console.log('COnfigurol som TI, vraciam info=', info);
             return info;
         }
 
@@ -524,7 +523,7 @@
             return this._backupCanvasDrawer;
         }
 
-        /** TODO: jump here xD
+        /**
          * Draw to this._outputCanvas.
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          */

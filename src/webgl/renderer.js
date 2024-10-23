@@ -856,6 +856,8 @@
                 setTimeout(() => this.ready());
             }
             this.running = true;
+
+            console.info('$.WebGLModule::createProgram: PROGRAM CREATED! Shaders available =', $.WebGLModule.ShaderMediator.availableTypes());
         }
 
         /**
@@ -867,12 +869,17 @@
          */
         addShader(shaderObject, shaderType, controlsId, dataSourceJSON) {
             // console.log('renderer:: addShader call!');
+            console.info('$.WebGLModule::addShader: Shaders available =', $.WebGLModule.ShaderMediator.availableTypes());
 
             // shaderType = "identity" for example
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             if (!Shader) {
                 throw new Error(`$.WebGLModule::addShader: Unknown shader type '${shaderType}'!`);
+            } else {
+                // console.debug('$.WebGLModule::addShader: Adding shader type:', shaderType);
+                // console.debug('$.WebGLModule::addShader: Shader:', Shader);
             }
+
             const shader = new Shader(shaderType + '_shader', {
                 shaderObject: shaderObject,
                 webglContext: this.webglContext,
@@ -899,7 +906,7 @@
          * @returns {ShaderLayer} instantion of shaderLayer
          */
         createShader(sourceJSON, shaderType, controlsId) {
-            // console.log('Createshader, sourceJSON =', sourceJSON, 'controlsID =', controlsId);
+            console.warn('Createshader, sourceJSON =', sourceJSON, 'shaderType =', shaderType, 'controlsID =', controlsId);
             const shaderObject = {};
             if (this.shadersCounter[shaderType] === undefined) {
                 const newShader = this.addShader(shaderObject, shaderType, controlsId, sourceJSON);
