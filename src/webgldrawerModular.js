@@ -292,12 +292,14 @@
                 throw new Error(`Invalid argument ${item}!`);
             }
 
+            console.debug('drawer.id =', this._id);
             if (tileSource.__renderInfo !== undefined) {
+                console.debug('TiledImage already seen, returning its info. Shaders=', shaders);
                 return tileSource.__renderInfo;
             }
 
 
-            // console.log('TiledImage seen for the very first time!');
+            console.debug('TiledImage seen for the very first time! Shaders =', shaders);
             const info = tileSource.__renderInfo = {};
             info.id = Date.now();
 
