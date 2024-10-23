@@ -60,10 +60,11 @@
 
     OpenSeadragon.WebGLDrawerModular = class WebGLDrawer extends OpenSeadragon.DrawerBase{
         constructor(options){
-            console.log('Robim moju implementaciu, options =', options);
+            // console.log('Robim moju implementaciu, options =', options);
             // sets this.viewer, this.viewport, this.container <- options.element, this.debugGridColor, this.options <- options.options
             super(options);
             this.webGLOptions = options.options;
+            // console.info('WebGLDrawerModular options =', this.webGLOptions);
 
 
             /**
@@ -121,7 +122,7 @@
                     stencil: true
                 }
             });
-            console.log('Renderer options =', rendererOptions);
+            // console.log('Renderer options =', rendererOptions);
             this.renderer = new $.WebGLModule(rendererOptions);
             this.renderer.createProgram();
             this.renderer.setDimensions(0, 0, this.canvas.width, this.canvas.height);
@@ -175,6 +176,7 @@
             this.viewer.world.addHandler("add-item", (e) => {
                 console.info('ADD-ITEM EVENT !!!, size =', this._size);
 
+                console.log('tiledImage info =', e.item);
                 const tiledImageInfo = this.configureTiledImage(e.item);
 
                 // spec is object holding data about how the tiledImage's sources are rendered
@@ -289,18 +291,7 @@
             }
 
 
-            // "shader_id_1": {
-            //         "name": "Layer 1",
-            //         "type": "identity",
-            //         "visible": 1,
-            //         "fixed": false,
-            //         "dataReferences":  ["0[1]", 5, "5"],
-            //          "params": {
-            //              "opacity": {
-            //                  default: 3
-            //              }
-            //         }
-            //     },
+
 
             if (tileSource.__renderInfo === undefined) {
                 tileSource.__renderInfo = {};
@@ -313,10 +304,8 @@
                 // every instantion can put it's own data here with it's id representing the key into the map
                 info.drawers = {};
 
-                // manualne nastavenie teraz -> malo by dojst ZVONKA v buducnosti uz nastavene podla toho co user chce
-                let keys = shaders && Object.keys(shaders),
-                    shaderType = keys && keys.length && shaders[keys[0]].type; // FIXME: deal properly with objects as discussed
-                if (!shaderType) {
+                let shaderType;
+                if (!shaders) {
                     if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
                         shaderType = "edge";
                     } else if (tileSource._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
@@ -324,6 +313,28 @@
                     } else {
                         shaderType = "identity";
                     }
+                } else {
+                    // SHADERS: {
+                    // "shader_id": {
+                    //         "name": "Layer 1",
+                    //         "type": "identity",
+                    //         "visible": 1,
+                    //         "fixed": false,
+                    //         "dataReferences":  ["0[1]", 5, "5"],
+                    //         "params": {
+                    //             "opacity": {
+                    //                 default: 3
+                    //             }
+                    //         }
+                    //         "cache": {}
+                    //         "_cacheApplied": undefined
+                    // },
+                    // "shader_id2": {
+                    //       ...
+                    // }
+                    // }
+                    let keys = shaders && Object.keys(shaders),
+                        shaderType = keys && keys.length && shaders[keys[0]].type; // FIXME: deal properly with objects as discussed
                 }
 
                 info.sources = [0]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
@@ -479,9 +490,7 @@
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          */
         draw(tiledImages) {
-            // if (tiledImages.length) {
-            //     throw new Error("asd");
-            // }
+            console.log('Draw called with tiledImages lenght=', tiledImages.length);
 
             // clear the output canvas
             this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
@@ -1077,8 +1086,8 @@
 
         /**
          * Initialize this._offscreenTextureArray as gl.TEXTURE_2D_ARRAY to be used with two-pass rendering.
-         * Called during "add-item" and "resize" events.
-         * @param {Number} numOfLayers number of layers in gl.TEXTURE_2D_ARRAY that will be used
+         * Called during "add-item", "remove-item" (number of layers has to be changed),
+         * and "resize" (size of the layers has to be changed) events.
          */
         _initializeOffScreenTextureArray() {
             // console.error('Pozdrav z initialize off screen texture array!');
