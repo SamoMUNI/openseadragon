@@ -148,6 +148,42 @@
             // one layer for every tiledImage's source
             this._offscreenTextureArrayLayers = 0;
 
+            // download offScreenTextures
+            this.offScreenCanvases = {};
+            this.downloadCanvases = () => {
+                for (const layerIndex in this.offScreenCanvases) {
+                    const canvas = this.offScreenCanvases[layerIndex];
+                    canvas.toBlob(function(blob) {
+                        const link = document.createElement('a');
+                        // eslint-disable-next-line compat/compat
+                        link.href = URL.createObjectURL(blob);
+                        // link.download = `${layerIndex}.jpeg`;
+                        link.download = `png${layerIndex}.png`;
+                        link.click();  // Programmatically trigger the download
+                    // }, 'image/jpeg');
+                    }, 'image/png');
+                }
+            };
+            // console.info('every id in DOM:', document.querySelectorAll('*[id]'));
+            if (this._id === 0) {
+                const downloadLink = document.createElement('a');
+                downloadLink.id = 'downloadLink';
+                downloadLink.href = '#';  // Make it a clickable link
+                downloadLink.textContent = 'Download offScreenTextures';
+                let element = document.getElementById('panel-shaders');
+                if (!element) {
+                    console.error('Element with id "panel-shaders" not found, appending to body.');
+                    document.body.appendChild(downloadLink);
+                } else {
+                    element.appendChild(downloadLink);
+                }
+
+                // Add an event listener to trigger the download when clicked
+                downloadLink.addEventListener('click', (event) => {
+                    event.preventDefault();  // Prevent the default anchor behavior
+                    this.downloadCanvases();  // Specify which layer you want to download
+                });
+            }
 
             // disable cull face, this solved flipping error
             // this._gl.disable(this._gl.CULL_FACE);
@@ -1343,6 +1379,47 @@
         } // end of function
 
 
+        // Function to extract an image from a TEXTURE_2D_ARRAY
+        extractTextureLayer(texture, width, height, layerIndex) {
+            const gl = this._gl;
+
+            // Create framebuffer to read from the texture layer
+            const framebuffer = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+
+            // Attach the specific layer of the texture to the framebuffer
+            gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, texture, 0, layerIndex);
+
+            // Check if framebuffer is complete
+            if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+                console.error('Framebuffer is not complete');
+                return;
+            }
+
+            // Read pixels from the framebuffer
+            const pixels = new Uint8Array(width * height * 4);  // RGBA format
+            gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+            // Unbind the framebuffer
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+            // Create a canvas to convert raw pixel data to image
+            const outputCanvas = document.createElement('canvas');
+            outputCanvas.width = width;
+            outputCanvas.height = height;
+            const ctx = outputCanvas.getContext('2d');
+            const imageData = ctx.createImageData(width, height);
+
+            // Copy the pixel data into the canvas's ImageData
+            for (let i = 0; i < pixels.length; i++) {
+                imageData.data[i] = pixels[i];
+            }
+            ctx.putImageData(imageData, 0, 0);
+
+            this.offScreenCanvases[layerIndex] = outputCanvas;
+        }
+
+
         /**
          * Called only from draw function. Context2DPipeline not working with two-pass rendering, because everything is rendered onto this._renderingCanvas.
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
@@ -1353,6 +1430,7 @@
             // console.log('Two pass rendering.');
             const gl = this._gl;
             gl.clear(gl.COLOR_BUFFER_BIT);
+            this.numOfItems = tiledImages.length;
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
             // this._clearOffScreenTextureArray();
@@ -1430,6 +1508,13 @@
             // SECOND PASS (render from texture array to output canvas)
             gl.finish();
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+            // Put the offscreentexture data into the canvases to enable exporting it as a image
+            // gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._offscreenTextureArray);
+            for (let layerIndex = 0; layerIndex < tiledImages.length; ++layerIndex) {
+                this.extractTextureLayer(this._offscreenTextureArray, this._size.x, this._size.y, layerIndex);
+            }
+
             // use program for two-pass rendering => parameter 2
             this.renderer.useDefaultProgram(2);
 
@@ -1444,7 +1529,6 @@
             // useContext2DPipeline or else TODO - use instanced rendering ???
             if (useContext2DPipeline) {
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
-
                     const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     const renderInfo = {
                         transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
@@ -1455,10 +1539,10 @@
 
                     for (const shaderKey of tiledImage.source.__renderInfo.sources) {
                         const shader = shaders[shaderKey]._renderContext;
-                        // if (shader.opacity !== undefined) {
-                        //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
-                        //     shader.opacity.set(tiledImage.opacity);
-                        // }
+                        if (shader.opacity !== undefined) {
+                            console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
+                            shader.opacity.set(tiledImage.opacity);
+                        }
 
                         this.renderer.processData(renderInfo, shader,
                             tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId
