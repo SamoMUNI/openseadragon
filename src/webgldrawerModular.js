@@ -1068,7 +1068,7 @@
                 texture2DArray: undefined, // used with WebGL 2, TEXTURE_2D_ARRAY
                 debugTiledImage: event.tiledImage,
                 debugCanvas: canvas,
-                debugId: this.tileIdCounter++
+                debugId: this._tileIdCounter++
             };
 
             if (this.webGLVersion === "1.0") {
@@ -1455,7 +1455,7 @@
          * @param {OpenSeadragon.Mat3} viewMatrix to apply
          */
         _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
-            console.log('Two pass rendering. Number of tiles =', this._TextureMap.size);
+            // console.log('Two pass rendering. Number of tiles =', this._TextureMap.size);
             const gl = this._gl;
             gl.clear(gl.COLOR_BUFFER_BIT);
             this.numOfItems = tiledImages.length;
