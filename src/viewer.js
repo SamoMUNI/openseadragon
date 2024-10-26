@@ -1760,6 +1760,9 @@ $.extend( $.Viewer.prototype, $.EventSource.prototype, $.ControlDock.prototype, 
                         item: tiledImage
                     });
                 }
+
+                // TODO: comment this
+                // _this.viewer.drawer.tiledImageCreated(tiledImage);
             }
         }
 

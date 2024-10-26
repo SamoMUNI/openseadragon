@@ -151,6 +151,14 @@ OpenSeadragon.DrawerBase = class DrawerBase{
         return false;
      }
 
+     /**
+      * TODO: comment
+      * Called when tiledImage is created and all the external events
+      * and handlers were processed.
+      * @param {TiledImage} tiledImage
+      */
+    tiledImageCreated(tiledImage) {
+    }
 
     /**
      * @abstract
