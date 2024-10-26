@@ -89,6 +89,7 @@
 
             this._destroyed = false;
             this._tileIdCounter = 0;
+            this._tileIds = {};
             this._TextureMap = new Map();
             this._TileMap = new Map(); //unused
 
@@ -164,7 +165,7 @@
                     }, 'image/png');
                 }
             };
-            // console.info('every id in DOM:', document.querySelectorAll('*[id]'));
+            // create link only for the main drawer, not the minimap
             if (this._id === 0) {
                 const downloadLink = document.createElement('a');
                 downloadLink.id = 'downloadLink';
@@ -181,9 +182,26 @@
                 // Add an event listener to trigger the download when clicked
                 downloadLink.addEventListener('click', (event) => {
                     event.preventDefault();  // Prevent the default anchor behavior
-                    this.downloadCanvases();  // Specify which layer you want to download
+                    this.downloadCanvases();
                 });
             }
+
+            this.downloadTile = (tileId, canvas) => {
+                if (this._tileIds[tileId] !== undefined) {
+                    throw new Error("Tile with this ID already exists!");
+                }
+                console.debug('Downloading tile with ID =', tileId);
+
+                this._tileIds[tileId] = true;
+
+                canvas.toBlob(function(blob) {
+                    const link = document.createElement('a');
+                    // eslint-disable-next-line compat/compat
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `tile${tileId}.png`;
+                    link.click();  // Programmatically trigger the download
+                }, 'image/png');
+            };
 
             // disable cull face, this solved flipping error
             // this._gl.disable(this._gl.CULL_FACE);
@@ -201,7 +219,8 @@
             // Add listeners for events that require modifying the scene or camera
             this._boundToTileReady = ev => this._tileReadyHandler(ev);
             this._boundToImageUnloaded = ev => {
-                this._cleanupImageData(ev.context2D.canvas);
+                // console.log('event =', ev);
+                this._cleanupImageData(ev.tile.__renderInfo.id);
             };
             this.viewer.addHandler("tile-ready", this._boundToTileReady);
             this.viewer.addHandler("image-unloaded", this._boundToImageUnloaded);
@@ -214,50 +233,50 @@
             this.viewer.world.addHandler("add-item", (e) => {
                 console.info('ADD-ITEM EVENT !!!, size =', this._size);
 
-                    const tiledImageInfo = this.configureTiledImage(e.item);
-                    // console.debug('Pockal som, TiledImageInfo =', tiledImageInfo);
+                const tiledImageInfo = this.configureTiledImage(e.item);
+                // console.debug('Pockal som, TiledImageInfo =', tiledImageInfo);
 
-                    // spec is object holding data about how the tiledImage's sources are rendered
-                    let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
-                    for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
-                        const originalShaderDefinition = tiledImageInfo.shaders[sourceIndex].originalShaderDefinition;
-                        const shaderID = tiledImageInfo.shaders[sourceIndex].shaderID;
+                // spec is object holding data about how the tiledImage's sources are rendered
+                let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
+                for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
+                    const originalShaderDefinition = tiledImageInfo.shaders[sourceIndex].originalShaderDefinition;
+                    const shaderID = tiledImageInfo.shaders[sourceIndex].shaderID;
 
-                        const shaderType = originalShaderDefinition.type;
-                        if (shaderType === "edge") {
-                            spec._utilizeLocalMethods = true;
-                        }
-
-                        // sourceJSON is object holding data about how the concrete source is rendered
-                        let sourceJSON = spec.shaders[sourceIndex] = {};
-                        sourceJSON.originalShaderDefinition = originalShaderDefinition;
-                        sourceJSON.type = shaderType;
-
-                        sourceJSON._controls = {};
-                        sourceJSON._controlsCache = {};
-
-                        const shader = this.renderer.createShader(sourceJSON, shaderType, shaderID);
-                        sourceJSON._renderContext = shader;
-                        sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
-
-                        sourceJSON._index = 0;
-                        sourceJSON.visible = true;
-                        sourceJSON.rendering = true;
+                    const shaderType = originalShaderDefinition.type;
+                    if (shaderType === "edge") {
+                        spec._utilizeLocalMethods = true;
                     }
 
-                    spec._initialized = true;
-                    tiledImageInfo.drawers[this._id] = spec;
+                    // sourceJSON is object holding data about how the concrete source is rendered
+                    let sourceJSON = spec.shaders[sourceIndex] = {};
+                    sourceJSON.originalShaderDefinition = originalShaderDefinition;
+                    sourceJSON.type = shaderType;
 
-                    // object to export session settings
-                    const tI = this._export[tiledImageInfo.id] = {};
-                    tI.sources = tiledImageInfo.sources;
-                    tI.shaders = tiledImageInfo.shaders;
-                    tI.controlsCaches = {};
-                    for (const sourceId in tiledImageInfo.drawers[this._id].shaders) {
-                        tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._controlsCache;
-                    }
+                    sourceJSON._controls = {};
+                    sourceJSON._controlsCache = {};
 
-                    this._initializeOffScreenTextureArray();
+                    const shader = this.renderer.createShader(sourceJSON, shaderType, shaderID);
+                    sourceJSON._renderContext = shader;
+                    sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
+
+                    sourceJSON._index = 0;
+                    sourceJSON.visible = true;
+                    sourceJSON.rendering = true;
+                }
+
+                spec._initialized = true;
+                tiledImageInfo.drawers[this._id] = spec;
+
+                // object to export session settings
+                const tI = this._export[tiledImageInfo.id] = {};
+                tI.sources = tiledImageInfo.sources;
+                tI.shaders = tiledImageInfo.shaders;
+                tI.controlsCaches = {};
+                for (const sourceId in tiledImageInfo.drawers[this._id].shaders) {
+                    tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._controlsCache;
+                }
+
+                this._initializeOffScreenTextureArray();
             });
 
             this.viewer.world.addHandler("remove-item", (e) => {
@@ -685,15 +704,20 @@
             // console.warn('image-unloaded event called! From id =', this._id);
             let tileInfo = this._TextureMap.get(id);
 
+            //remove from the map
+            this._TextureMap.delete(id);
+
+            if (!tileInfo) {
+                console.error('Removing tile with no data! What the heck?! TileId =', id);
+                return;
+            }
+
             //release the texture / texture2DArray from the GPU
             if (tileInfo.textures) {
                 tileInfo.textures.map(texture => this._gl.deleteTexture(texture));
             } else if (tileInfo.texture2DArray) {
                 this._gl.deleteTexture(tileInfo.texture2DArray);
             }
-
-            //remove from the map
-            this._TextureMap.delete(id);
         }
 
 
@@ -971,6 +995,9 @@
                 };
             } else {
                 console.warn('Tile already has __renderInfo, tile id =', tile.__renderInfo.id);
+                if (tile.getCanvasContext().canvas !== this._TextureMap.get(tile.__renderInfo.id).debugCanvas) {
+                    console.error('Tile canvas is different from the one in the map!');
+                }
                 return;
             }
 
@@ -1046,6 +1073,7 @@
                 textures: undefined, // used with WebGL 1, [TEXTURE_2D]
                 texture2DArray: undefined, // used with WebGL 2, TEXTURE_2D_ARRAY
                 debugTiledImage: event.tiledImage,
+                debugCanvas: canvas
             };
 
             if (this.webGLVersion === "1.0") {
@@ -1101,6 +1129,11 @@
 
             // add it to our _TextureMap
             this._TextureMap.set(id, tileInfo);
+
+            // download all tiles as images to the disk
+            if (this._id === 0) {
+                // this.downloadTile(id, canvas);
+            }
         }
 
         // _registerResizeEventHandler() {
@@ -1472,6 +1505,8 @@
                         );
                         gl.clear(gl.COLOR_BUFFER_BIT);
 
+                        // console.info('first pass, tiledImageIndex', tiledImageIndex, 'tilesIDs =');
+                        // console.info(tilesToDraw.map(item => item.tile.__renderInfo.id));
                         // ITERATE over TILES
                         for (let tileIndex = 0; tileIndex < tilesToDraw.length; ++tileIndex) {
                             //console.log('Kreslim tile cislo', tileIndex);
@@ -1480,7 +1515,7 @@
                             const tileContext = tile.getCanvasContext();
                             let tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
                             if (!tileInfo) {
-                                // console.log('tileContext nie je nahrany, nahravam ho tam');
+                                console.warn('Divna vec sa deje, tile neni nahraty cez event, nahravam ho z draw funkcie');
 
                                 // tile was not processed in the tile-ready event (this can happen if this drawer was created after the tile was downloaded),
                                 // process it now and retry getting the data
@@ -1490,6 +1525,13 @@
                             if (!tileInfo) {
                                 throw Error("webgldrawerModular::drawTwoPass: tile has no context!");
                             }
+
+                            // DEBUG -> export tiles as images
+                            // if (tilesToDraw.length === 28) {
+                            //     const id = tile.__renderInfo.id;
+                            //     const canvas = tileContext.canvas;
+                            //     this.downloadTile(id, canvas);
+                            // }
 
                             const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
 
