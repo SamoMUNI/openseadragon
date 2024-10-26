@@ -176,8 +176,6 @@
             this.viewer.world.addHandler("add-item", (e) => {
                 console.info('ADD-ITEM EVENT !!!, size =', this._size);
 
-                //TODO: comment this setTimeout what the hell is it doing here?
-                setTimeout(() => {
                     const tiledImageInfo = this.configureTiledImage(e.item);
                     // console.debug('Pockal som, TiledImageInfo =', tiledImageInfo);
 
@@ -222,8 +220,7 @@
                     }
 
                     this._initializeOffScreenTextureArray();
-                }); // end of setTimeout
-            }, null, -Infinity);
+            });
 
             this.viewer.world.addHandler("remove-item", (e) => {
                 console.log('REMOVE-ITEM EVENT !!!');
