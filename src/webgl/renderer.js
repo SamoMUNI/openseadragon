@@ -857,7 +857,7 @@
             }
             this.running = true;
 
-            console.info('$.WebGLModule::createProgram: PROGRAM CREATED! Shaders available =', $.WebGLModule.ShaderMediator.availableTypes());
+            console.info('$.WebGLModule::createProgram: PROGRAM CREATED!');
         }
 
         /**
@@ -869,7 +869,7 @@
          */
         addShader(shaderObject, shaderType, controlsId, dataSourceJSON) {
             // console.log('renderer:: addShader call!');
-            console.info('$.WebGLModule::addShader: Shaders available =', $.WebGLModule.ShaderMediator.availableTypes());
+            // console.info('$.WebGLModule::addShader: Shaders available =', $.WebGLModule.ShaderMediator.availableTypes());
 
             // shaderType = "identity" for example
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
@@ -906,7 +906,7 @@
          * @returns {ShaderLayer} instantion of shaderLayer
          */
         createShader(sourceJSON, shaderType, controlsId) {
-            console.warn('Createshader, sourceJSON =', sourceJSON, 'shaderType =', shaderType, 'controlsID =', controlsId);
+            // console.warn('Createshader, sourceJSON =', sourceJSON, 'shaderType =', shaderType, 'controlsID =', controlsId);
             const shaderObject = {};
             if (this.shadersCounter[shaderType] === undefined) {
                 const newShader = this.addShader(shaderObject, shaderType, controlsId, sourceJSON);
