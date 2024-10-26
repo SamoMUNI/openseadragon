@@ -149,59 +149,30 @@
             // one layer for every tiledImage's source
             this._offscreenTextureArrayLayers = 0;
 
-            // download offScreenTextures
-            this.offScreenCanvases = {};
-            this.downloadCanvases = () => {
-                for (const layerIndex in this.offScreenCanvases) {
-                    const canvas = this.offScreenCanvases[layerIndex];
-                    canvas.toBlob(function(blob) {
-                        const link = document.createElement('a');
-                        // eslint-disable-next-line compat/compat
-                        link.href = URL.createObjectURL(blob);
-                        // link.download = `${layerIndex}.jpeg`;
-                        link.download = `png${layerIndex}.png`;
-                        link.click();  // Programmatically trigger the download
-                    // }, 'image/jpeg');
-                    }, 'image/png');
-                }
-            };
-            // create link only for the main drawer, not the minimap
+            // map to save offScreenTextures as canvases for exporting
+            this.offScreenTexturesAsCanvases = {};
+            // create a link for exporting offScreenTextures, only for the main drawer, not the minimap
             if (this._id === 0) {
                 const downloadLink = document.createElement('a');
                 downloadLink.id = 'downloadLink';
-                downloadLink.href = '#';  // Make it a clickable link
+                downloadLink.href = '#';  // make it a clickable link
                 downloadLink.textContent = 'Download offScreenTextures';
+
+                // for now just random element from xOpat's DOM I chose
                 let element = document.getElementById('panel-shaders');
                 if (!element) {
-                    console.error('Element with id "panel-shaders" not found, appending to body.');
+                    console.warn('Element with id "panel-shaders" not found, appending to body.');
                     document.body.appendChild(downloadLink);
                 } else {
                     element.appendChild(downloadLink);
                 }
 
-                // Add an event listener to trigger the download when clicked
+                // add an event listener to trigger the download when clicked
                 downloadLink.addEventListener('click', (event) => {
-                    event.preventDefault();  // Prevent the default anchor behavior
-                    this.downloadCanvases();
+                    event.preventDefault();  // prevent the default anchor behavior
+                    this.downloadOffScreenTextures();
                 });
             }
-
-            this.downloadTile = (tileId, canvas) => {
-                if (this._tileIds[tileId] !== undefined) {
-                    throw new Error("Tile with this ID already exists!");
-                }
-                console.debug('Downloading tile with ID =', tileId);
-
-                this._tileIds[tileId] = true;
-
-                canvas.toBlob(function(blob) {
-                    const link = document.createElement('a');
-                    // eslint-disable-next-line compat/compat
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `tile${tileId}.png`;
-                    link.click();  // Programmatically trigger the download
-                }, 'image/png');
-            };
 
             // disable cull face, this solved flipping error
             // this._gl.disable(this._gl.CULL_FACE);
@@ -220,7 +191,7 @@
             this._boundToTileReady = ev => this._tileReadyHandler(ev);
             this._boundToImageUnloaded = ev => {
                 // console.log('event =', ev);
-                this._cleanupImageData(ev.tile.__renderInfo.id);
+                this._cleanupImageData(ev.context2D.canvas);
             };
             this.viewer.addHandler("tile-ready", this._boundToTileReady);
             this.viewer.addHandler("image-unloaded", this._boundToImageUnloaded);
@@ -292,8 +263,8 @@
                     this.renderer.removeShader(sourceJSON, e.item.source.__renderInfo.id.toString() + '_' + sourceIndex.toString());
                 }
 
-                --this._offscreenTextureArrayLayers;
-                this._initializeOffScreenTextureArray();
+                // --this._offscreenTextureArrayLayers;
+                // this._initializeOffScreenTextureArray();
 
                 // these lines are unnecessary because somehow when tiledImage is added again he does not have this .source.__renderInfo.drawers parameter anyways (I do not know why tho)
                 delete e.item.source.__renderInfo.drawers[this._id];
@@ -442,6 +413,29 @@
             // TODO: put add-item logic here
         }
 
+        downloadOffScreenTextures() {
+            for (const layerIndex in this.offScreenTexturesAsCanvases) {
+                const canvas = this.offScreenTexturesAsCanvases[layerIndex];
+                canvas.toBlob(function(blob) {
+                    const link = document.createElement('a');
+                    // eslint-disable-next-line compat/compat
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `offScreenTexture${layerIndex}.png`;
+                    link.click();  // programmatically trigger the download
+                }, 'image/png');
+            }
+        }
+
+        downloadTile(tileId, canvas) {
+            canvas.toBlob((blob) => {
+                const link = document.createElement('a');
+                // eslint-disable-next-line compat/compat
+                link.href = URL.createObjectURL(blob);
+                link.download = `tile${tileId}.png`;
+                link.click();  // programmatically trigger the download
+            }, 'image/png');
+        }
+
         // Public API required by all Drawer implementations
         /**
         * Clean up the renderer, removing all resources
@@ -466,13 +460,13 @@
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
             // Delete all our created resources
-            // let canvases = Array.from(this._TextureMap.keys());
-            // canvases.forEach(canvas => {
-            //     this._cleanupImageData(canvas); // deletes texture, removes from _TextureMap
-            // });
-            for (const id in this._TextureMap) {
-                this._cleanupImageData(id);
-            }
+            let canvases = Array.from(this._TextureMap.keys());
+            canvases.forEach(canvas => {
+                this._cleanupImageData(canvas); // deletes texture, removes from _TextureMap
+            });
+            // for (const id in this._TextureMap) {
+            //     this._cleanupImageData(id);
+            // }
 
             // from drawer
             this._offScreenTextures.forEach(t => {
@@ -689,36 +683,36 @@
 
         /* Removes tileCanvas from texture map + free texture from GPU,
             called from destroy and when image-unloaded event happens */
-        // _cleanupImageData(tileCanvas) {
-        //     // console.warn('image-unloaded event called! From id =', this._id);
-        //     let textureInfo = this._TextureMap.get(tileCanvas);
-        //     //remove from the map
-        //     this._TextureMap.delete(tileCanvas);
-
-        //     //release the texture from the GPU
-        //     if(textureInfo){
-        //         this._gl.deleteTexture(textureInfo.texture);
-        //     }
-        // }
-        _cleanupImageData(id) {
+        _cleanupImageData(tileCanvas) {
             // console.warn('image-unloaded event called! From id =', this._id);
-            let tileInfo = this._TextureMap.get(id);
-
+            let textureInfo = this._TextureMap.get(tileCanvas);
             //remove from the map
-            this._TextureMap.delete(id);
+            this._TextureMap.delete(tileCanvas);
 
-            if (!tileInfo) {
-                console.error('Removing tile with no data! What the heck?! TileId =', id);
-                return;
-            }
-
-            //release the texture / texture2DArray from the GPU
-            if (tileInfo.textures) {
-                tileInfo.textures.map(texture => this._gl.deleteTexture(texture));
-            } else if (tileInfo.texture2DArray) {
-                this._gl.deleteTexture(tileInfo.texture2DArray);
+            //release the texture from the GPU
+            if(textureInfo){
+                this._gl.deleteTexture(textureInfo.texture);
             }
         }
+        // _cleanupImageData(id) {
+        //     // console.warn('image-unloaded event called! From id =', this._id);
+        //     let tileInfo = this._TextureMap.get(id);
+
+        //     //remove from the map
+        //     this._TextureMap.delete(id);
+
+        //     if (!tileInfo) {
+        //         console.error('Removing tile with no data! What the heck?! TileId =', id);
+        //         return;
+        //     }
+
+        //     //release the texture / texture2DArray from the GPU
+        //     if (tileInfo.textures) {
+        //         tileInfo.textures.map(texture => this._gl.deleteTexture(texture));
+        //     } else if (tileInfo.texture2DArray) {
+        //         this._gl.deleteTexture(tileInfo.texture2DArray);
+        //     }
+        // }
 
 
         /* Context2DPipeline functions ------------------------------------------------------------------------------------------------------------------ */
@@ -989,19 +983,20 @@
                 return;
             }
 
-            if (tile.__renderInfo === undefined) {
-                tile.__renderInfo = {
-                    id: this._tileIdCounter++,
-                };
-            } else {
-                console.warn('Tile already has __renderInfo, tile id =', tile.__renderInfo.id);
-                if (tile.getCanvasContext().canvas !== this._TextureMap.get(tile.__renderInfo.id).debugCanvas) {
-                    console.error('Tile canvas is different from the one in the map!');
-                }
-                return;
-            }
+            // if (tile.__renderInfo === undefined) {
+            //     tile.__renderInfo = {
+            //         id: this._tileIdCounter++,
+            //     };
+            // } else {
+            //     console.warn('Tile already has __renderInfo, tile id =', tile.__renderInfo.id);
+            //     if (tile.getCanvasContext().canvas !== this._TextureMap.get(tile.__renderInfo.id).debugCanvas) {
+            //         throw new Error('Tile canvas is different from the one in the map! This should not happen!');
+            //     }
+            //     return;
+            // }
+            // const id = tile.__renderInfo.id;
 
-            const id = tile.__renderInfo.id;
+
             let tileContext = tile.getCanvasContext();
             let canvas = tileContext && tileContext.canvas;
             // if the tile doesn't provide a canvas, or is tainted by cross-origin
@@ -1018,13 +1013,12 @@
             }
 
 
-            // pri prerobeni cez idcka sa sem uz nedostanem :)
-            // let textureInfo = this._TextureMap.get(id);
-            // if (textureInfo) {
-            //     console.warn('Texture already exists in the map, returning from _tileReadyHandler.\n',
-            //         'textureInfo tiledImage id =', textureInfo.debugTiledImage.source.__renderInfo.id, 'tiledImage id =', event.tiledImage.source.__renderInfo.id);
-            //     return;
-            // }
+            let textureInfo = this._TextureMap.get(canvas);
+            if (textureInfo) {
+                console.warn('Texture already exists in the map, returning from _tileReadyHandler.\n',
+                    'textureInfo tiledImage id =', textureInfo.debugTiledImage.source.__renderInfo.id, 'new tiledImage id =', event.tiledImage.source.__renderInfo.id);
+                return;
+            }
 
             // if this is a new image for us, create a gl Texture for this tile and bind the canvas with the image data
             const gl = this._gl;
@@ -1073,7 +1067,8 @@
                 textures: undefined, // used with WebGL 1, [TEXTURE_2D]
                 texture2DArray: undefined, // used with WebGL 2, TEXTURE_2D_ARRAY
                 debugTiledImage: event.tiledImage,
-                debugCanvas: canvas
+                debugCanvas: canvas,
+                debugId: this.tileIdCounter++
             };
 
             if (this.webGLVersion === "1.0") {
@@ -1128,11 +1123,11 @@
             }
 
             // add it to our _TextureMap
-            this._TextureMap.set(id, tileInfo);
+            this._TextureMap.set(canvas, tileInfo);
 
-            // download all tiles as images to the disk
+            // if this is the main drawer (not the minimap) download the tile as an image to the disk
             if (this._id === 0) {
-                // this.downloadTile(id, canvas);
+                // this.downloadTile(tileInfo.debugId, canvas);
             }
         }
 
@@ -1355,13 +1350,13 @@
                         const tile = tilesToDraw[tileIndex].tile;
 
                         const tileContext = tile.getCanvasContext();
-                        let tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                        let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         if (tileInfo === null) {
                             // tile was not processed in the tile-ready event (this can happen
                             // if this drawer was created after the tile was downloaded)
                             this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
                             // retry getting textureInfo
-                            tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                            tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         }
                         if (tileInfo === null) {
                             throw Error("webgldrawerModular.js::drawSinglePass: tile has no context!");
@@ -1449,7 +1444,7 @@
             }
             ctx.putImageData(imageData, 0, 0);
 
-            this.offScreenCanvases[layerIndex] = outputCanvas;
+            this.offScreenTexturesAsCanvases[layerIndex] = outputCanvas;
         }
 
 
@@ -1460,7 +1455,7 @@
          * @param {OpenSeadragon.Mat3} viewMatrix to apply
          */
         _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
-            // console.log('Two pass rendering.');
+            console.log('Two pass rendering. Number of tiles =', this._TextureMap.size);
             const gl = this._gl;
             gl.clear(gl.COLOR_BUFFER_BIT);
             this.numOfItems = tiledImages.length;
@@ -1513,25 +1508,18 @@
                             const tile = tilesToDraw[tileIndex].tile;
 
                             const tileContext = tile.getCanvasContext();
-                            let tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                            let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                             if (!tileInfo) {
                                 console.warn('Divna vec sa deje, tile neni nahraty cez event, nahravam ho z draw funkcie');
 
                                 // tile was not processed in the tile-ready event (this can happen if this drawer was created after the tile was downloaded),
                                 // process it now and retry getting the data
                                 this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
-                                tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                                tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                             }
                             if (!tileInfo) {
                                 throw Error("webgldrawerModular::drawTwoPass: tile has no context!");
                             }
-
-                            // DEBUG -> export tiles as images
-                            // if (tilesToDraw.length === 28) {
-                            //     const id = tile.__renderInfo.id;
-                            //     const canvas = tileContext.canvas;
-                            //     this.downloadTile(id, canvas);
-                            // }
 
                             const matrix = this._getTileMatrix(tile, tiledImage, overallMatrix);
 
@@ -1551,8 +1539,7 @@
             gl.finish();
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-            // Put the offscreentexture data into the canvases to enable exporting it as a image
-            // gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._offscreenTextureArray);
+            // put the offScreenTextures data into the canvases to enable exporting it as an image
             for (let layerIndex = 0; layerIndex < tiledImages.length; ++layerIndex) {
                 this.extractTextureLayer(this._offscreenTextureArray, this._size.x, this._size.y, layerIndex);
             }
@@ -1785,13 +1772,13 @@
                         const tile = tilesToDraw[tileIndex].tile;
 
                         const tileContext = tile.getCanvasContext();
-                        let tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                        let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         if (tileInfo === null) {
                             // tile was not processed in the tile-ready event (this can happen
                             // if this drawer was created after the tile was downloaded)
                             this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
                             // retry getting textureInfo
-                            tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                            tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         }
                         if (tileInfo === null) {
                             throw Error("webgldrawerModular::drawSinglePass: tile has no context!");
@@ -1941,13 +1928,13 @@
                         const tile = tilesToDraw[tileIndex].tile;
 
                         const tileContext = tile.getCanvasContext();
-                        let tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                        let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         if (tileInfo === null) {
                             // tile was not processed in the tile-ready event (this can happen
                             // if this drawer was created after the tile was downloaded)
                             this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
                             // retry getting textureInfo
-                            tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                            tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         }
                         if (tileInfo === null) {
                             throw Error("webgldrawerModular::drawTwoPass: tile has no context!");
@@ -2143,13 +2130,13 @@
                         const tile = tilesToDraw[tileIndex].tile;
 
                         const tileContext = tile.getCanvasContext();
-                        let tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                        let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         if (tileInfo === null) {
                             // tile was not processed in the tile-ready event (this can happen
                             // if this drawer was created after the tile was downloaded)
                             this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
                             // retry getting textureInfo
-                            tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                            tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         }
                         if (tileInfo === null) {
                             throw Error("webgldrawerModular::drawTwoPass: tile has no context!");
@@ -2408,13 +2395,13 @@
                         const tile = tilesToDraw[tileIndex].tile;
 
                         const tileContext = tile.getCanvasContext();
-                        let tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                        let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         if (tileInfo === null) {
                             // tile was not processed in the tile-ready event (this can happen
                             // if this drawer was created after the tile was downloaded)
                             this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
                             // retry getting textureInfo
-                            tileInfo = tileContext ? this._TextureMap.get(tile.__renderInfo.id) : null;
+                            tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         }
                         if (tileInfo === null) {
                             throw Error("webgldrawerModular::drawTwoPass: tile has no context!");
