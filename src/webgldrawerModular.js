@@ -294,10 +294,12 @@
             }
 
             if (tileSource.__renderInfo !== undefined) {
+                console.log('Returning already configured tiledImage, shaders =', shaders);
                 return tileSource.__renderInfo;
             }
 
 
+            console.log('TiledImage seen for the first time, shaders =', shaders);
             const info = tileSource.__renderInfo = {};
             info.id = Date.now();
 
@@ -379,6 +381,9 @@
             return info;
         }
 
+        tiledImageCreated(tiledImage) {
+            // TODO: put add-item logic here
+        }
 
         // Public API required by all Drawer implementations
         /**
@@ -525,7 +530,10 @@
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          */
         draw(tiledImages) {
-            console.log('Draw called with tiledImages lenght=', tiledImages.length);
+            if (this._id !== 0) {
+                return;
+            }
+            // console.log('Draw called with tiledImages lenght=', tiledImages.length);
 
             // clear the output canvas
             this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
@@ -563,9 +571,11 @@
             //this.enableStencilTest(false);
 
             if (!twoPassRendering) {
-                console.log('Single pass.');
-                this._drawSinglePassNew(tiledImages, view, viewMatrix);
-                // this._drawTwoPassNew(tiledImages, view, viewMatrix);
+                // console.log('Single pass.');
+                console.log('Two pass.');
+
+                // this._drawSinglePassNew(tiledImages, view, viewMatrix);
+                this._drawTwoPassNew(tiledImages, view, viewMatrix);
             } else {
                 console.log('Two pass.');
                 // this._drawSinglePassNew(tiledImages, view, viewMatrix);
