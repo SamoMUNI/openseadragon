@@ -63,7 +63,7 @@
             // console.log('Robim moju implementaciu, options =', options);
             // sets this.viewer, this.viewport, this.container <- options.element, this.debugGridColor, this.options <- options.options
             super(options);
-            this.webGLOptions = options.options;
+            this.webGLOptions = this.options;
             // console.info('WebGLDrawerModular options =', this.webGLOptions);
 
 
@@ -85,6 +85,8 @@
             this._id = this.constructor.numOfDrawers;
             console.log('Drawer ID =', this._id);
             this.webGLVersion = "2.0";
+            this.debug = this.webGLOptions.debug || true;
+            console.log('Debug =', this.debug);
 
 
             this._destroyed = false;
@@ -149,8 +151,12 @@
             // one layer for every tiledImage's source
             this._offscreenTextureArrayLayers = 0;
 
-            // map to save offScreenTextures as canvases for exporting
+            // map to save offScreenTextures as canvases for exporting {layerId: canvas}
             this.offScreenTexturesAsCanvases = {};
+            // map to save tiles as canvases for exporting {tileId: canvas}
+            this.tilesAsCanvases = {};
+            this.debugTargetTileId = 0;
+
             // create a link for exporting offScreenTextures, only for the main drawer, not the minimap
             if (this._id === 0) {
                 const downloadLink = document.createElement('a');
@@ -159,7 +165,7 @@
                 downloadLink.textContent = 'Download offScreenTextures';
 
                 // for now just random element from xOpat's DOM I chose
-                let element = document.getElementById('panel-shaders');
+                const element = document.getElementById('panel-shaders');
                 if (!element) {
                     console.warn('Element with id "panel-shaders" not found, appending to body.');
                     document.body.appendChild(downloadLink);
@@ -171,6 +177,24 @@
                 downloadLink.addEventListener('click', (event) => {
                     event.preventDefault();  // prevent the default anchor behavior
                     this.downloadOffScreenTextures();
+                });
+
+
+                const downloadLink2 = document.createElement('a');
+                downloadLink2.id = 'downloadLink2';
+                downloadLink2.href = '#';  // make it a clickable link
+                downloadLink2.textContent = 'Download tile';
+
+                if (!element) {
+                    document.body.appendChild(downloadLink2);
+                } else {
+                    element.appendChild(downloadLink2);
+                }
+
+                // add an event listener to trigger the download when clicked
+                downloadLink2.addEventListener('click', (event) => {
+                    event.preventDefault();  // prevent the default anchor behavior
+                    this.downloadTile(this.debugTargetTileId);
                 });
             }
 
@@ -413,9 +437,16 @@
             // TODO: put add-item logic here
         }
 
-        downloadOffScreenTextures() {
-            for (const layerIndex in this.offScreenTexturesAsCanvases) {
-                const canvas = this.offScreenTexturesAsCanvases[layerIndex];
+        /**
+         * @param {Object} data {layerId: canvas}
+         */
+        downloadOffScreenTextures(data) {
+            if (!data) {
+                data = this.offScreenTexturesAsCanvases;
+            }
+
+            for (const layerIndex in data) {
+                const canvas = data[layerIndex];
                 canvas.toBlob(function(blob) {
                     const link = document.createElement('a');
                     // eslint-disable-next-line compat/compat
@@ -426,7 +457,16 @@
             }
         }
 
-        downloadTile(tileId, canvas) {
+        /**
+         * @param {Number} tileId
+         * @param {Object} data {tileId: canvas}
+         */
+        downloadTile(tileId, data) {
+            if (!data) {
+                data = this.tilesAsCanvases;
+            }
+
+            const canvas = data[tileId];
             canvas.toBlob((blob) => {
                 const link = document.createElement('a');
                 // eslint-disable-next-line compat/compat
@@ -434,6 +474,18 @@
                 link.download = `tile${tileId}.png`;
                 link.click();  // programmatically trigger the download
             }, 'image/png');
+        }
+
+        getDebugData() {
+            const data = {
+                offScreenTextures: this.offScreenTexturesAsCanvases,
+                tile: this.tilesAsCanvases[this.debugTargetTileId]
+            };
+            return data;
+        }
+
+        setDebugTargetTile(tileId) {
+            this.debugTargetTileId = tileId;
         }
 
         // Public API required by all Drawer implementations
@@ -584,9 +636,6 @@
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          */
         draw(tiledImages) {
-            if (this._id !== 0) {
-                return;
-            }
             // console.log('Draw called with tiledImages lenght=', tiledImages.length);
 
             // clear the output canvas
@@ -645,6 +694,10 @@
             }
 
             this.lastDrawArray = tiledImages;
+            if (this.debug && this._id === 0) {
+                const event = new CustomEvent('debug-data-after-draw', this.getDebugData());
+                document.dispatchEvent(event);
+            }
         }//end of draw function
 
         /**
@@ -1125,9 +1178,9 @@
             // add it to our _TextureMap
             this._TextureMap.set(canvas, tileInfo);
 
-            // if this is the main drawer (not the minimap) download the tile as an image to the disk
-            if (this._id === 0) {
-                // this.downloadTile(tileInfo.debugId, canvas);
+            // if this is the main drawer (not the minimap) and debug is enabled, save the tile as canvas
+            if (this.debug && this._id === 0) {
+                this.tilesAsCanvases[tileInfo.debugId] = canvas;
             }
         }
 
@@ -1408,8 +1461,11 @@
 
 
         // Function to extract an image from a TEXTURE_2D_ARRAY
-        extractTextureLayer(texture, width, height, layerIndex) {
-            const gl = this._gl;
+        extractTextureLayer(layerIndex) {
+            const gl = this._gl,
+            texture = this._offscreenTextureArray,
+            width = this._size.x,
+            height = this._size.y;
 
             // Create framebuffer to read from the texture layer
             const framebuffer = gl.createFramebuffer();
@@ -1539,9 +1595,11 @@
             gl.finish();
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-            // put the offScreenTextures data into the canvases to enable exporting it as an image
-            for (let layerIndex = 0; layerIndex < tiledImages.length; ++layerIndex) {
-                this.extractTextureLayer(this._offscreenTextureArray, this._size.x, this._size.y, layerIndex);
+            if (this.debug && this._id === 0) {
+                // put the offScreenTexture's data into the canvases to enable exporting it as an image
+                for (let layerIndex = 0; layerIndex < tiledImages.length; ++layerIndex) {
+                    this.extractTextureLayer(layerIndex);
+                }
             }
 
             // use program for two-pass rendering => parameter 2
