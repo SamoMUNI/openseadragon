@@ -1762,7 +1762,7 @@ $.extend( $.Viewer.prototype, $.EventSource.prototype, $.ControlDock.prototype, 
                 }
 
                 // TODO: comment this
-                // _this.viewer.drawer.tiledImageCreated(tiledImage);
+                _this.drawer.tiledImageCreated(tiledImage);
             }
         }
 

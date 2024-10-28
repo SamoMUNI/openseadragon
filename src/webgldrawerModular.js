@@ -225,54 +225,6 @@
             this.viewer.rejectEventHandler("tile-drawing", "The WebGLDrawer does not raise the tile-drawing event");
 
             this._export = {};
-            this.viewer.world.addHandler("add-item", (e) => {
-                console.info('ADD-ITEM EVENT !!!, size =', this._size);
-
-                const tiledImageInfo = this.configureTiledImage(e.item);
-                // console.debug('Pockal som, TiledImageInfo =', tiledImageInfo);
-
-                // spec is object holding data about how the tiledImage's sources are rendered
-                let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
-                for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
-                    const originalShaderDefinition = tiledImageInfo.shaders[sourceIndex].originalShaderDefinition;
-                    const shaderID = tiledImageInfo.shaders[sourceIndex].shaderID;
-
-                    const shaderType = originalShaderDefinition.type;
-                    if (shaderType === "edge") {
-                        spec._utilizeLocalMethods = true;
-                    }
-
-                    // sourceJSON is object holding data about how the concrete source is rendered
-                    let sourceJSON = spec.shaders[sourceIndex] = {};
-                    sourceJSON.originalShaderDefinition = originalShaderDefinition;
-                    sourceJSON.type = shaderType;
-
-                    sourceJSON._controls = {};
-                    sourceJSON._controlsCache = {};
-
-                    const shader = this.renderer.createShader(sourceJSON, shaderType, shaderID);
-                    sourceJSON._renderContext = shader;
-                    sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
-
-                    sourceJSON._index = 0;
-                    sourceJSON.visible = true;
-                    sourceJSON.rendering = true;
-                }
-
-                spec._initialized = true;
-                tiledImageInfo.drawers[this._id] = spec;
-
-                // object to export session settings
-                const tI = this._export[tiledImageInfo.id] = {};
-                tI.sources = tiledImageInfo.sources;
-                tI.shaders = tiledImageInfo.shaders;
-                tI.controlsCaches = {};
-                for (const sourceId in tiledImageInfo.drawers[this._id].shaders) {
-                    tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._controlsCache;
-                }
-
-                this._initializeOffScreenTextureArray();
-            });
 
             this.viewer.world.addHandler("remove-item", (e) => {
                 console.log('REMOVE-ITEM EVENT !!!');
@@ -423,7 +375,8 @@
                         // set which shader to use for the source
                         info.shaders[sourceIndex] = {
                             originalShaderDefinition: shaderDefinition,
-                            shaderID: shaderID
+                            // shaderID: shaderID // wont work because I expect the exact logic as down below
+                            shaderID: info.id.toString() + '_' + sourceIndex.toString()
                         };
                     }
 
@@ -434,7 +387,53 @@
         }
 
         tiledImageCreated(tiledImage) {
-            // TODO: put add-item logic here
+            if (this._id !== 0) {
+                return;
+            }
+
+            const tiledImageInfo = this.configureTiledImage(tiledImage);
+
+            // spec is object holding data about how the tiledImage's sources are rendered
+            let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
+            for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
+                const originalShaderDefinition = tiledImageInfo.shaders[sourceIndex].originalShaderDefinition;
+                const shaderID = tiledImageInfo.shaders[sourceIndex].shaderID;
+
+                const shaderType = originalShaderDefinition.type;
+                if (shaderType === "edgeNotPlugin") {
+                    spec._utilizeLocalMethods = true;
+                }
+
+                // sourceJSON is object holding data about how the concrete source is rendered
+                let sourceJSON = spec.shaders[sourceIndex] = {};
+                sourceJSON.originalShaderDefinition = originalShaderDefinition;
+                sourceJSON.type = shaderType;
+
+                sourceJSON._controls = {};
+                sourceJSON._controlsCache = {};
+
+                const shader = this.renderer.createShader(sourceJSON, shaderType, shaderID);
+                sourceJSON._renderContext = shader;
+                sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
+
+                sourceJSON._index = 0;
+                sourceJSON.visible = true;
+                sourceJSON.rendering = true;
+            }
+
+            spec._initialized = true;
+            tiledImageInfo.drawers[this._id] = spec;
+
+            // object to export session settings
+            const tI = this._export[tiledImageInfo.id] = {};
+            tI.sources = tiledImageInfo.sources;
+            tI.shaders = tiledImageInfo.shaders;
+            tI.controlsCaches = {};
+            for (const sourceId in tiledImageInfo.drawers[this._id].shaders) {
+                tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._controlsCache;
+            }
+
+            this._initializeOffScreenTextureArray();
         }
 
         /**
@@ -715,8 +714,6 @@
 
             this._renderingCanvas.width = this._clippingCanvas.width = this._outputCanvas.width;
             this._renderingCanvas.height = this._clippingCanvas.height = this._outputCanvas.height;
-
-            // this._registerResizeEventHandler();
         }
 
         // nemenil som
