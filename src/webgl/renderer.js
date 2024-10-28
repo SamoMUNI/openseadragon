@@ -92,7 +92,9 @@
                 this.htmlControlsElement = document.getElementById(this.htmlControlsId);
                 if (!this.htmlControlsElement) {
                     console.warn('$.WebGLModule::constructor: drawer should support HTML controls, but renderer could not find DOM element with id =', this.htmlControlsId);
+                    this.htmlControlsId = null;
                 }
+                this.htmlControlsElement.className = "";
             }
             this.htmlShaderPartHeader = incomingOptions.htmlShaderPartHeader;
 
@@ -851,6 +853,7 @@
         createProgram() {
             const program = this.webglContext.programCreated(this._getShaders());
             this._program = program;
+            this.gl.useProgram(program);
             if (!this.running) {
                 //TODO: might not be the best place to call, timeout necessary to allow finish initialization of OSD before called
                 setTimeout(() => this.ready());
@@ -868,7 +871,7 @@
          * @returns {ShaderLayer} instantion of newly created shaderLayer
          */
         addShader(shaderObject, shaderType, controlsId, dataSourceJSON) {
-            // console.log('renderer:: addShader call!');
+            console.log('renderer:: addShader call!');
             // console.info('$.WebGLModule::addShader: Shaders available =', $.WebGLModule.ShaderMediator.availableTypes());
 
             // shaderType = "identity" for example
@@ -876,7 +879,7 @@
             if (!Shader) {
                 throw new Error(`$.WebGLModule::addShader: Unknown shader type '${shaderType}'!`);
             } else {
-                // console.debug('$.WebGLModule::addShader: Adding shader type:', shaderType);
+                console.debug('$.WebGLModule::addShader: Adding shader type:', shaderType);
                 // console.debug('$.WebGLModule::addShader: Shader:', Shader);
             }
 

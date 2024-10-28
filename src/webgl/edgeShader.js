@@ -14,7 +14,7 @@
     $.WebGLModule.EdgeLayer = class extends $.WebGLModule.ShaderLayer {
 
         static type() {
-            return "edge";
+            return "edgeNotPlugin";
         }
 
         static name() {

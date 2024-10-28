@@ -261,7 +261,7 @@
                         "Linking of WebGLProgram failed. For more information, see logs in the $.console.");
                 } else { //if (this.renderer.debug) { //todo uncomment in production
                     // $.console.info("VERTEX SHADER\n", numberLines( opts.vs ));
-                    // $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs ));
+                    $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs ));
                 }
             }
         }
@@ -718,13 +718,16 @@ void main() {
     uniform float u_pixel_size_in_fragments;
     uniform float u_zoom_level;
 
-    flat in int v_texture_id;
-    in vec2 v_texture_coords;
-
     uniform int u_shaderLayerIndex;
 
     // 1 = single-pass, 2 = two-pass
     flat in int nPassRendering;
+
+    // TEXTURES
+    flat in int v_texture_id;
+    in vec2 v_texture_coords;
+    uniform float u_textureWidth;     // Width of the texture
+    uniform float u_textureHeight;    // Height of the texture
 
     // for single-pass rendering
     uniform sampler2DArray u_textureArray1;
@@ -869,6 +872,13 @@ void main() {
             this._renderingType = n;
         }
 
+        setTextureSize(width, height) {
+            console.info('Setting texture size to', width, height);
+            const gl = this.gl;
+            gl.uniform1f(this._locationTextureWidth, width);
+            gl.uniform1f(this._locationTextureHeight, height);
+        }
+
         /**
          * Load the locations of glsl variables and initialize buffers.
          * Need to also call this.setRenderingType(n) after this function call to prepare the whole program correctly.
@@ -900,6 +910,8 @@ void main() {
             this._locationTextureLayer1 = gl.getUniformLocation(program, "u_textureLayer1");
             this._locationTextureArray2 = gl.getUniformLocation(program, "u_textureArray2");
             this._locationTextureLayer2 = gl.getUniformLocation(program, "u_textureLayer2");
+            this._locationTextureWidth = gl.getUniformLocation(program, "u_textureWidth");
+            this._locationTextureHeight = gl.getUniformLocation(program, "u_textureHeight");
 
             this._locationShaderLayerIndex = gl.getUniformLocation(program, "u_shaderLayerIndex");
 

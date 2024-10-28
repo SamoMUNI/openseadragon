@@ -83,6 +83,9 @@
             // private members
             // this._id = Date.now();
             this._id = this.constructor.numOfDrawers;
+            if (this._id !== 0) {
+                return;
+            }
             console.log('Drawer ID =', this._id);
             this.webGLVersion = "2.0";
             this.debug = this.webGLOptions.debug || true;
@@ -314,10 +317,10 @@
             // set info.sources and info.shaders, if !shaders -> set manually, else set from the parameter
             info.sources = [];
             info.shaders = {};
-            if (!shaders) {
+            if (!shaders || shaders) {
                 let shaderType;
                 if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
-                    shaderType = "edge";
+                    shaderType = "edgeNotPlugin";
                 } else if (tileSource._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
                     shaderType = "negative";
                 } else {
@@ -635,6 +638,9 @@
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          */
         draw(tiledImages) {
+            if (this._id !== 0) {
+                return;
+            }
             // console.log('Draw called with tiledImages lenght=', tiledImages.length);
 
             // clear the output canvas
@@ -673,11 +679,11 @@
             //this.enableStencilTest(false);
 
             if (!twoPassRendering) {
-                // console.log('Single pass.');
-                console.log('Two pass.');
+                console.log('Single pass.');
+                // console.log('Two pass.');
 
-                // this._drawSinglePassNew(tiledImages, view, viewMatrix);
-                this._drawTwoPassNew(tiledImages, view, viewMatrix);
+                this._drawSinglePassNew(tiledImages, view, viewMatrix);
+                // this._drawTwoPassNew(tiledImages, view, viewMatrix);
             } else {
                 console.log('Two pass.');
                 // this._drawSinglePassNew(tiledImages, view, viewMatrix);
@@ -1300,10 +1306,14 @@
             for (let i = 0; i < numOfLayers; ++i) {
                 gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, x, y, 1, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
             }
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            // bol gl.LINEAR, chatgpt ale odporuca NEAREST pre two-pass rendering, kvoli The intermediate texture may use a filtering mode, like linear filtering, which causes interpolation between pixels. This interpolation can make edges appear softer or bulkier because values are blended rather than sampled strictly at each texel.
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            // send the layer's size to the glsl
+            this.renderer.webglContext.setTextureSize(x, y);
         }
 
         _clearOffScreenTextureArray() {
@@ -1335,8 +1345,8 @@
             const gl = this._gl;
             gl.clear(gl.COLOR_BUFFER_BIT);
 
-            this.renderer.useDefaultProgram(1);
 
+            this.renderer.useDefaultProgram(1);
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 // console.log('Vo for cykli cez tiledImages, TiledImage cislo', tiledImageIndex);
 
@@ -1511,7 +1521,6 @@
             // console.log('Two pass rendering. Number of tiles =', this._TextureMap.size);
             const gl = this._gl;
             gl.clear(gl.COLOR_BUFFER_BIT);
-            this.numOfItems = tiledImages.length;
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
             // this._clearOffScreenTextureArray();

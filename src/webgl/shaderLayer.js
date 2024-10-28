@@ -219,21 +219,26 @@
          */
         newAddControl(dataSourceJSON, dataSourceID, controlsParentHTMLElement = null, controlsChangeHandler = null) {
             const defaultControls = this.constructor.defaultControls;
-            // console.info('defContrls=', defaultControls);
+            console.info(`defaultControls of ${this.constructor.name()} shader =`, defaultControls);
             for (let controlName in defaultControls) {
                 if (controlName.startsWith("use_")) {
                     continue;
                 }
 
-                // console.log('newAddControl, prechadzam defaultControls, controlName =', controlName);
+                console.debug('newAddControl, prechadzam defaultControls, controlName =', controlName);
                 const controlObject = defaultControls[controlName];
                 const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, dataSourceID + '_' + controlName, {});
+                console.debug('newAddControl, vytvoril som control', controlName, control);
 
                 control.init();
                 if (controlsParentHTMLElement && controlsChangeHandler) {
-                    // console.log('robim taktiez html pre tento control');
-                    control.createDOMElement(controlsParentHTMLElement);
-                    control.registerDOMElementEventHandler(controlsChangeHandler);
+                    console.debug('robim taktiez html pre tento control');
+                    const node = control.createDOMElement(controlsParentHTMLElement);
+                    if (node) {
+                        control.registerDOMElementEventHandler(controlsChangeHandler);
+                    } else {
+                        console.warn(`Control ${controlName}'s HMTL shits could not be created!`);
+                    }
                 }
 
                 // update shaderLayer's attributes
@@ -876,6 +881,7 @@
         }
 
         /**
+         * this._impls -> kluc je typ controlu, hodnota je trieda, ktora sa pouzije pri vytvarani controlu
          * Build UI control object based on given parameters
          * @param {OpenSeadragon.WebGLModule.ShaderLayer} owner owner of the control, shaderLayer
          * @param {string} controlName name used for the control (eg.: opacity)
@@ -904,27 +910,35 @@
             // merge dP, p, rP recursively, without modifying p and rP
             defaultParams = $.extend(true, {}, defaultParams, params, requiredParams);
 
-            // if control's type (eg.: opacity -> range) not already present in this._items
+            // if control's type (eg.: opacity -> range) not present in this._items
             /* VOBEC SOM NEPRESIEL TUTO CAST */
             if (!this._items[defaultParams.type]) {
-                // console.log('UIControls:build - if vetva, typ =', defaultParams.type);
-                if (!this._impls[defaultParams.type]) {
-                    return this._buildFallback(defaultParams.type, originalType,
-                        owner, controlName, controlObject, params);
+                const controlType = defaultParams.type;
+                console.debug('UIControls:build - if vetva, typ =', controlType, 'neni v UIControls._items');
+                console.debug('UIControls:build - if vetva, this._impls =', this._impls);
+
+                // if cannot use the new control type, try to use the default one
+                if (!this._impls[controlType]) {
+                    return this._buildFallback(controlType, originalType, owner, controlName, controlObject, params);
                 }
-                /* TOTO NEVIEM CO ROBI, ale menil som konstruktory IControl a Simplecontrol cize asi sa posielaju zle veci
-                    `${controlName}_${owner.uid}` vyzera ako webglvariable, co predtym brali obidva konstruktory, simple
-                    ho iba posunul hore do rodica Icontrol a ten to nastavil... Ale neviem preco tu su defaultParams ze sa posielaju */
-                let cls = new this._impls[defaultParams.type](
-                    owner, controlName, `${controlName}_${owner.uid}`, defaultParams
-                );
+
+                /* Toz toto robi nieco divne pretoze to cucia uz z Jirkovho pluginu, cize neviem presne co to robi.
+                Ale myslel som ze to ma vytvorit jeden control a ked si vypisujem iba ze prechod konstruktormi SIMPLE a ICONTROL
+                tak to vyzera ako by sa tym riadkom cls =... robil jeden control viac raz co neviem preco. */
+                console.debug('Vytvaram custom control implementaciu');
+                let cls = new this._impls[controlType](owner, controlName, controlId, defaultParams);
+                console.debug('Vytvoril som custom control implementaciu');
                 if (accepts(cls.type, cls)) {
+                    console.debug('Idem pouzit custom control implementaciu');
                     return cls;
                 }
-                return this._buildFallback(defaultParams.type, originalType,
-                    owner, controlName, controlObject, params);
-            } else { // control's type (eg.: range/number/...) is present in this._items
-                // console.log('UIControls:build - else vetva');
+
+                // cannot built with custom implementation, try to build with default one
+                console.debug('Nejde pouzit vytvorenu custom control implementaciu, vyskusam defaultnu.');
+                return this._buildFallback(controlType, originalType, owner, controlName, controlObject, params);
+
+            } else { // control's type (eg.: range/number/...) is defined in this._items
+                console.debug('UIControls:build - typ controlu je definovany v UIControls._items.');
                 let intristicComponent = this.getUiElement(defaultParams.type);
                 let comp = new $.WebGLModule.UIControls.SimpleUIControl(
                     owner, controlName, controlId, defaultParams, intristicComponent
@@ -935,6 +949,20 @@
                 }
                 return this._buildFallback(intristicComponent.glType, originalType,
                     owner, controlName, controlObject, params);
+            }
+        }
+
+        static _buildFallback(newType, originalType, owner, controlName, controlObject, params) {
+            //repeated check when building object from type
+
+            params.interactive = false;
+            if (originalType === newType) { //if default and new equal, fail - recursion will not help
+                console.error(`Invalid parameter in shader '${params.type}': the parameter could not be built.`);
+                return undefined;
+            } else { //otherwise try to build with originalType (default)
+                params.type = originalType;
+                console.warn("Incompatible UI control type '" + newType + "': making the input non-interactive.");
+                return this.build(owner, controlName, controlObject, params);
             }
         }
 
@@ -994,25 +1022,6 @@
             // } else {
             //     console.warn(`Skipping UI control '${type}': does not inherit from $.WebGLModule.UIControls.IControl.`);
             // }
-        }
-
-        /////////////////////////
-        /////// PRIVATE /////////
-        /////////////////////////
-
-
-        static _buildFallback(newType, originalType, owner, controlName, controlObject, params) {
-            //repeated check when building object from type
-
-            params.interactive = false;
-            if (originalType === newType) { //if default and new equal, fail - recursion will not help
-                console.error(`Invalid parameter in shader '${params.type}': the parameter could not be built.`);
-                return undefined;
-            } else { //otherwise try to build with originalType (default)
-                params.type = originalType;
-                console.warn("Incompatible UI control type '" + newType + "': making the input non-interactive.");
-                return this.build(owner, controlName, controlObject, params);
-            }
         }
     };
 
@@ -1169,11 +1178,11 @@
          * @param {string} uniq another element to construct the DOM id from, mostly for compound controls
          */
         constructor(owner, name, id, uniq = "") {
+            console.debug('V konstruktori IControlu, owner=', owner.constructor.name(), 'name=', name, 'id=', id);
             this.owner = owner;
             this.name = name;
             // this.id = `${uniq}${name}-${owner.uid}`;
             this.id = id;
-            // console.log(`V konstruktori controlu, owner=${owner.constructor.name()}, name=${name}, id=${id}`);
             this.webGLVariableName = `${name}_${owner.uid}`;
             this._params = {};
             this.__onchange = {};
@@ -1568,14 +1577,19 @@
         createDOMElement(parentElement) {
             const html = this.toHtml(true);
             // console.log('createDOMElement, html injection =', html);
-            parentElement.insertAdjacentHTML('beforeend', html);
+            if (!html) {
+                console.info(`Control ${this.name} failed to create HTML element. Should it ?`);
+                return null;
+            }
 
+            // this should create element in the DOM with this.id as the id of the element
+            parentElement.insertAdjacentHTML('beforeend', html);
             this._htmlDOMElement = document.getElementById(this.id);
             this._htmlDOMElement.setAttribute('value', this.encodedValue);
 
             // call to this.toHtml(true) returns html elements for control wrapped in one more <div> element,
-            // this element is now pointed onto with this._parentContainer
-            this._parentContainer = this._htmlDOMElement.parentElement;
+            // this element is now pointed onto with this._htmlDOMParentContainer
+            this._htmlDOMParentContainer = this._htmlDOMElement.parentElement;
 
             return this._htmlDOMElement;
         }
@@ -1596,7 +1610,7 @@
         destroy() {
             if (this._htmlDOMElement) {
                 this._htmlDOMElement.remove();
-                this._parentContainer.remove();
+                this._htmlDOMParentContainer.remove();
             }
 
             // maybe something more??
@@ -1632,6 +1646,7 @@
          */
         //uses intristicComponent that holds all specifications needed to work with the component uniformly
         constructor(owner, name, id, params, intristicComponent) {
+            console.debug('V konstruktori SimpleUIControlu, owner=', owner.constructor.name(), 'name=', name, 'id=', id, 'params=', params, 'intristicComp=', intristicComponent);
             super(owner, name, id);
             this.component = intristicComponent;
             // do _params da params s urcenym poradim properties (asi)
@@ -1698,6 +1713,7 @@
             // if (!this.params.interactive) {
             //     return "";
             // }
+            // console.log('toHtml, componenr =', this.component);
             const result = this.component.html(this.id, this.params, controlCss);
             return breakLine ? `<div>${result}</div>` : result;
         }
