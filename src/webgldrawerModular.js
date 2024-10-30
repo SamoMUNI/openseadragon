@@ -288,7 +288,7 @@
         }
 
         // FIXME: for thinking: there could be built-in functionality for reseting the whole system & re-rendering output
-        configureTiledImage(item, shaders = undefined) {
+        configureTiledImage(item, externalId = Date.now(), shaders = undefined) {
             let tileSource;
             if (item instanceof OpenSeadragon.TiledImage) {
                 tileSource = item.source;
@@ -330,6 +330,8 @@
                 const sourceIndex = 0;
                 info.sources = [sourceIndex]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
                 info.shaders = {};
+                // TODO: warn: sourceIndex might change dynamically at runtime... use unique tiled image
+                //   keys instead... these keys shall be the shaderID values
                 info.shaders[sourceIndex] = {
                     originalShaderDefinition: {
                         name: shaderType + " shader",
@@ -342,6 +344,9 @@
                         _cacheApplied: undefined
                     },
                     shaderID: info.id.toString() + '_' + sourceIndex.toString(),
+                    externalId: externalId  // NOTE: you must keep the shaderID remembered since
+                    // external apps pass this ID to you and expect you to communicate through this ID
+                    // with them
                 };
 
             } else {
@@ -376,10 +381,15 @@
                         info.sources.push(sourceIndex);
 
                         // set which shader to use for the source
+                        // TODO: warn: sourceIndex might change dynamically at runtime... use unique tiled image
+                        //   keys instead... these keys shall be the shaderID values
                         info.shaders[sourceIndex] = {
                             originalShaderDefinition: shaderDefinition,
                             // shaderID: shaderID // wont work because I expect the exact logic as down below
-                            shaderID: info.id.toString() + '_' + sourceIndex.toString()
+                            shaderID: info.id.toString() + '_' + sourceIndex.toString(),
+                            externalId: externalId // NOTE: you must keep the shaderID remembered since
+                            // external apps pass this ID to you and expect you to communicate through this ID
+                            // with them
                         };
                     }
 
@@ -399,8 +409,10 @@
             // spec is object holding data about how the tiledImage's sources are rendered
             let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
             for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
-                const originalShaderDefinition = tiledImageInfo.shaders[sourceIndex].originalShaderDefinition;
-                const shaderID = tiledImageInfo.shaders[sourceIndex].shaderID;
+                const config = tiledImageInfo.shaders[sourceIndex];
+
+                const originalShaderDefinition = config.originalShaderDefinition;
+                const shaderID = config.shaderID;
                 const shaderType = originalShaderDefinition.type;
                 const shaderParams = originalShaderDefinition.params;
 
@@ -411,6 +423,7 @@
                 shaderObject.type = shaderType;
                 shaderObject.name = originalShaderDefinition.name;
                 shaderObject.params = shaderParams;
+                shaderObject.externalId = config.externalId;
 
                 shaderObject._controls = {};
                 shaderObject._controlsCache = {};
