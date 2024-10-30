@@ -261,7 +261,7 @@
                         "Linking of WebGLProgram failed. For more information, see logs in the $.console.");
                 } else { //if (this.renderer.debug) { //todo uncomment in production
                     // $.console.info("VERTEX SHADER\n", numberLines( opts.vs ));
-                    $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs ));
+                    // $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs )); // TODO: uncomment
                 }
             }
         }

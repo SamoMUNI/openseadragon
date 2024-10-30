@@ -1531,6 +1531,7 @@
             this.renderer.useFirstPassProgram();
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 const tilesToDraw = tiledImage.getTilesToDraw();
+                // FIXME: dat aj do druheho passu
                 if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
                     // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
                     return;
