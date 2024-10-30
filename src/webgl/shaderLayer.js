@@ -230,7 +230,7 @@
                 const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, shaderID + '_' + controlName, {});
                 console.debug('newAddControl, vytvoril som control', controlName, control);
 
-                control.init();
+                // control.init();
                 // if (controlsParentHTMLElement && controlsChangeHandler) {
                 //     console.debug('robim taktiez html pre tento control');
                 //     const node = control.createDOMElement(controlsParentHTMLElement);
@@ -291,6 +291,13 @@
             for (const controlName in this._controls) {
                 const control = this[controlName];
                 control.registerDOMElementEventHandler(callback);
+            }
+        }
+
+        initControls() {
+            for (const controlName in this._controls) {
+                const control = this[controlName];
+                control.init();
             }
         }
 
@@ -1695,29 +1702,36 @@
             // console.error(`UIControl ${this.name} INIT() -> sets its value to ${this.value}`);
 
             // vykomentovane pri nasadeni mojho prepojenia vsetkeho (bod 6)
-            // if (this.params.interactive) {
-            //     const _this = this;
-            //     let node = document.getElementById(this.id);
-            //     console.error('Init controlu, node=', node);
-            //     if (node) {
-            //         let updater = function(e) {
-            //             _this.set(e.target.value);
-            //             _this.context.invalidate();
-            //         };
-            //         node.value = this.encodedValue;
-            //         node.addEventListener('change', updater);
-            //     }
-            // }
+            if (this.params.interactive) {
+                const _this = this;
+                let node = document.getElementById(this.id);
+                if (node) {
+                    let updater = function(e) {
+                        _this.set(e.target.value);
+                        _this.owner.invalidate();
+                    };
+
+                    // TODO: some elements do not have 'value' attribute, but 'checked' or 'selected' instead
+                    node.value = this.encodedValue;
+                    node.addEventListener('change', updater);
+                } else {
+                    console.error('UIControl::init() - HTML element not found, id =', this.id);
+                }
+            }
         }
 
         set(encodedValue) {
             // console.warn('control\'s set call, value =', encodedValue);
             this.encodedValue = encodedValue;
             this.value = this.component.normalize(this.component.decode(this.encodedValue), this.params);
-            //this.changed("default", this.value, this.encodedValue, this);
-            //this.store(this.encodedValue);
-            this._cache.encodedValue = this.encodedValue;
-            this._cache.value = this.value;
+
+            // zmenil sa params.default, posledne zaregistrovany handler na tuto zmenu sa zavola..
+            this.changed("default", this.value, this.encodedValue, this);
+
+            // bud alebo
+            this.store(this.encodedValue);
+            // this._cache.encodedValue = this.encodedValue;
+            // this._cache.value = this.value;
         }
 
         glDrawing(program, gl) {

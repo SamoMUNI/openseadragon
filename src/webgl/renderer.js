@@ -183,7 +183,7 @@
             return null;
         }
 
-        /**
+        /** TODO: pouzit s mojou logikou
          * Execute call on each visualization layer with no errors
          * @param {object} spec current specification setup context
          * @param {function} callback call to execute
@@ -851,13 +851,17 @@
 
         createProgram() {
             const program = this.webglContext.programCreated(this.shadersCounter);
+            this.gl.useProgram(program);
+
             if (this.supportsHtmlControls()) {
                 this.htmlControlsElement.innerHTML = program._osdOptions.html;
-                for (const shaderLayer of Object.values(this.shadersCounter)) {
-                    shaderLayer.registerControlsHandlers(this.resetCallback);
-                }
+                // for (const shaderLayer of Object.values(this.shadersCounter)) {
+                //     shaderLayer.registerControlsHandlers(this.resetCallback);
+                // }
             }
-            this.gl.useProgram(program);
+            for (const shaderLayer of Object.values(this.shadersCounter)) {
+                shaderLayer.initControls(this.resetCallback);
+            }
 
             this._program = program;
 
