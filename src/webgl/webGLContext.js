@@ -852,8 +852,12 @@ void main() {
                 this._shadersMapping[shaderID] = shaderLayerIndex;
 
 
-                // if (true) {
-                    html += this.renderer.htmlShaderPartHeader(shaderLayer.newHtmlControls(), shaderObject.type, shaderObject.visible, shaderObject, true);
+                // todo if (true) {
+                    html += this.renderer.htmlShaderPartHeader(shaderLayer.newHtmlControls(),
+                        shaderObject.externalId,
+                        shaderObject.visible,
+                        shaderObject,
+                        true);
                 // }
             } // end of for cycle
 
