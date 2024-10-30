@@ -212,12 +212,12 @@
 
         /**
          *
-         * @param {object} dataSourceJSON unique object bind to the dataSource
-         * @param {string} dataSourceID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
+         * @param {object} shaderObject unique object bind to this shader
+         * @param {string} shaderID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
          * @param {HTMLElement} controlsParentHTMLElement
          * @param {function} controlsChangeHandler
          */
-        newAddControl(dataSourceJSON, dataSourceID, controlsParentHTMLElement = null, controlsChangeHandler = null) {
+        newAddControl(shaderObject, shaderID, controlsParentHTMLElement = null, controlsChangeHandler = null) {
             const defaultControls = this.constructor.defaultControls;
             console.info(`defaultControls of ${this.constructor.name()} shader =`, defaultControls);
             for (let controlName in defaultControls) {
@@ -227,33 +227,33 @@
 
                 console.debug('newAddControl, prechadzam defaultControls, controlName =', controlName);
                 const controlObject = defaultControls[controlName];
-                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, dataSourceID + '_' + controlName, {});
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, shaderID + '_' + controlName, {});
                 console.debug('newAddControl, vytvoril som control', controlName, control);
 
                 control.init();
-                if (controlsParentHTMLElement && controlsChangeHandler) {
-                    console.debug('robim taktiez html pre tento control');
-                    const node = control.createDOMElement(controlsParentHTMLElement);
-                    if (node) {
-                        control.registerDOMElementEventHandler(controlsChangeHandler);
-                    } else {
-                        console.warn(`Control ${controlName}'s HMTL shits could not be created!`);
-                    }
-                }
+                // if (controlsParentHTMLElement && controlsChangeHandler) {
+                //     console.debug('robim taktiez html pre tento control');
+                //     const node = control.createDOMElement(controlsParentHTMLElement);
+                //     if (node) {
+                //         control.registerDOMElementEventHandler(controlsChangeHandler);
+                //     } else {
+                //         console.warn(`Control ${controlName}'s HMTL shits could not be created!`);
+                //     }
+                // }
 
                 // update shaderLayer's attributes
                 if (!this._controls[controlName]) {
                     this._controls[controlName] = {};
                 }
-                this._controls[controlName][dataSourceID] = control;
+                this._controls[controlName][shaderID] = control;
 
                 // very disgusting fix -> every time new control of the same type comes, it rewrites this attribute
                 // to itself... Needed because Jirka's shaders use shaderLayer.shaderName.(...)
                 this[controlName] = control;
 
                 // update dataSource object attributes
-                dataSourceJSON._controls[controlName] = control;
-                const sourceControlsCache = dataSourceJSON._controlsCache;
+                shaderObject._controls[controlName] = control;
+                const sourceControlsCache = shaderObject._controlsCache;
                 if (sourceControlsCache[controlName]) {
                     control.loadCacheObject(sourceControlsCache[controlName]);
                 } else {
@@ -263,18 +263,34 @@
         }
 
         /**
-         * @param {object} dataSourceJSON unique object bind to the dataSource
-         * @param {string} dataSourceID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
+         * @param {object} shaderObject unique object bind to the dataSource
+         * @param {string} shaderID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
          *
          */
-        newRemoveControl(dataSourceJSON, dataSourceID) {
+        newRemoveControl(shaderObject, shaderID) {
             for (const controlName in this._controls) {
-                const control = this._controls[controlName][dataSourceID];
+                const control = this._controls[controlName][shaderID];
                 control.destroy();
-                delete this._controls[controlName][dataSourceID];
+                delete this._controls[controlName][shaderID];
 
-                delete dataSourceJSON._controls[controlName];
-                delete dataSourceJSON._controlsCache[controlName];
+                delete shaderObject._controls[controlName];
+                delete shaderObject._controlsCache[controlName];
+            }
+        }
+
+        newHtmlControls() {
+            const controlsHtmls = [];
+            for (const controlName in this._controls) {
+                const control = this[controlName];
+                controlsHtmls.push(control.toHtml(true));
+            }
+            return controlsHtmls.join("");
+        }
+
+        registerControlsHandlers(callback) {
+            for (const controlName in this._controls) {
+                const control = this[controlName];
+                control.registerDOMElementEventHandler(callback);
             }
         }
 
@@ -1596,7 +1612,13 @@
 
         registerDOMElementEventHandler(functionToCall) {
             const _this = this;
-            const node = this._htmlDOMElement;
+            const node = document.getElementById(this.id);
+            if (!node) {
+                console.error('registerDOMElementEventHandler: HTML element not found, id =', this.id);
+                return;
+            }
+
+            node.setAttribute('value', this.encodedValue);
 
             let handler = function(e) {
                 // console.info('from event handler, calling set on control with value =', e.target.value, '.');

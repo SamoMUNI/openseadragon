@@ -804,7 +804,7 @@ void main() {
 
         /**
          * Create WebGLProgram that uses shaderLayers defined in an input parameter.
-         * @param {[ShaderLayer]} shaderLayers array of shaderLayers to use
+         * @param {Object} shaderLayers map of shaderLayers to use {shaderID: ShaderLayer}
          * @returns {WebGLProgram}
          */
         programCreated(shaderLayers) {
@@ -812,11 +812,16 @@ void main() {
             const program = gl.createProgram();
 
             let definition = '',
-                execution = '';
+                execution = '',
+                html = '';
                 // globalScopeCode = {};
 
+            let i = 0;
+            for (const shaderID in shaderLayers) {
+                const shaderLayer = shaderLayers[shaderID];
+                const shaderLayerIndex = i++;
+                const shaderObject = shaderLayer.__shaderObject;
 
-            shaderLayers.forEach((shaderLayer, shaderLayerIndex) => {
                 definition += `\n    // Definition of ${shaderLayer.constructor.type()} shader:\n`;
                 // returns string which corresponds to glsl code
                 definition += shaderLayer.getFragmentShaderDefinition();
@@ -844,18 +849,25 @@ void main() {
                 execution += `
                 break;`;
 
-                this._shadersMapping[shaderLayer.constructor.type()] = shaderLayerIndex;
-            }); // end of for cycle
+                this._shadersMapping[shaderID] = shaderLayerIndex;
+
+
+                // if (true) {
+                    html += this.renderer.htmlShaderPartHeader(shaderLayer.newHtmlControls(), shaderObject.type, shaderObject.visible, shaderObject, true);
+                // }
+            } // end of for cycle
 
             const vertexShaderCode = this.compileVertexShader({});
             const fragmentShaderCode = this.compileFragmentShader(definition, execution, {});
             // toto by som spravil inak, ale kedze uz je naimplementovana funkcia _compileProgram tak ju pouzijem
             program._osdOptions = {};
+            program._osdOptions.html = html;
             program._osdOptions.vs = vertexShaderCode;
             program._osdOptions.fs = fragmentShaderCode;
-            this._compileProgram(program, $.console.error);
 
+            this._compileProgram(program, $.console.error);
             this._secondPassProgram = program;
+
             return program;
         }
 
@@ -883,13 +895,13 @@ void main() {
          * Load the locations of glsl variables and initialize buffers.
          * Need to also call this.setRenderingType(n) after this function call to prepare the whole program correctly.
          * @param {WebGLProgram} program WebGLProgram in use
-         * @param {[ShaderLayer]} shaderLayers shaderLayers to load
+         * @param {Object} shaderLayers map of shaderLayers to load {shaderID: ShaderLayer}
          */
         programLoaded(program, shaderLayers) {
             const gl = this.gl;
 
             // load clip and blend shaderLayer's glsl locations, load shaderLayer's control's glsl locations
-            for (const shaderLayer of shaderLayers) {
+            for (const shaderLayer of Object.values(shaderLayers)) {
                 //console.log('Calling glLoaded on shaderLayer', shaderLayer.constructor.name(), shaderLayer);
                 shaderLayer.glLoaded(program, gl);
             }
@@ -958,7 +970,7 @@ void main() {
             // tell the control to fill it's uniforms
             shaderLayer.glDrawing(program, gl, controlId);
             // tell glsl which shaderLayer to use
-            const shaderLayerIndex = this._shadersMapping[shaderLayer.constructor.type()];
+            const shaderLayerIndex = this._shadersMapping[controlId]; // malo by sediet ze controlID je to iste ako shaderID hadam...
             gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
 
             // fill FRAGMENT shader's uniforms (that are unused)

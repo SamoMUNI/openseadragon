@@ -115,8 +115,8 @@
                 webGLPreferredVersion: "2.0",
                 webGLOptions: {},
                 htmlControlsId: ++this.constructor.numOfDrawers === 1 ? "drawer-controls" : undefined,
-                htmlShaderPartHeader: (html, dataId, isVisible, layer, isControllable = true) => {
-                    return `<div class="configurable-border"><div class="shader-part-name">${dataId}</div>${html}</div>`;
+                htmlShaderPartHeader: (html, shaderName, isVisible, layer, isControllable = true) => {
+                    return `<div class="configurable-border"><div class="shader-part-name">${shaderName}</div>${html}</div>`;
                 },
                 ready: () => {
                 },
@@ -317,7 +317,7 @@
             // set info.sources and info.shaders, if !shaders -> set manually, else set from the parameter
             info.sources = [];
             info.shaders = {};
-            if (!shaders || shaders) {
+            if (!shaders) {
                 let shaderType;
                 if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
                     shaderType = "edgeNotPlugin";
@@ -401,27 +401,31 @@
             for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
                 const originalShaderDefinition = tiledImageInfo.shaders[sourceIndex].originalShaderDefinition;
                 const shaderID = tiledImageInfo.shaders[sourceIndex].shaderID;
-
                 const shaderType = originalShaderDefinition.type;
+                const shaderParams = originalShaderDefinition.params;
+
+                // shaderObject is object holding data about how the concrete source is rendered
+                let shaderObject = spec.shaders[sourceIndex] = {};
+                // shaderObject.originalShaderDefinition = originalShaderDefinition;
+                shaderObject.id = shaderID;
+                shaderObject.type = shaderType;
+                shaderObject.name = originalShaderDefinition.name;
+                shaderObject.params = shaderParams;
+
+                shaderObject._controls = {};
+                shaderObject._controlsCache = {};
+
+                const shader = this.renderer.createShader(shaderObject, shaderType, shaderID);
+                shaderObject._renderContext = shader;
+                shaderObject._textureLayerIndex = this._offscreenTextureArrayLayers++;
+
+                // shaderObject._index = 0;
+                shaderObject.visible = true;
+                shaderObject.rendering = true;
+
                 if (shaderType === "edgeNotPlugin") {
                     spec._utilizeLocalMethods = true;
                 }
-
-                // sourceJSON is object holding data about how the concrete source is rendered
-                let sourceJSON = spec.shaders[sourceIndex] = {};
-                sourceJSON.originalShaderDefinition = originalShaderDefinition;
-                sourceJSON.type = shaderType;
-
-                sourceJSON._controls = {};
-                sourceJSON._controlsCache = {};
-
-                const shader = this.renderer.createShader(sourceJSON, shaderType, shaderID);
-                sourceJSON._renderContext = shader;
-                sourceJSON._textureLayerIndex = this._offscreenTextureArrayLayers++;
-
-                sourceJSON._index = 0;
-                sourceJSON.visible = true;
-                sourceJSON.rendering = true;
             }
 
             spec._initialized = true;
