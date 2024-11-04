@@ -227,6 +227,10 @@
 
                 console.debug('newAddControl, prechadzam defaultControls, controlName =', controlName);
                 const controlObject = defaultControls[controlName];
+                if (!controlObject) { // pridane iba kvoli codingVisualizationLayer, ktory ma ze opacity: false -.-
+                    console.warn(`Control ${controlName} not defined in ${this.constructor.name()} shader's defaultControls!`);
+                    continue;
+                }
                 const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, shaderID + '_' + controlName, {});
                 console.debug('newAddControl, vytvoril som control', controlName, control);
 
@@ -385,7 +389,14 @@
                 // console.log('shaderLayer gl drawing, controlName =', controlName);
                 // console.log('shaderLayer gl drawing, controlId =', controlId);
 
-                this._controls[controlName][controlId].glDrawing(program, gl);
+                // const control = this._controls[controlName][controlId];
+                // klasika co som zatial mal
+                // if (control instanceof $.WebGLModule.UIControls.SimpleUIControl) {
+                    this._controls[controlName][controlId].glDrawing(program, gl);
+                // } else { // jirka si pridal do glDrawing dimension
+                    // console.warn('Tu som');
+                    // this._controls[controlName][controlId].glDrawing(program, undefined, gl);
+                // }
             }
         }
 
@@ -601,7 +612,8 @@
          * @return {number} number of textures available
          */
         get texturesCount() {
-            return this.__shaderObject.dataReferences.length;
+            // return this.__shaderObject.dataReferences.length;
+            return 1; // uz jeden shader pre kazdy zdroj
         }
 
         /**
@@ -928,6 +940,7 @@
             if (!interactivityEnabled) {
                 params.interactive = false;
             }
+
             let originalType = defaultParams.type;
 
             // merge dP, p, rP recursively, without modifying p and rP

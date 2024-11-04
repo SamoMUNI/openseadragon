@@ -213,6 +213,7 @@
          * @param {function(error: string, description: string)} onError callback to call when error happens, sets corresponding
          * specification.error = error;
          * specification.desc = description;
+         * @return {boolean} true if program was built successfully
          */
         _compileProgram(program, onError) {
             const gl = this.gl;
@@ -244,7 +245,7 @@
             if (!opts) {
                 $.console.error("Invalid program compilation! Did you build shaders using compile[Type]Shader() methods?");
                 onError("Invalid program.", "Program not compatible with this renderer!");
-                return;
+                return false;
             }
 
             // Attaching shaders to WebGLProgram failed
@@ -254,14 +255,17 @@
                     "Attaching of shaders to WebGLProgram failed. For more information, see logs in the $.console.");
                 $.console.warn("VERTEX SHADER\n", numberLines( opts.vs ));
                 $.console.warn("FRAGMENT SHADER\n", numberLines( opts.fs ));
+                return false;
             } else { // Shaders attached
                 gl.linkProgram(program);
                 if (!ok('Program', 'LINK', program)) {
                     onError("Unable to use this specification.",
                         "Linking of WebGLProgram failed. For more information, see logs in the $.console.");
+                    return false;
                 } else { //if (this.renderer.debug) { //todo uncomment in production
-                    // $.console.info("VERTEX SHADER\n", numberLines( opts.vs ));
-                    // $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs )); // TODO: uncomment
+                    $.console.debug("VERTEX SHADER\n", numberLines( opts.vs ));
+                    $.console.debug("FRAGMENT SHADER\n", numberLines( opts.fs )); // TODO: uncomment
+                    return true;
                 }
             }
         }
@@ -709,7 +713,7 @@ void main() {
          * @param {object} options
          * @returns {string} fragment shader's glsl code
          */
-        compileFragmentShader(definition, execution, options) {
+        compileFragmentShader(definition, execution, options, globalScopeCode) {
             const fragmentShaderCode = `#version 300 es
     precision mediump float;
     precision mediump sampler2D;
@@ -779,11 +783,13 @@ void main() {
         _last_clip = clip;
     }
 
+    // GLOBAL SCOPE CODE:${Object.keys(globalScopeCode).length !== 0 ?
+        Object.values(globalScopeCode).join("\n") : '\n    // No global scope code here...'}
 
-    // Definitions of shaderLayers:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
+    // DEFINITIONS OF SHADERLAYERS:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
 
     void main() {
-        // Executions of shaderLayers:
+        // EXECUTIONS OF SHADERLAYERS:
         switch (u_shaderLayerIndex) {${execution}
             default:
                 if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
@@ -814,13 +820,15 @@ void main() {
             let definition = '',
                 execution = '',
                 html = '';
-                // globalScopeCode = {};
 
             let i = 0;
             for (const shaderID in shaderLayers) {
                 const shaderLayer = shaderLayers[shaderID];
                 const shaderLayerIndex = i++;
                 const shaderObject = shaderLayer.__shaderObject;
+
+                // tell which shaderLayer is used with which shaderLayerIndex
+                this._shadersMapping[shaderID] = shaderLayerIndex;
 
                 definition += `\n    // Definition of ${shaderLayer.constructor.type()} shader:\n`;
                 // returns string which corresponds to glsl code
@@ -849,12 +857,11 @@ void main() {
                 execution += `
                 break;`;
 
-                this._shadersMapping[shaderID] = shaderLayerIndex;
 
 
-                // todo if (true) {
+                // TODO: if (true) {
                     html += this.renderer.htmlShaderPartHeader(shaderLayer.newHtmlControls(),
-                        shaderObject.externalId,
+                        shaderObject.shaderID,
                         shaderObject.visible,
                         shaderObject,
                         true);
@@ -862,16 +869,21 @@ void main() {
             } // end of for cycle
 
             const vertexShaderCode = this.compileVertexShader({});
-            const fragmentShaderCode = this.compileFragmentShader(definition, execution, {});
+            const globalScopeCode = $.WebGLModule.ShaderLayer.__globalIncludes;
+            const fragmentShaderCode = this.compileFragmentShader(definition, execution, {}, globalScopeCode);
+
             // toto by som spravil inak, ale kedze uz je naimplementovana funkcia _compileProgram tak ju pouzijem
             program._osdOptions = {};
             program._osdOptions.html = html;
             program._osdOptions.vs = vertexShaderCode;
             program._osdOptions.fs = fragmentShaderCode;
 
-            this._compileProgram(program, $.console.error);
-            this._secondPassProgram = program;
+            const build = this._compileProgram(program, $.console.error);
+            if (!build) {
+                throw new Error("$.WebGLModule.WebGL20::programCreated: Program could not be built!");
+            }
 
+            this._secondPassProgram = program;
             return program;
         }
 

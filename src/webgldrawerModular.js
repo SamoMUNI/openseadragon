@@ -254,7 +254,7 @@
             });
 
             this.viewer.addHandler("resize", (e) => {
-                if(this._outputCanvas !== this.viewer.drawer.canvas){
+                if(this._outputCanvas !== this.viewer.drawer.canvas) {
                     this._outputCanvas.style.width = this.viewer.drawer.canvas.clientWidth + 'px';
                     this._outputCanvas.style.height = this.viewer.drawer.canvas.clientHeight + 'px';
                 }
@@ -332,6 +332,7 @@
                 info.shaders = {};
                 // TODO: warn: sourceIndex might change dynamically at runtime... use unique tiled image
                 //   keys instead... these keys shall be the shaderID values
+                // TODO: no
                 info.shaders[sourceIndex] = {
                     originalShaderDefinition: {
                         name: shaderType + " shader",
@@ -344,10 +345,9 @@
                         _cacheApplied: undefined
                     },
                     shaderID: info.id.toString() + '_' + sourceIndex.toString(),
-                    externalId: externalId  // NOTE: you must keep the shaderID remembered since
-                    // external apps pass this ID to you and expect you to communicate through this ID
-                    // with them
+                    externalID: externalId + '_' + sourceIndex.toString()
                 };
+                console.debug('Config TI, shaders neboli nic, tak som nastavil shaderID na', info.shaders[sourceIndex].shaderID);
 
             } else {
                 // SHADERS: {
@@ -371,10 +371,14 @@
                 // }
 
                 // TODO: Object.keys does not guarantee that the order in which keys were added will be preserved!
+                // which is A MUST! because the order in which data references will be rendered depends on it!!!
+                // -> solution = get an array of shader objects ???
+                console.debug('Config TI, shaders parameter:', shaders);
                 for (const shaderID of Object.keys(shaders)) {
                     const shaderDefinition = shaders[shaderID];
+                    shaderDefinition.id = shaderID;
 
-                    // FIXME: dataReferences comes as [1] but should be [0] because it is the first source!!!
+                    // FIXME: dataReferences comes as [1] but should be [0] because it is the only source!!!
                     for (const badSourceIndex of shaderDefinition.dataReferences) {
                         const sourceIndex = badSourceIndex - 1;
                         // set the rendering order of the source
@@ -387,9 +391,7 @@
                             originalShaderDefinition: shaderDefinition,
                             // shaderID: shaderID // wont work because I expect the exact logic as down below
                             shaderID: info.id.toString() + '_' + sourceIndex.toString(),
-                            externalId: externalId // NOTE: you must keep the shaderID remembered since
-                            // external apps pass this ID to you and expect you to communicate through this ID
-                            // with them
+                            externalID: externalId + '_' + sourceIndex.toString()
                         };
                     }
 
@@ -690,7 +692,8 @@
                 tiledImage =>
                     tiledImage.source.__renderInfo.drawers[this._id]._utilizeLocalMethods ||
                     tiledImage.getOpacity() < 1 ||
-                    (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency)
+                    (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency) ||
+                    true // for testing purposes
             );
 
             //this.enableStencilTest(false);
@@ -1579,6 +1582,7 @@
                             tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._textureLayerIndex
                         );
                         gl.clear(gl.COLOR_BUFFER_BIT);
+                        // console.info('first pass, tiledImageIndex', tiledImageIndex, 'textureLayerIndex', tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._textureLayerIndex);
 
                         // console.info('first pass, tiledImageIndex', tiledImageIndex, 'tilesIDs =');
                         // console.info(tilesToDraw.map(item => item.tile.__renderInfo.id));

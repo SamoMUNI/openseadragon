@@ -890,11 +890,11 @@
             if (!Shader) {
                 throw new Error(`$.WebGLModule::addShader: Unknown shader type '${shaderType}'!`);
             } else {
-                console.debug('$.WebGLModule::addShader: Adding shader type:', shaderType);
+                console.debug('$.WebGLModule::addShader: Adding shader type:', shaderType, 'with id:', shaderID);
                 // console.debug('$.WebGLModule::addShader: Shader:', Shader);
             }
 
-            const shader = new Shader(shaderType + '_' + shaderID, {
+            const shader = new Shader(shaderType.replaceAll('-', '_') + '_' + shaderID, {
                 shaderObject: shaderObject,
                 webglContext: this.webglContext,
                 interactive: this.supportsHtmlControls(),
