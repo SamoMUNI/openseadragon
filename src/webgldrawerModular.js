@@ -809,7 +809,7 @@
 
             // set composite operation; ignore for first image drawn
             this._outputContext.globalCompositeOperation = tiledImageIndex === 0 ? null : tiledImage.compositeOperation || this.viewer.compositeOperation;
-            if(tiledImage._croppingPolygons || tiledImage._clip){
+            if (tiledImage._croppingPolygons || tiledImage._clip){
                 this._renderToClippingCanvas(tiledImage);
                 this._outputContext.drawImage(this._clippingCanvas, 0, 0);
 
@@ -1552,16 +1552,15 @@
             // this._clearOffScreenTextureArray();
             this.renderer.useFirstPassProgram();
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
+                if (tiledImage.isTainted()) {
+                    throw new Error("TiledImage.isTainted during two pass! -> not implemented!");
+                } else {
                 const tilesToDraw = tiledImage.getTilesToDraw();
-                // FIXME: dat aj do druheho passu
                 if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
                     // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
                     return;
                 }
 
-                if (tiledImage.isTainted()) {
-                    throw new Error("TiledImage.isTainted during two pass! -> not implemented!");
-                } else {
                     // pridane z merge-u
                     if ( tiledImage.placeholderFillStyle && tiledImage._hasOpaqueTile === false ) {
                         throw new Error("Drawtwopass: placeholderfillstyle not implemented!");
@@ -1685,7 +1684,7 @@
                             this._offscreenTextureArray, tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._textureLayerIndex);
                     }
 
-                    // TODO - apply context2dpipeline for every source?
+                    // TODO: - apply context2dpipeline for every source?
                     // draw from the rendering canvas onto the output canvas
                     this._applyContext2dPipeline(tiledImage, tiledImage.getTilesToDraw(), tiledImageIndex);
                     // clear the rendering canvas
