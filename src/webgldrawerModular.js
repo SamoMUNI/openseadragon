@@ -1662,6 +1662,12 @@
             // useContext2DPipeline or else TODO - use instanced rendering ???
             if (useContext2DPipeline) {
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
+                    const tilesToDraw = tiledImage.getTilesToDraw();
+                    if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
+                        // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
+                        return;
+                    }
+
                     const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     const renderInfo = {
                         transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
@@ -1691,6 +1697,12 @@
 
             } else {
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
+                    const tilesToDraw = tiledImage.getTilesToDraw();
+                    if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
+                        // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
+                        return;
+                    }
+
                     const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     const renderInfo = {
                         transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
