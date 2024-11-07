@@ -233,8 +233,8 @@
                 console.log('REMOVE-ITEM EVENT !!!');
 
                 // delete export info about this tiledImage
-                delete this._export[e.item.source.__renderInfo.id];
-                // this.export();
+                delete this._export[e.item.source.__renderInfo.externalID];
+                this.export();
 
                 for (const sourceIndex of Object.keys(e.item.source.__renderInfo.drawers[this._id].shaders)) {
                     // console.log('Mazem shaderType =', shaderType);
@@ -309,6 +309,7 @@
             console.log('TiledImage seen for the first time, shaders =', shaders);
             const info = tileSource.__renderInfo = {};
             info.id = Date.now();
+            info.externalID = externalId;
 
             // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap, maybe more in the future...)
             // every instantion can put it's own data here with it's id serving as the key into the map
@@ -428,7 +429,7 @@
                 shaderObject.externalId = config.externalId;
 
                 shaderObject._controls = {};
-                shaderObject._controlsCache = {};
+                shaderObject._cache = {};
 
                 const shader = this.renderer.createShader(shaderObject, shaderType, shaderID);
                 shaderObject._renderContext = shader;
@@ -447,14 +448,15 @@
             tiledImageInfo.drawers[this._id] = spec;
 
             // object to export session settings
-            const tI = this._export[tiledImageInfo.id] = {};
+            const tI = this._export[tiledImageInfo.externalID] = {};
             tI.sources = tiledImageInfo.sources;
             tI.shaders = tiledImageInfo.shaders;
             tI.controlsCaches = {};
             for (const sourceId in tiledImageInfo.drawers[this._id].shaders) {
-                tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._controlsCache;
+                tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._cache;
             }
 
+            // reinitialize offScreenTextureArray (probably new layers added)
             this._initializeOffScreenTextureArray();
         }
 
@@ -1708,12 +1710,18 @@
                         //     shader.opacity.set(tiledImage.opacity);
                         // }
 
+                        // DEBUG
+                        // const textureLayer = tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._textureLayerIndex;
+                        // const shaderType = tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey].type;
+                        // console.debug(`Kreslim do layeru ${textureLayer} pomocou ${shaderType}`);
+
                         this.renderer.processData(renderInfo, shader,
                             tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId
                             null, null,
                             this._offscreenTextureArray, tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._textureLayerIndex);
-                    }
 
+
+                    }
                 }); // end of tiledImages for cycle
 
                 // flag that the data needs to be put to the output canvas and that the rendering canvas needs to be cleared

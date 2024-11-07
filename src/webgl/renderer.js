@@ -897,7 +897,9 @@
             const shader = new Shader(shaderType.replaceAll('-', '_') + '_' + shaderID, {
                 shaderObject: shaderObject,
                 webglContext: this.webglContext,
+                controls: shaderObject._controls,
                 interactive: this.supportsHtmlControls(),
+                cache: shaderObject._cache,
                 invalidate: this.resetCallback,
                 rebuild: () => {}, // need to rebuild the whole shaderLayer
                 refetch: () => {}  // need to reinitialize whole drawer? probably not needed
@@ -940,12 +942,12 @@
 
         /**
          * Remove shader's controls corresponding to dataSource. If needed, remove shader from this.shadersCounter and recreate program.
-         * @param {object} sourceJSON json object corresponding to a concrete data source
+         * @param {object} shaderObject json object corresponding to a concrete data source
          * @param {string} shaderID "<tiledImageIndex>_<sourceIndex>"
          */
-        removeShader(sourceJSON, shaderID) {
+        removeShader(shaderObject, shaderID) {
             const shader = this.shadersCounter[shaderID];
-            shader.newRemoveControl(sourceJSON, shaderID);
+            shader.newRemoveControl(shaderObject, shaderID);
 
             delete this.shadersCounter[shaderID];
             this.createProgram();

@@ -157,19 +157,12 @@
                 console.error(`Invalid ID for the shader: ${id} does not match to the pattern`, $.WebGLModule.idPattern);
             }
 
-
-            this._controls = {}; // {opacity: {TII_sourceI: UIControl, ...}, color: {TII_sourceI: UIControl, ...}}
-            //todo custom control names share namespace with this API - unique names or controls in seperate object?
-
             this.webglContext = privateOptions.webglContext;
-
-            // DO NOT WANT TO USE THIS!
-            this.__shaderObject = privateOptions.shaderObject;
-            if (!this.__shaderObject.cache) {
-                this.__shaderObject.cache = {};
-            }
-
+            this.__shaderObject = privateOptions.shaderObject; // shaderObject from spec.shaders
+            this._controls = privateOptions.controls; // shaderObject._controls
             this._hasInteractiveControls = privateOptions.interactive;
+            this._cache = privateOptions.cache; // shaderObject._cache
+
             this.invalidate = privateOptions.invalidate;
             this._rebuild = privateOptions.rebuild;
             this._refetch = privateOptions.refetch;
@@ -202,8 +195,6 @@
          * @param {[number]} dataReferences indexes of data being requested for this shader (this.__shaderObject.dataReferences)
          */
         newConstruct(options = {}) {
-            this._controls = {};
-
             // nastavi this.__channels na ["rgba"] plus do shaderObject.cache da use_channel0: "rgba" (opacity tam este neni!)
             this.resetChannel(options);
             // nastavi this._mode a this.__mode na "show", inak by mohla aj do cache nastavovat...
@@ -234,35 +225,9 @@
                 const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, shaderID + '_' + controlName, {});
                 console.debug('newAddControl, vytvoril som control', controlName, control);
 
-                // control.init();
-                // if (controlsParentHTMLElement && controlsChangeHandler) {
-                //     console.debug('robim taktiez html pre tento control');
-                //     const node = control.createDOMElement(controlsParentHTMLElement);
-                //     if (node) {
-                //         control.registerDOMElementEventHandler(controlsChangeHandler);
-                //     } else {
-                //         console.warn(`Control ${controlName}'s HMTL shits could not be created!`);
-                //     }
-                // }
 
-                // update shaderLayer's attributes
-                if (!this._controls[controlName]) {
-                    this._controls[controlName] = {};
-                }
-                this._controls[controlName][shaderID] = control;
-
-                // very disgusting fix -> every time new control of the same type comes, it rewrites this attribute
-                // to itself... Needed because Jirka's shaders use shaderLayer.shaderName.(...)
+                this._controls[controlName] = control;
                 this[controlName] = control;
-
-                // update dataSource object attributes
-                shaderObject._controls[controlName] = control;
-                const sourceControlsCache = shaderObject._controlsCache;
-                if (sourceControlsCache[controlName]) {
-                    control.loadCacheObject(sourceControlsCache[controlName]);
-                } else {
-                    sourceControlsCache[controlName] = control.createCacheObject();
-                }
             }
         }
 
@@ -273,12 +238,12 @@
          */
         newRemoveControl(shaderObject, shaderID) {
             for (const controlName in this._controls) {
-                const control = this._controls[controlName][shaderID];
+                const control = this[controlName];
                 control.destroy();
-                delete this._controls[controlName][shaderID];
+                delete this[controlName];
 
                 delete shaderObject._controls[controlName];
-                delete shaderObject._controlsCache[controlName];
+                // delete shaderObject._cache[controlName]; // kedze cache je naprogramovana neviem ako ale kluce su tam dake mena tak neviem ju zrusit
             }
         }
 
@@ -392,7 +357,7 @@
                 // const control = this._controls[controlName][controlId];
                 // klasika co som zatial mal
                 // if (control instanceof $.WebGLModule.UIControls.SimpleUIControl) {
-                    this._controls[controlName][controlId].glDrawing(program, gl);
+                    this[controlName].glDrawing(program, gl);
                 // } else { // jirka si pridal do glDrawing dimension
                     // console.warn('Tu som');
                     // this._controls[controlName][controlId].glDrawing(program, undefined, gl);
@@ -420,10 +385,7 @@
 
             for (const controlName in this._controls) {
                 // console.log(`shaderLayer ${this.constructor.name()} loading ${control}`);
-                // this[control].glLoaded(program, gl);
-                for (const controlId in this._controls[controlName]) {
-                    this._controls[controlName][controlId].glLoaded(program, gl);
-                }
+                this[controlName].glLoaded(program, gl);
             }
         }
 
@@ -566,24 +528,18 @@
          * @param {string} defaultValue default value if no stored value available
          * @return {string} stored value or default value
          */
-        /* Pozera do this.__visualizationLayer.cache ci tam je name, ak ano vrati ho, ak nie vrati defaultValue */
         loadProperty(name, defaultValue) {
-            /* podla mna uplne zbytocny if */
-            if (!this.__shaderObject) {
-                return defaultValue;
-            }
-
-            const value = this.__shaderObject.cache[name];
+            const value = this._cache[name];
             return value === undefined ? defaultValue : value;
         }
 
         /**
          * Store value, useful for controls value caching
          * @param {string} name value name
-         * @param {*} value value
+         * @param {string} value value
          */
         storeProperty(name, value) {
-            this.__shaderObject.cache[name] = value;
+            this._cache[name] = value;
         }
 
         /**
@@ -631,7 +587,7 @@
                         teda channel = "rgba" */
                     let channel = predefined ? (predefined.required ? predefined.required : predefined.default) : undefined;
                     if (!channel) {
-                        /* pokial najde v this.__shaderObject.cache controlName tak to vrati,
+                        /* pokial najde v this._cache controlName tak to vrati,
                             inak vrati options[controlName] ({}.controlName = undefined) */
                         channel = this.loadProperty(controlName, options[controlName]);
                     }
@@ -1507,7 +1463,6 @@
             return "IControl";
         }
 
-        // POZRIET
         /**
          * Load a value from cache to support its caching - should be used on all values
          * that are available for the user to play around with and change using UI controls
@@ -1518,15 +1473,12 @@
          * @return {*} cached or default value
          */
         load(defaultValue, paramName = "") {
-            if (paramName === "default") {
-                paramName = "";
-            }
-            const value = this.owner.loadProperty(this.name + paramName, defaultValue);
+            const value = this.owner.loadProperty(this.name + (paramName === "default" ? "" : paramName), defaultValue);
+
             //check param in case of input cache collision between shader types
             return this.getSafeParam(value, defaultValue, paramName === "" ? "default" : paramName);
         }
 
-        // POZRIET
         /**
          * Store a value from cache to support its caching - should be used on all values
          * that are available for the user to play around with and change using UI controls
@@ -1539,7 +1491,7 @@
             if (paramName === "default") {
                 paramName = "";
             }
-            return this.owner.storeProperty(this.name + paramName, value);
+            this.owner.storeProperty(this.name + paramName, value);
         }
 
         /**
@@ -1748,7 +1700,7 @@
         }
 
         glDrawing(program, gl) {
-            // console.log('Settujem', this.component.glUniformFunName(), 'odpovedajuci', this.webGLVariableName, 'na', this.value === 0.2 ? 0.05 : this.value);
+            // console.log('Settujem', this.component.glUniformFunName(), 'odpovedajuci', this.webGLVariableName, 'na', this.value);
             gl[this.component.glUniformFunName()](this.glLocation, this.value);
         }
 
