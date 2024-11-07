@@ -467,13 +467,14 @@
             }
 
             for (const layerIndex in data) {
-                const canvas = data[layerIndex];
+                const canvas = data[layerIndex].canvas;
+                const order = data[layerIndex].order;
                 canvas.toBlob(function(blob) {
                     const link = document.createElement('a');
                     // eslint-disable-next-line compat/compat
                     link.href = URL.createObjectURL(blob);
-                    link.download = `offScreenTexture${layerIndex}.png`;
-                    link.click();  // programmatically trigger the download
+                    link.download = `offScreenTexture_order=${order}_layerIndex=${layerIndex}.png`;
+                    link.click();
                 }, 'image/png');
             }
         }
@@ -1488,7 +1489,7 @@
 
 
         // Function to extract an image from a TEXTURE_2D_ARRAY
-        extractTextureLayer(layerIndex) {
+        extractTextureLayer(layerIndex, order) {
             const gl = this._gl,
             texture = this._offscreenTextureArray,
             width = this._size.x,
@@ -1527,7 +1528,10 @@
             }
             ctx.putImageData(imageData, 0, 0);
 
-            this.offScreenTexturesAsCanvases[layerIndex] = outputCanvas;
+            this.offScreenTexturesAsCanvases[layerIndex] = {
+                canvas: outputCanvas,
+                order: order
+            };
         }
 
 
@@ -1576,7 +1580,7 @@
                         overallMatrix = viewMatrix.multiply(localMatrix);
                     }
 
-                    for (let i = 0; i < tiledImage.source.__renderInfo.sources.length; ++i) {
+                    for (const i of tiledImage.source.__renderInfo.sources) {
                         // bind framebuffer to correct layer and clear it
                         this._bindFrameBufferToOffScreenTextureArray(
                             tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._textureLayerIndex
@@ -1613,6 +1617,8 @@
                             } else {
                                 this.renderer.drawFirstPassProgram(null, tileInfo.texture2DArray, i, tileInfo.position, matrix);
                             }
+
+
                         } // end of TILES iteration
                     }
                 }
@@ -1624,10 +1630,20 @@
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
             if (this.debug && this._id === 0) {
+                // reset the object that may hold some unnecessary old data
+                this.offScreenTexturesAsCanvases = {};
+
                 // put the offScreenTexture's data into the canvases to enable exporting it as an image
-                for (let layerIndex = 0; layerIndex < tiledImages.length; ++layerIndex) {
-                    this.extractTextureLayer(layerIndex);
-                }
+                tiledImages.forEach((tiledImage, tiledImageIndex) => {
+                    const numOfSources = tiledImage.source.__renderInfo.sources.length;
+                    tiledImage.source.__renderInfo.sources.forEach((value, i) => {
+                        const layerIndex = tiledImage.source.__renderInfo.drawers[this._id].shaders[value]._textureLayerIndex;
+                        const order = tiledImageIndex * numOfSources + i;
+
+                        // layerIndex = index to the texture layer in the texture array, order = order in which data were rendered
+                        this.extractTextureLayer(layerIndex, order);
+                    });
+                });
             }
 
             // use program for two-pass rendering => parameter 2
