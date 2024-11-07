@@ -586,6 +586,7 @@
          *      matrix or flat matrix array (instance drawing)
          * @param {number} tileOpts.zoom value passed to the shaders as zoom_level
          * @param {number} tileOpts.pixelSize value passed to the shaders as pixel_size_in_fragments
+         * @param {number} tileOpts.globalOpacity value passed to the shaders as global_alpha
          * @param {[8 Numbers]} tileOpts.textureCoords 8 numbers representing triangle strip
          * @param {number?} tileOpts.instanceCount OPTIONAL how many instances to draw in case instanced drawing is enabled
          *

@@ -529,8 +529,11 @@
          * @return {string} stored value or default value
          */
         loadProperty(name, defaultValue) {
+            // console.log('loadProperty, key to cache =', name, 'defaultValue =', defaultValue, 'cache =', this._cache);
             const value = this._cache[name];
-            return value === undefined ? defaultValue : value;
+            const retval = value === undefined ? defaultValue : value;
+            // console.log('loadProperty, retval =', retval);
+            return retval;
         }
 
         /**
@@ -1474,9 +1477,11 @@
          */
         load(defaultValue, paramName = "") {
             const value = this.owner.loadProperty(this.name + (paramName === "default" ? "" : paramName), defaultValue);
+            return value;
 
+            // TODO: check this
             //check param in case of input cache collision between shader types
-            return this.getSafeParam(value, defaultValue, paramName === "" ? "default" : paramName);
+            // return this.getSafeParam(value, defaultValue, paramName === "" ? "default" : paramName);
         }
 
         /**
@@ -1653,10 +1658,15 @@
          */
         init() {
             this.encodedValue = this.load(this.params.default);
-            //this unfortunatelly makes cache erasing and rebuilding vis impossible, the shader part has to be fully re-instantiated
-            this.params.default = this.encodedValue;
+            // nothing was stored in the cache so we got the default value from the load call => store the value in the cache
+            if (this.encodedValue === this.params.default) {
+                this.store(this.encodedValue);
+            }
 
-            // console.error(`UIControl ${this.name} INIT() -> sets its encodedValue to ${this.encodedValue}`);
+
+            // did not know why this is here so I just commented it out
+            // this unfortunatelly makes cache erasing and rebuilding vis impossible, the shader part has to be fully re-instantiated
+            // this.params.default = this.encodedValue;
 
             // najprv dekoduje encodedValue, pri color to znamena napriklad ze zo stringu #ffffff sa prevedie na array troch floatov, pre range ze proste parse float na vstupe
             // potom normalizuje, co pri farbe nerobi nic ale napriklad pri range to uz nejakym sposobom dostava do rozmedzia <0, 1> s tym ze napriklad ak min je 0 a max 100 a default hodnota 40 tak hodnotu
@@ -1666,7 +1676,7 @@
             // console.error(`UIControl ${this.name} INIT() -> value without normalizing`, this.component.decode(this.encodedValue));
             // console.error(`UIControl ${this.name} INIT() -> sets its value to ${this.value}`);
 
-            // vykomentovane pri nasadeni mojho prepojenia vsetkeho (bod 6)
+            // console.log('UIControl::init() - setting value to', this.value, 'encodedValue =', this.encodedValue, 'interactive= ', this.params.interactive);
             if (this.params.interactive) {
                 const _this = this;
                 let node = document.getElementById(this.id);
@@ -1677,6 +1687,7 @@
                     };
 
                     // TODO: some elements do not have 'value' attribute, but 'checked' or 'selected' instead
+                    // console.log('Setting node.value to', this.encodedValue);
                     node.value = this.encodedValue;
                     node.addEventListener('change', updater);
                 } else {

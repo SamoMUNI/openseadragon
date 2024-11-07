@@ -1667,6 +1667,7 @@
                         transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                         zoom: viewport.zoom,
                         pixelSize: this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom),
+                        globalOpacity: tiledImage.getOpacity(),
                         textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
                     };
 
@@ -1700,6 +1701,7 @@
                         transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                         zoom: viewport.zoom,
                         pixelSize: this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom),
+                        globalOpacity: tiledImage.getOpacity(),
                         textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
                     };
 

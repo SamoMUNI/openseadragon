@@ -294,6 +294,7 @@
 
             this._locationPixelSize = null; // u_pixel_size_in_fragments ?
             this._locationZoomLevel = null; // u_zoom_level ?
+            this._locationGlobalAlpha = null; // u_global_alpha
 
             this._locationTextureArray1 = null; // u_textureArray1 TEXTURE_2D_ARRAY to use during single-pass rendering
             this._locationTextureLayer1 = null; // u_textureLayer1 which layer from TEXTURE_2D_ARRAY to use
@@ -721,6 +722,7 @@ void main() {
 
     uniform float u_pixel_size_in_fragments;
     uniform float u_zoom_level;
+    uniform float u_global_alpha;
 
     uniform int u_shaderLayerIndex;
 
@@ -802,6 +804,8 @@ void main() {
 
         //blend last level
         blend(vec4(.0), 0, false);
+
+        final_color *= u_global_alpha;
     }`;
 
             return fragmentShaderCode;
@@ -932,6 +936,7 @@ void main() {
             // FRAGMENT shader's locations
             this._locationPixelSize = gl.getUniformLocation(program, "u_pixel_size_in_fragments");
             this._locationZoomLevel = gl.getUniformLocation(program, "u_zoom_level");
+            this._locationGlobalAlpha = gl.getUniformLocation(program, "u_global_alpha");
 
             this._locationTexture = gl.getUniformLocation(program, "u_texture");
             this._locationTextureArray1 = gl.getUniformLocation(program, "u_textureArray1");
@@ -992,6 +997,7 @@ void main() {
             // fill FRAGMENT shader's uniforms (that are unused)
             gl.uniform1f(this._locationPixelSize, tileInfo.pixelSize || 1);
             gl.uniform1f(this._locationZoomLevel, tileInfo.zoom || 1);
+            gl.uniform1f(this._locationGlobalAlpha, tileInfo.globalOpacity || 1);
 
             // const textureType = program._osdOptions.textureType; // nechal som aby som videl ze existuju nejake _osdOptions
 
