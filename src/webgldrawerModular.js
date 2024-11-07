@@ -1673,11 +1673,6 @@
 
                     for (const shaderKey of tiledImage.source.__renderInfo.sources) {
                         const shader = shaders[shaderKey]._renderContext;
-                        if (shader.opacity !== undefined) {
-                            console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
-                            shader.opacity.set(tiledImage.opacity);
-                        }
-
                         this.renderer.processData(renderInfo, shader,
                             tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId
                             null, null,
@@ -1707,10 +1702,6 @@
 
                     for (const shaderKey of tiledImage.source.__renderInfo.sources) {
                         const shader = shaders[shaderKey]._renderContext;
-                        // if (shader.opacity !== undefined) {
-                        //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
-                        //     shader.opacity.set(tiledImage.opacity);
-                        // }
 
                         // DEBUG
                         // const textureLayer = tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._textureLayerIndex;
@@ -1721,8 +1712,6 @@
                             tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId
                             null, null,
                             this._offscreenTextureArray, tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._textureLayerIndex);
-
-
                     }
                 }); // end of tiledImages for cycle
 
