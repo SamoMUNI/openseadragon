@@ -402,12 +402,12 @@
          * (might be multiple times), after htmlControls()
          */
         init() {
-            if (!this.initialized()) {
-                console.error("Shader not properly initialized! Call shader.construct()!");
-            }
-            for (let control of this._ownedControls) {
-                // console.log(`Control ${control}, this[control] = ${this[control]}`);
-                this[control].init();
+            // if (!this.initialized()) {
+            //     console.error("Shader not properly initialized! Call shader.construct()!");
+            // }
+            for (const controlName in this._controls) {
+                const control = this[controlName];
+                control.init();
             }
         }
 
