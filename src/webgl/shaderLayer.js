@@ -210,6 +210,13 @@
          */
         newAddControl(shaderObject, shaderID, controlsParentHTMLElement = null, controlsChangeHandler = null) {
             const defaultControls = this.constructor.defaultControls;
+            if (defaultControls.opacity === undefined || (typeof defaultControls.opacity === "object" && !defaultControls.opacity.accepts("float"))) {
+                defaultControls.opacity = {
+                    default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
+                    accepts: (type, instance) => type === "float"
+                };
+            }
+
             console.info(`defaultControls of ${this.constructor.name()} shader =`, defaultControls);
             for (let controlName in defaultControls) {
                 if (controlName.startsWith("use_")) {
