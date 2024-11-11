@@ -861,7 +861,8 @@
                 // }
             }
             for (const shaderLayer of Object.values(this.shadersCounter)) {
-                shaderLayer.initControls(this.resetCallback);
+                // shaderLayer.initControls(this.resetCallback);
+                shaderLayer.init();
             }
 
             this._program = program;
