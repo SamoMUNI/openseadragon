@@ -470,8 +470,21 @@
             this.webglContext.loadFirstPassProgram();
         }
 
-        drawFirstPassProgram(texture, textureArray, textureLayer, textureCoords, transformMatrix) {
-            this.webglContext.drawFirstPassProgram(texture, textureArray, textureLayer, textureCoords, transformMatrix);
+        /**
+         *
+         * @param {object} source
+         * @param {[WebGLTexture]} source.textures
+         * @param {WebGLTexture} source.texture2DArray // TEXTURE_2D_ARRAY
+         * @param {number} source.index                // index of texture in textures array or index of layer in texture2DArray
+         * @param {Float32Array} textureCoords
+         * @param {[Float]} transformMatrix
+         */
+        drawFirstPassProgram(source, textureCoords, transformMatrix) {
+            if (this.webGLPreferredVersion === "2.0") {
+                this.webglContext.drawFirstPassProgram(source.texture2DArray, source.index, textureCoords, transformMatrix);
+            } else {
+                this.webglContext.drawFirstPassProgram(source.textures[source.index], textureCoords, transformMatrix);
+            }
         }
 
         /**
@@ -581,22 +594,26 @@
          * @param {GLuint|[GLuint]} textureArray texture array for instanced drawing
          * @param {Number} textureLayer
          * @param {Number} shaderLayerIndex uniform for fragment shader to decide which shaderLayer to use for rendering
-         * @param {Object} tileOpts
-         * @param {OpenSeadragon.Mat3|[OpenSeadragon.Mat3]} tileOpts.transform position transform
+         * @param {Object} renderInfo
+         * @param {OpenSeadragon.Mat3|[OpenSeadragon.Mat3]} renderInfo.transform position transform
          *      matrix or flat matrix array (instance drawing)
-         * @param {number} tileOpts.zoom value passed to the shaders as zoom_level
-         * @param {number} tileOpts.pixelSize value passed to the shaders as pixel_size_in_fragments
-         * @param {number} tileOpts.globalOpacity value passed to the shaders as global_alpha
-         * @param {[8 Numbers]} tileOpts.textureCoords 8 numbers representing triangle strip
-         * @param {number?} tileOpts.instanceCount OPTIONAL how many instances to draw in case instanced drawing is enabled
+         * @param {number} renderInfo.zoom value passed to the shaders as zoom_level
+         * @param {number} renderInfo.pixelSize value passed to the shaders as pixel_size_in_fragments
+         * @param {number} renderInfo.globalOpacity value passed to the shaders as global_alpha
+         * @param {[8 Numbers]} renderInfo.textureCoords 8 numbers representing triangle strip
+         * @param {number?} renderInfo.instanceCount OPTIONAL how many instances to draw in case instanced drawing is enabled
          *
          * @instance
          * @memberOf WebGLModule
          */
-        processData(tileOpts, shaderLayer, controlId, tileSourcesTextureArray = null, tileSourcesTextureLayer = null, secondPassTextureArray = null, secondPassTextureLayer = null) {
-            this.webglContext.programUsed(this._program, tileOpts, shaderLayer, controlId,
-                tileSourcesTextureArray, tileSourcesTextureLayer, secondPassTextureArray, secondPassTextureLayer
-            );
+        processData(renderInfo, shaderLayer, controlId, source) {
+            if (this.webGLPreferredVersion === "2.0") {
+                this.webglContext.programUsed(this._program, renderInfo, shaderLayer, controlId, source.texture2DArray, source.index);
+            } else {
+                this.webglContext.programUsed(this._program, renderInfo, shaderLayer, controlId, source.textures[source.index]);
+                // this.webglContext.loadFirstPassProgram();
+                // this.webglContext.drawFirstPassProgram(source.textures[source.index], renderInfo.textureCoords, renderInfo.transform);
+            }
         }
 
         // CUSTOM program I guess DRAWING !
