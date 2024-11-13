@@ -128,8 +128,17 @@
             };
         }
 
+        this.elementWrapper = document.createElement('div');
         this.element = options.element;
-        this.style = options.element.style;
+        this.elementWrapper.appendChild(this.element);
+
+        if (this.element.id) {
+            this.elementWrapper.id = "overlay-wrapper-" + this.element.id;
+        } else {
+            this.elementWrapper.id = "overlay-wrapper";
+        }
+
+        this.style = this.elementWrapper.style;
         this._init(options);
     };
 
@@ -196,7 +205,7 @@
          * @function
          */
         destroy: function() {
-            var element = this.element;
+            var element = this.elementWrapper;
             var style = this.style;
 
             if (element.parentNode) {
@@ -241,7 +250,7 @@
          * @param {Element} container
          */
         drawHTML: function(container, viewport) {
-            var element = this.element;
+            var element = this.elementWrapper;
             if (element.parentNode !== container) {
                 //save the source parent for later if we need it
                 element.prevElementParent = element.parentNode;
@@ -252,43 +261,57 @@
                 this.style.position = "absolute";
                 // this.size is used by overlays which don't get scaled in at
                 // least one direction when this.checkResize is set to false.
-                this.size = $.getElementSize(element);
+                this.size = $.getElementSize(this.elementWrapper);
             }
-
             var positionAndSize = this._getOverlayPositionAndSize(viewport);
-
             var position = positionAndSize.position;
             var size = this.size = positionAndSize.size;
-            var rotate = positionAndSize.rotate;
-
+            var outerScale = "";
+            if (viewport.overlayPreserveContentDirection) {
+                outerScale = viewport.flipped ? " scaleX(-1)" : " scaleX(1)";
+            }
+            var rotate = viewport.flipped ? -positionAndSize.rotate : positionAndSize.rotate;
+            var scale = viewport.flipped ? " scaleX(-1)" : "";
             // call the onDraw callback if it exists to allow one to overwrite
             // the drawing/positioning/sizing of the overlay
             if (this.onDraw) {
                 this.onDraw(position, size, this.element);
             } else {
                 var style = this.style;
+                var innerStyle = this.element.style;
+                innerStyle.display = "block";
                 style.left = position.x + "px";
                 style.top = position.y + "px";
                 if (this.width !== null) {
-                    style.width = size.x + "px";
+                    innerStyle.width = size.x + "px";
                 }
                 if (this.height !== null) {
-                    style.height = size.y + "px";
+                    innerStyle.height = size.y + "px";
                 }
                 var transformOriginProp = $.getCssPropertyWithVendorPrefix(
                     'transformOrigin');
                 var transformProp = $.getCssPropertyWithVendorPrefix(
                     'transform');
                 if (transformOriginProp && transformProp) {
-                    if (rotate) {
+                    if (rotate && !viewport.flipped) {
+                        innerStyle[transformProp] = "";
                         style[transformOriginProp] = this._getTransformOrigin();
                         style[transformProp] = "rotate(" + rotate + "deg)";
+                    } else if (!rotate && viewport.flipped) {
+                        innerStyle[transformProp] = outerScale;
+                        style[transformOriginProp] = this._getTransformOrigin();
+                        style[transformProp] = scale;
+                    } else if (rotate && viewport.flipped){
+                        innerStyle[transformProp] = outerScale;
+                        style[transformOriginProp] = this._getTransformOrigin();
+                        style[transformProp] = "rotate(" + rotate + "deg)" + scale;
                     } else {
+                        innerStyle[transformProp] = "";
                         style[transformOriginProp] = "";
                         style[transformProp] = "";
                     }
                 }
-                style.display = 'block';
+                style.display = 'flex';
             }
         },
 
@@ -314,6 +337,9 @@
                 }
             }
 
+            if (viewport.flipped) {
+                position.x = (viewport.getContainerSize().x - position.x);
+            }
             return {
                 position: position,
                 size: size,
@@ -337,7 +363,7 @@
             }
             if (this.checkResize &&
                 (this.width === null || this.height === null)) {
-                var eltSize = this.size = $.getElementSize(this.element);
+                var eltSize = this.size = $.getElementSize(this.elementWrapper);
                 if (this.width === null) {
                     width = eltSize.x;
                 }

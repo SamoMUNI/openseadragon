@@ -399,24 +399,25 @@ $.Viewer = function( options ) {
 
     // Create the viewport
     this.viewport = new $.Viewport({
-        containerSize:              THIS[ this.hash ].prevContainerSize,
-        springStiffness:            this.springStiffness,
-        animationTime:              this.animationTime,
-        minZoomImageRatio:          this.minZoomImageRatio,
-        maxZoomPixelRatio:          this.maxZoomPixelRatio,
-        visibilityRatio:            this.visibilityRatio,
-        wrapHorizontal:             this.wrapHorizontal,
-        wrapVertical:               this.wrapVertical,
-        defaultZoomLevel:           this.defaultZoomLevel,
-        minZoomLevel:               this.minZoomLevel,
-        maxZoomLevel:               this.maxZoomLevel,
-        viewer:                     this,
-        degrees:                    this.degrees,
-        flipped:                    this.flipped,
-        navigatorRotate:            this.navigatorRotate,
-        homeFillsViewer:            this.homeFillsViewer,
-        margins:                    this.viewportMargins,
-        silenceMultiImageWarnings:  this.silenceMultiImageWarnings
+        containerSize:                      THIS[ this.hash ].prevContainerSize,
+        springStiffness:                    this.springStiffness,
+        animationTime:                      this.animationTime,
+        minZoomImageRatio:                  this.minZoomImageRatio,
+        maxZoomPixelRatio:                  this.maxZoomPixelRatio,
+        visibilityRatio:                    this.visibilityRatio,
+        wrapHorizontal:                     this.wrapHorizontal,
+        wrapVertical:                       this.wrapVertical,
+        defaultZoomLevel:                   this.defaultZoomLevel,
+        minZoomLevel:                       this.minZoomLevel,
+        maxZoomLevel:                       this.maxZoomLevel,
+        viewer:                             this,
+        degrees:                            this.degrees,
+        flipped:                            this.flipped,
+        overlayPreserveContentDirection:    this.overlayPreserveContentDirection,
+        navigatorRotate:                    this.navigatorRotate,
+        homeFillsViewer:                    this.homeFillsViewer,
+        margins:                            this.viewportMargins,
+        silenceMultiImageWarnings:          this.silenceMultiImageWarnings
     });
 
     this.viewport._setContentBounds(this.world.getHomeBounds(), this.world.getContentFactor());
@@ -517,6 +518,9 @@ $.Viewer = function( options ) {
             crossOriginPolicy: this.crossOriginPolicy,
             animationTime:     this.animationTime,
             drawer:            this.drawer.getType(),
+            loadTilesWithAjax: this.loadTilesWithAjax,
+            ajaxHeaders:       this.ajaxHeaders,
+            ajaxWithCredentials: this.ajaxWithCredentials,
         });
     }
 
@@ -2203,7 +2207,7 @@ $.extend( $.Viewer.prototype, $.EventSource.prototype, $.ControlDock.prototype, 
      *      viewport which the location coordinates will be treated as relative
      *      to.
      * @param {function} [onDraw] - If supplied the callback is called when the overlay
-     *      needs to be drawn. It it the responsibility of the callback to do any drawing/positioning.
+     *      needs to be drawn. It is the responsibility of the callback to do any drawing/positioning.
      *      It is passed position, size and element.
      * @returns {OpenSeadragon.Viewer} Chainable.
      * @fires OpenSeadragon.Viewer.event:add-overlay

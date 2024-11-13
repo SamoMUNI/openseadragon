@@ -20,6 +20,13 @@ const drawers = {
     universalWebgl: "Jirka's modular drawer",
 }
 
+const viewportMargins = {
+    left: 100,
+    top: 0,
+    right: 0,
+    bottom: 50,
+};
+
 //Support drawer type from the url
 const url = new URL(window.location.href);
 const drawer1 = url.searchParams.get("left") || 'canvas';
@@ -42,6 +49,7 @@ let viewer1 = window.viewer1 = OpenSeadragon({
     drawer:drawer1,
     blendTime:0,
     showNavigator:true,
+    viewportMargins,
 });
 
 // viewer2: webgl drawer
@@ -57,6 +65,7 @@ let viewer2 = window.viewer2 = OpenSeadragon({
     drawer:drawer2,
     blendTime:0,
     showNavigator:true,
+    viewportMargins,
 });
 
 // // viewer3: html drawer, unused
