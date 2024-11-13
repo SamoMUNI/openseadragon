@@ -1769,14 +1769,6 @@
                 });
             }
 
-            const temp = 3;
-            if (temp === 4) {
-                console.log('Preskakujem second pass');
-                return;
-            } else {
-                console.log('Idem na second pass');
-            }
-
             // use program for two-pass rendering => parameter 2
             this.renderer.useDefaultProgram(2);
 

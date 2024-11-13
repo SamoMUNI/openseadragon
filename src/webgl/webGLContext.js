@@ -904,7 +904,7 @@ void main() {
         }
 
         setTextureSize(width, height) {
-            console.info('Setting texture size to', width, height);
+            // console.info('Setting texture size to', width, height);
             const gl = this.gl;
             gl.uniform1f(this._locationTextureWidth, width);
             gl.uniform1f(this._locationTextureHeight, height);
@@ -981,7 +981,7 @@ void main() {
          * @param {number} textureLayer index to layer in textureArray to use
          */
         programUsed(program, tileInfo, shaderLayer, controlId, textureArray, textureLayer) {
-            console.debug('Drawujem programom webgl2! textureCoords:', tileInfo.textureCoords, 'transform=', tileInfo.transform, 'zoom=');
+            // console.debug('Drawujem programom webgl2! textureCoords:', tileInfo.textureCoords, 'transform=', tileInfo.transform, 'zoom=');
             const gl = this.gl;
 
             // tell the controls to fill its uniforms
