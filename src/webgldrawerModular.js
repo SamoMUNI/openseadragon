@@ -87,7 +87,7 @@
                 return;
             }
             console.log('Drawer ID =', this._id);
-            this.webGLVersion = "1.0";
+            this.webGLVersion = "2.0";
             this.debug = this.webGLOptions.debug || true;
             console.log('Debug =', this.debug);
 
@@ -143,12 +143,11 @@
 
             // TWO-PASS RENDERING attributes
             this._offScreenBuffer = this._gl.createFramebuffer();
+            this._offScreenTexturesCount = 0;
             if (this.webGLVersion === "1.0") {
-                this._offScreenTextures = []; // textures to render into during first-pass
-                this._offScreenTexturesCount = 0;
+                this._offScreenTextures = []; // [TEXTURE_2D, TEXTURE_2D, ...]
             } else {
-                this._offscreenTextureArray = this._gl.createTexture();
-                this._offscreenTextureArrayLayers = 0;
+                this._offscreenTextureArray = this._gl.createTexture(); // TEXTURE_2D_ARRAY
             }
 
 
@@ -159,7 +158,7 @@
             this.tilesAsCanvases = {};
             this.debugTargetTileId = 0;
 
-            // create a link for exporting offScreenTextures, only for the main drawer, not the minimap
+            // create a link for exporting offScreenTextures and tiles, only for the main drawer, not the minimap
             if (this._id === 0) {
                 const downloadLink = document.createElement('a');
                 downloadLink.id = 'downloadLink';
@@ -169,7 +168,7 @@
                 // for now just random element from xOpat's DOM I chose
                 const element = document.getElementById('panel-shaders');
                 if (!element) {
-                    console.warn('Element with id "panel-shaders" not found, appending to body.');
+                    console.warn('Element with id "panel-shaders" not found, appending download link to body.');
                     document.body.appendChild(downloadLink);
                 } else {
                     element.appendChild(downloadLink);
@@ -209,7 +208,7 @@
 
             /***** SETUP WEBGL PROGRAMS *****/ // used no more
             // this._createTwoPassEasy();
-            this._createTwoPassEZ();
+            // this._createTwoPassEZ();
 
 
             /***** EVENT HANDLERS *****/
@@ -241,8 +240,6 @@
                     this.renderer.removeShader(sourceJSON, e.item.source.__renderInfo.id.toString() + '_' + sourceIndex.toString());
                 }
 
-                // --this._offscreenTextureArrayLayers;
-                // this._initializeOffScreenTextureArray();
 
                 // these lines are unnecessary because somehow when tiledImage is added again he does not have this .source.__renderInfo.drawers parameter anyways (I do not know why tho)
                 delete e.item.source.__renderInfo.drawers[this._id];
@@ -274,11 +271,8 @@
                 this.renderer.setDimensions(0, 0, viewportSize.x, viewportSize.y);
                 this._size = viewportSize;
 
-                if (this.webGLVersion === "2.0") {
-                    this._initializeOffScreenTextureArray();
-                } else {
-                    this._initializeOffScreenTextures();
-                }
+                // reinitialize offScreenTextures (size of the textures needs to be changed)
+                this._initializeOffScreenTextures();
             });
         }//end of constructor
 
@@ -436,7 +430,7 @@
 
                 const shader = this.renderer.createShader(shaderObject, shaderType, shaderID);
                 shaderObject._renderContext = shader;
-                shaderObject._textureLayerIndex = this.webGLVersion === "2.0" ? this._offscreenTextureArrayLayers++ : this._offScreenTexturesCount++;
+                shaderObject._textureLayerIndex = this._offScreenTexturesCount++;
 
                 // shaderObject._index = 0;
                 shaderObject.visible = true;
@@ -459,12 +453,8 @@
                 tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._cache;
             }
 
-            // reinitialize offScreenTextureArray (probably new layers added)
-            if (this.webGLVersion === "2.0") {
-                this._initializeOffScreenTextureArray();
-            } else {
-                this._initializeOffScreenTextures();
-            }
+            // reinitialize offScreenTextures (new layers need to be added)
+            this._initializeOffScreenTextures();
         }
 
         /**
@@ -565,7 +555,7 @@
 
             // rework with Texture2DArray
             gl.deleteTexture(this._offscreenTextureArray); // zrusi vsetky layers???
-            this._offscreenTextureArrayLayers = 0;
+            this._offscreenTexturesCount = 0;
 
 
             if (this._offScreenBuffer) {
@@ -1178,24 +1168,19 @@
 
                     // upload the image into the texture
                     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+
                     // texImage2D(target, level, internalformat, format, type, pixels) = webgl 1 syntax!
                     // console.log("trying using a texImage2D(target, level, internalformat, width, height, border, format, type, pixels) = also webgl 1 syntax!"); FUNGOVALO
                     // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, canvas); //FUNGOVALO
-
-                    // // options.wrap -> gl.MIRRORED_REPEAT
-                    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-                    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-                    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
                     textureArray.push(texture);
                 }
 
                 tileInfo.textures = textureArray;
+
             } else {
                 const options = this.renderer.webglContext.options;
                 const texture2DArray = gl.createTexture();
-                // gl.activeTexture(gl.TEXTURE1);
                 gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture2DArray);
 
                 const x = canvas.width;
@@ -1210,7 +1195,6 @@
 
                 // fill the data
                 for (let i = 0; i < numOfDataSources; ++i) {
-                    // console.log('tileReadyHandler, nahravam to textureArray-u canvas');
                     gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, x, y, 1, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
                 }
 
@@ -1219,10 +1203,9 @@
 
             // add it to our _TextureMap
             this._TextureMap.set(canvas, tileInfo);
-            // console.debug('Tile ready handler, texture added to the map, id =', tileInfo);
 
             // if this is the main drawer (not the minimap) and debug is enabled, save the tile as canvas
-            if (this.debug && this._id === 0) {
+            if (this._id === 0 && this.debug) {
                 this.tilesAsCanvases[tileInfo.debugId] = canvas;
             }
         }
@@ -1323,102 +1306,135 @@
         }
 
         /**
-         * WebGL 1.0 - Two pass rendering
+         * Initialize offScreenTextures used as a render target for first pass during two pass rendering.
+         *
+         * Called during "add-item", "remove-item" (number of layers has to be changed), and "resize" (size of the layers has to be changed) events.
          */
         _initializeOffScreenTextures() {
             const gl = this._gl;
+            const x = this._size.x;
+            const y = this._size.y;
             const numOfTextures = this._offScreenTexturesCount;
-            for (let i = 0; i < numOfTextures; ++i) {
-                console.log('Pripravujem offscreen texturu cislo', i);
-                let texture = this._offScreenTextures[i];
-                if (!texture) {
-                    this._offScreenTextures[i] = texture = gl.createTexture();
+
+            if (this.webGLVersion === "1.0") {
+                for (let i = 0; i < numOfTextures; ++i) {
+                    console.debug('Pripravujem offscreen texturu cislo', i);
+                    let texture = this._offScreenTextures[i];
+                    if (!texture) {
+                        this._offScreenTextures[i] = texture = gl.createTexture();
+                    }
+                    gl.bindTexture(gl.TEXTURE_2D, texture);
+
+                    const initialData = new Uint8Array(x * y * 4);
+                    // set initial data as blue pixels everywhere
+                    // for (let i = 2; i < initialData.length; i += 4) {
+                    //     initialData[i] = 255;
+                    //     initialData[i + 1] = 255;
+                    // }
+
+                    // original was internalformat = gl.RGBA8
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, x, y, 0, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
                 }
-                gl.bindTexture(gl.TEXTURE_2D, texture);
 
-                const x = this._size.x;
-                const y = this._size.y;
+            } else {
+                gl.deleteTexture(this._offscreenTextureArray);
+                this._offscreenTextureArray = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._offscreenTextureArray);
+
+                // once you allocate storage with gl.texStorage3D, you cannot change the texture's size
+                // or format, which helps optimize performance and ensures consistency
+                gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, x, y, numOfTextures);
+
                 const initialData = new Uint8Array(x * y * 4);
-                // set initial data as blue pixels everywhere
-                // for (let i = 2; i < initialData.length; i += 4) {
-                //     initialData[i] = 255;
-                //     initialData[i + 1] = 255;
-                // }
+                for (let i = 0; i < numOfTextures; ++i) {
+                    console.debug('Pripravujem offscreen layer cislo', i);
+                    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, x, y, 1, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
+                }
 
-                // original was internalformat = gl.RGBA8
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, x, y, 0, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                // bol gl.LINEAR, chatgpt ale odporuca NEAREST pre two-pass rendering, kvoli The intermediate texture may use a filtering mode, like linear filtering, which causes interpolation between pixels. This interpolation can make edges appear softer or bulkier because values are blended rather than sampled strictly at each texel.
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             }
+
+            // send the layer's size to the glsl
+            //  this.renderer.webglContext.setTextureSize(x, y);
         }
 
         /**
-         * WebGL 1.0 - Two pass rendering
-         * Bind framebuffer to i-th texture from this._renderOffScreenTextures.
-         * @param {number} i index of texture to bind
+         * Bind framebuffer to i-th texture from this_offScreenTextures [gl.TEXTURE_2D]
+         *               or to i-th layer from this._offscreenTextureArray gl.TEXTURE_2D_ARRAY
+         * @param {Number} i index of texture or texture layer to bind
          */
         _bindFrameBufferToOffScreenTexture(i) {
             const gl = this._gl;
             gl.bindFramebuffer(gl.FRAMEBUFFER, this._offScreenBuffer);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._offScreenTextures[i], 0);
-        }
-
-        /**
-         * WebGL 2.0 - Two pass rendering
-         * Initialize this._offscreenTextureArray as gl.TEXTURE_2D_ARRAY to be used with two-pass rendering.
-         * Called during "add-item", "remove-item" (number of layers has to be changed),
-         * and "resize" (size of the layers has to be changed) events.
-         */
-        _initializeOffScreenTextureArray() {
-            // console.error('Pozdrav z initialize off screen texture array!');
-            const gl = this._gl;
-            const numOfLayers = this._offscreenTextureArrayLayers;
-
-            gl.deleteTexture(this._offscreenTextureArray);
-            this._offscreenTextureArray = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._offscreenTextureArray);
-
-            const x = this._size.x;
-            const y = this._size.y;
-            // once you allocate storage with gl.texStorage3D, you cannot change the texture's size
-            // or format, which helps optimize performance and ensures consistency
-            gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, x, y, numOfLayers);
-
-            const initialData = new Uint8Array(x * y * 4);
-            for (let i = 0; i < numOfLayers; ++i) {
-                gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, x, y, 1, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
+            if (this.webGLVersion === "1.0") {
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._offScreenTextures[i], 0);
+            } else {
+                gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this._offscreenTextureArray, 0, i);
             }
-            // bol gl.LINEAR, chatgpt ale odporuca NEAREST pre two-pass rendering, kvoli The intermediate texture may use a filtering mode, like linear filtering, which causes interpolation between pixels. This interpolation can make edges appear softer or bulkier because values are blended rather than sampled strictly at each texel.
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-            // send the layer's size to the glsl
-            this.renderer.webglContext.setTextureSize(x, y);
         }
 
-        _clearOffScreenTextureArray() {
-            const gl = this._gl;
-            for (let i = 0; i < this._offscreenTextureArrayLayers; ++i) {
-                this._bindFrameBufferToOffScreenTextureArray(i);
-                gl.clear(gl.COLOR_BUFFER_BIT);
-            }
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        }
 
-        /**
-         * WebGL 2.0 - Two pass rendering
-         * Bind framebuffer to i-th layer from this._offscreenTextureArray (gl.TEXTURE_2D_ARRAY).
-         * @param {Number} i index of layer to bind
-         */
-        _bindFrameBufferToOffScreenTextureArray(i) {
-            const gl = this._gl;
-            gl.bindFramebuffer(gl.FRAMEBUFFER, this._offScreenBuffer);
-            gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this._offscreenTextureArray, 0, i);
-        }
+        // /**
+        //  * WebGL 2.0 - Two pass rendering
+        //  * Initialize this._offscreenTextureArray as gl.TEXTURE_2D_ARRAY to be used with two-pass rendering.
+        //  * Called during "add-item", "remove-item" (number of layers has to be changed),
+        //  * and "resize" (size of the layers has to be changed) events.
+        //  */
+        // _initializeOffScreenTextureArray() {
+        //     // console.error('Pozdrav z initialize off screen texture array!');
+        //     const gl = this._gl;
+        //     const numOfLayers = this._offscreenTextureArrayLayers;
+
+        //     gl.deleteTexture(this._offscreenTextureArray);
+        //     this._offscreenTextureArray = gl.createTexture();
+        //     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._offscreenTextureArray);
+
+        //     const x = this._size.x;
+        //     const y = this._size.y;
+        //     // once you allocate storage with gl.texStorage3D, you cannot change the texture's size
+        //     // or format, which helps optimize performance and ensures consistency
+        //     gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, x, y, numOfLayers);
+
+        //     const initialData = new Uint8Array(x * y * 4);
+        //     for (let i = 0; i < numOfLayers; ++i) {
+        //         gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, x, y, 1, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
+        //     }
+        //     // bol gl.LINEAR, chatgpt ale odporuca NEAREST pre two-pass rendering, kvoli The intermediate texture may use a filtering mode, like linear filtering, which causes interpolation between pixels. This interpolation can make edges appear softer or bulkier because values are blended rather than sampled strictly at each texel.
+        //     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        //     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        //     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        //     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+
+        // }
+
+        // _clearOffScreenTextureArray() {
+        //     const gl = this._gl;
+        //     for (let i = 0; i < this._offscreenTexturesCount; ++i) {
+        //         this._bindFrameBufferToOffScreenTextureArray(i);
+        //         gl.clear(gl.COLOR_BUFFER_BIT);
+        //     }
+        //     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        // }
+
+        // /**
+        //  * WebGL 2.0 - Two pass rendering
+        //  * Bind framebuffer to i-th layer from this._offscreenTextureArray (gl.TEXTURE_2D_ARRAY).
+        //  * @param {Number} i index of layer to bind
+        //  */
+        // _bindFrameBufferToOffScreenTextureArray(i) {
+        //     const gl = this._gl;
+        //     gl.bindFramebuffer(gl.FRAMEBUFFER, this._offScreenBuffer);
+        //     gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this._offscreenTextureArray, 0, i);
+        // }
 
         /**
          * Called only from draw function. Iterates over tiledImages, and the end od each cycle, data are drawn from this._renderingCanvas onto this._outputCanvas.
@@ -1519,25 +1535,17 @@
                         // need to render in correct order
                         for (const shaderKey of tiledImage.source.__renderInfo.sources) {
                             const shader = shaders[shaderKey]._renderContext;
-                            // if (shader.opacity !== undefined) {
-                            //     console.log('Calling opacity set from draw call, tiledImage.opacity =', tiledImage.opacity);
-                            //     shader.opacity.set(tiledImage.opacity);
-                            // }
 
                             const source = {
                                 textures: tileInfo.textures,
                                 texture2DArray: tileInfo.texture2DArray,
                                 index: shaderKey
                             };
-                            if (this.webGLVersion === "1.0") {
-                                this.renderer.processData(renderInfo, shader,
-                                    tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId
-                                    source);
-                            } else {
-                                this.renderer.processData(renderInfo, shader,
-                                    tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId
-                                    source);
-                            }
+
+                            this.renderer.processData(renderInfo, shader,
+                                tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId
+                                source);
+
                         }
                     }
 
@@ -1557,96 +1565,104 @@
         } // end of function
 
 
-        // Function to extract an image from a TEXTURE_2D_ARRAY
-        extractTextureLayer(layerIndex, order) {
-            const gl = this._gl,
-            texture = this._offscreenTextureArray,
-            width = this._size.x,
-            height = this._size.y;
+        // Function to extract an image from the offScreenTexture
+        extractOffScreenTexture(index, order) {
+            const gl = this._gl;
+            const width = this._size.x;
+            const height = this._size.y;
 
-            // Create framebuffer to read from the texture layer
+            // create framebuffer to read from the texture layer
             const framebuffer = gl.createFramebuffer();
             gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
 
-            // Attach the specific layer of the texture to the framebuffer
-            gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, texture, 0, layerIndex);
+            if (this.webGLVersion === "1.0") {
+                // attach the texture to the framebuffer
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._offScreenTextures[index], 0);
+            } else {
+                // attach the specific layer of the textureArray to the framebuffer
+                gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this._offscreenTextureArray, 0, index);
+            }
 
-            // Check if framebuffer is complete
+            // check if framebuffer is complete
             if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-                console.error('Framebuffer is not complete');
+                console.error(`Framebuffer is not complete, could not extract offScreenTexture index ${index}`);
                 return;
             }
 
-            // Read pixels from the framebuffer
-            const pixels = new Uint8Array(width * height * 4);  // RGBA format
+            // read pixels from the framebuffer
+            const pixels = new Uint8Array(width * height * 4);  // RGBA format needed???
             gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
 
-            // Unbind the framebuffer
+            // unbind the framebuffer
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-            // Create a canvas to convert raw pixel data to image
+            // use a canvas to convert raw pixel data to image
             const outputCanvas = document.createElement('canvas');
             outputCanvas.width = width;
             outputCanvas.height = height;
             const ctx = outputCanvas.getContext('2d');
             const imageData = ctx.createImageData(width, height);
 
-            // Copy the pixel data into the canvas's ImageData
-            for (let i = 0; i < pixels.length; i++) {
-                imageData.data[i] = pixels[i];
-            }
+            // copy the pixel data into the canvas's ImageData
+            // for (let i = 0; i < pixels.length; i++) {
+            //     imageData.data[i] = pixels[i];
+            // }
+            // ctx.putImageData(imageData, 0, 0);
+
+            // optimized copying of pixel data directly into ImageData
+            imageData.data.set(pixels);
             ctx.putImageData(imageData, 0, 0);
 
-            this.offScreenTexturesAsCanvases[layerIndex] = {
+            this.offScreenTexturesAsCanvases[index] = {
                 canvas: outputCanvas,
                 order: order
             };
         }
 
         // Function to extract an image from a TEXTURE_2D
-        extractTexture2D(index, order) {
-            const gl = this._gl,
-            texture = this._offScreenTextures[index],  // The TEXTURE_2D to extract from
-            width = this._size.x,  // Assuming texture size is available
-            height = this._size.y;
+        // extractTexture2D(index, order) {
+        //     const gl = this._gl,
+        //     texture = this._offScreenTextures[index],  // The TEXTURE_2D to extract from
+        //     width = this._size.x,  // Assuming texture size is available
+        //     height = this._size.y;
 
-            // Create framebuffer to read from the texture
-            const framebuffer = gl.createFramebuffer();
-            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        //     // Create framebuffer to read from the texture
+        //     const framebuffer = gl.createFramebuffer();
+        //     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
 
-            // Attach the texture to the framebuffer (no need for layerIndex since it's a 2D texture)
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+        //     // Attach the texture to the framebuffer (no need for layerIndex since it's a 2D texture)
+        //     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
 
-            // Check if framebuffer is complete
-            if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-                console.error('Framebuffer is not complete');
-                return;
-            }
+        //     // Check if framebuffer is complete
+        //     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        //         console.error('Framebuffer is not complete');
+        //         return;
+        //     }
 
-            // Read pixels from the framebuffer
-            const pixels = new Uint8Array(width * height * 4);  // RGBA format
-            gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        //     // Read pixels from the framebuffer
+        //     const pixels = new Uint8Array(width * height * 4);  // RGBA format
+        //     gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
 
-            // Unbind the framebuffer
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        //     // Unbind the framebuffer
+        //     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-            // Create a canvas to convert raw pixel data to an image
-            const outputCanvas = document.createElement('canvas');
-            outputCanvas.width = width;
-            outputCanvas.height = height;
-            const ctx = outputCanvas.getContext('2d');
-            const imageData = ctx.createImageData(width, height);
+        //     // Create a canvas to convert raw pixel data to an image
+        //     const outputCanvas = document.createElement('canvas');
+        //     outputCanvas.width = width;
+        //     outputCanvas.height = height;
+        //     const ctx = outputCanvas.getContext('2d');
+        //     const imageData = ctx.createImageData(width, height);
 
-            // Optimized copying of pixel data directly into ImageData
-            imageData.data.set(pixels);  // Directly copy pixels to ImageData data
-            ctx.putImageData(imageData, 0, 0);
+        //     // Optimized copying of pixel data directly into ImageData
+        //     imageData.data.set(pixels);  // Directly copy pixels to ImageData data
+        //     ctx.putImageData(imageData, 0, 0);
 
-            // Store the canvas in an object, assuming you need to keep track of it
-            this.offScreenTexturesAsCanvases[index] = {
-                canvas: outputCanvas,
-                order: order
-            };
-        }
+        //     // Store the canvas in an object, assuming you need to keep track of it
+        //     this.offScreenTexturesAsCanvases[index] = {
+        //         canvas: outputCanvas,
+        //         order: order
+        //     };
+        // }
 
 
         /**
@@ -1661,7 +1677,6 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
-            // this._clearOffScreenTextureArray();
             this.renderer.useFirstPassProgram();
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 if (tiledImage.isTainted()) {
@@ -1694,17 +1709,9 @@
                     }
 
                     for (const i of tiledImage.source.__renderInfo.sources) {
-                        // bind framebuffer to correct layer and clear it
-                        if (this.webGLVersion === "2.0") {
-                            this._bindFrameBufferToOffScreenTextureArray(
-                                tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._textureLayerIndex
-                            );
-                        } else {
-                            this._bindFrameBufferToOffScreenTexture(
-                                tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._textureLayerIndex
-                            );
-                        }
+                        this._bindFrameBufferToOffScreenTexture(tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._textureLayerIndex);
                         gl.clear(gl.COLOR_BUFFER_BIT);
+
                         // console.info('first pass, tiledImageIndex', tiledImageIndex, 'textureLayerIndex', tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._textureLayerIndex);
 
                         // console.info('first pass, tiledImageIndex', tiledImageIndex, 'tilesIDs =');
@@ -1757,12 +1764,7 @@
                         const layerIndex = tiledImage.source.__renderInfo.drawers[this._id].shaders[value]._textureLayerIndex;
                         const order = tiledImageIndex * numOfSources + i;
 
-                        if (this.webGLVersion === "2.0") {
-                            // layerIndex = index to the texture layer in the texture array, order = order in which data were rendered
-                            this.extractTextureLayer(layerIndex, order);
-                        } else {
-                            this.extractTexture2D(layerIndex, order);
-                        }
+                        this.extractOffScreenTexture(layerIndex, order);
                     });
                 });
             }
@@ -1783,8 +1785,7 @@
                 tiledImage.compositeOperation ||
                 tiledImage._clip ||
                 tiledImage._croppingPolygons ||
-                tiledImage.debugMode ||
-                true // always use context2d pipeline for now
+                tiledImage.debugMode
             );
 
             // useContext2DPipeline or else TODO - use instanced rendering ???
