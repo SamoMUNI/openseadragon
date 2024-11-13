@@ -1038,12 +1038,6 @@ void main() {
                 1.0, 1.0, 1.0,
                 1.0, 0.0, 1.0
             ]);
-            // this._firstPassViewport = new Float32Array([
-            //     -1.0, -1.0,
-            //     1.0, -1.0,
-            //     -1.0, 1.0,
-            //     1.0, 1.0
-            // ]);
             this._secondPassViewport = new Float32Array([
                 0.0, 0.0, 1.0,
                 0.0, 1.0, 1.0,
@@ -1066,13 +1060,14 @@ void main() {
             this._locationShaderLayerIndex = null; // u_shaderLayerIndex which shaderLayer to use for rendering
 
 
-            // FIRST PASS PROGRAM, used to render data from tiledImages to their corresponding layers in TEXTURE_2D_ARRAY
+            // FIRST PASS PROGRAM, used to render data from tiledImages to their corresponding offScreenTextures
             this._firstPassProgram = null;
-            this._firstPassProgramTexcoordLocation = null;
             this._firstPassProgramTransformMatrixLocation = null;
-            this._firstPassProgramTextureArrayLocation = null;
-            this._firstPassProgramTextureLayerLocation = null;
+            this._firstPassProgramTextureLocation = null;
+            this._firstPassProgramTexcoordLocation = null;
             this._firstPassProgramTexcoordBuffer = null;
+            this._firstPassProgramPositionLocation = null;
+            this._firstPassProgramPositionBuffer = null;
             this._createFirstPassProgram(); // sets this._firstPassProgram to WebGL program
         }
 
@@ -1162,6 +1157,7 @@ void main() {
 
             // Locations
             this._firstPassProgramTransformMatrixLocation = gl.getUniformLocation(program, "u_transform_matrix");
+            this._firstPassProgramTextureLocation = gl.getUniformLocation(program, "u_texture");
 
             // Initialize viewport attribute
             this._firstPassProgramPositionLocation = gl.getAttribLocation(program, "a_position");
@@ -1181,16 +1177,14 @@ void main() {
             gl.vertexAttribPointer(this._firstPassProgramTexcoordLocation, 2, gl.FLOAT, false, 0, 0);
 
             // Initialize texture
-            gl.uniform1i(this._firstPassProgramTextureArrayLocation, 0);
+            gl.uniform1i(this._firstPassProgramTextureLocation, 0);
             gl.activeTexture(gl.TEXTURE0);
         }
 
         /** Draw using firstPassProgram.
-         * @param {WebGLTexture} texture unused
-         * @param {WebGLTexture} textureArray gl.TEXTURE_2D_ARRAY used as source of data for rendering
-         * @param {number} textureLayer index to layer in textureArray to use
+         * @param {WebGLTexture} texture gl.TEXTURE_2D used as a source of data for rendering
          * @param {Float32Array} textureCoords
-         * @param {[Float]} transformMatrix
+         * @param {Float32Array} transformMatrix
          */
         drawFirstPassProgram(texture, textureCoords, transformMatrix) {
             // console.debug('Drawujem first pass programom! texcoords:', textureCoords, 'transformMatrix:', transformMatrix);
@@ -1198,10 +1192,9 @@ void main() {
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramPositionBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, this._firstPassViewport, gl.STATIC_DRAW);
-            const positionLocation = gl.getAttribLocation(this._firstPassProgram, "a_position");
-            gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
-            gl.enableVertexAttribArray(positionLocation);
-
+            // const positionLocation = gl.getAttribLocation(this._firstPassProgram, "a_position");
+            // gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+            // gl.enableVertexAttribArray(positionLocation);
 
             // Texture coords
             gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramTexcoordBuffer);
@@ -1514,9 +1507,7 @@ void main() {
             gl.vertexAttribPointer(this._locationTextureCoords, 2, gl.FLOAT, false, 0, 0);
 
 
-            // Initialize texture arrays
-            // single-pass rendering uses gl.TEXTURE1 unit to which it binds TEXTURE_2D_ARRAY,
-            // two-pass rendering uses gl.TEXTURE2 unit to which it binds TEXTURE_2D_ARRAY.
+            // Initialize texture
             gl.uniform1i(this._locationTextures, 0);
             gl.activeTexture(gl.TEXTURE0);
         }
@@ -1527,16 +1518,14 @@ void main() {
          * @param {WebGLProgram} program WebGLProgram in use
 
          * @param {object} tileInfo
-         * @param {[Float]} tileInfo.transform 3*3 matrix that should be applied to tile vertices
-         * @param {number} tileInfo.zoom
-         * @param {number} tileInfo.pixelSize
+         * @param {Float32Array} tileInfo.transform 3*3 matrix that should be applied to tile vertices
+         * @param {Number} tileInfo.zoom
+         * @param {Number} tileInfo.pixelSize
          * @param {Float32Array} tileInfo.textureCoords 8 suradnic, (2 pre kazdy vrchol triangle stripu)
          *
          * @param {ShaderLayer} shaderLayer shaderLayer
-         * @param {WebGLTexture} singlePassTextureArray gl.TEXTURE_2D_ARRAY used for single-pass rendering
-         * @param {number} singlePassTextureLayer index to layer in texture array to use
-         * @param {WebGLTexture} textureArray gl.TEXTURE_2D_ARRAY used for second pass render during two-pass rendering
-         * @param {number} secondPassTextureLayer index to layer in texture array to use
+         * @param {string} controlId shaderLayer's control's id
+         * @param {WebGLTexture} texture gl.TEXTURE_2D used as a source of data for rendering
          */
         programUsed(program, tileInfo, shaderLayer, controlId, texture) {
             // console.debug('programUsed! texcoords:', tileInfo.textureCoords, 'transformMatrix:', tileInfo.transform);
@@ -1549,18 +1538,19 @@ void main() {
             const shaderLayerIndex = this._shadersMapping[controlId]; // malo by sediet ze controlID je to iste ako shaderID hadam...
             gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
 
+
             // fill FRAGMENT shader's uniforms (that are unused)
             gl.uniform1f(this._locationPixelSize, tileInfo.pixelSize || 1);
             gl.uniform1f(this._locationZoomLevel, tileInfo.zoom || 1);
             // fill FRAGMENT shader's uniforms (that are used)
             gl.uniform1f(this._locationGlobalAlpha, tileInfo.globalOpacity || 1);
 
+
             // viewport attribute
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferPosition);
             if (this._renderingType === 1) {
                 // console.debug('Setting first pass viewport');
                 gl.bufferData(gl.ARRAY_BUFFER, this._firstPassViewport, gl.STATIC_DRAW);
-
             } else {
                 // console.debug('Setting second pass viewport');
                 gl.bufferData(gl.ARRAY_BUFFER, this._secondPassViewport, gl.STATIC_DRAW);
@@ -1571,10 +1561,14 @@ void main() {
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
             gl.bufferData(gl.ARRAY_BUFFER, tileInfo.textureCoords, gl.STATIC_DRAW);
 
+
             // transform matrix
             gl.uniformMatrix3fv(this._locationTransformMatrix, false, tileInfo.transform);
 
+
+            // texture
             gl.bindTexture(gl.TEXTURE_2D, texture);
+
 
             // draw triangle strip (two triangles) from a static array defined in the vertex shader,
             // 0: start reading vertex data from the first vertex,
