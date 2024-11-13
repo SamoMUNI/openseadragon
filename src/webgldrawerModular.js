@@ -706,8 +706,8 @@
                 tiledImage =>
                     tiledImage.source.__renderInfo.drawers[this._id]._utilizeLocalMethods ||
                     tiledImage.getOpacity() < 1 ||
-                    (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency) ||
-                    true // for testing purposes
+                    (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency)
+                    // true // for testing purposes
             );
 
             if (!twoPassRendering) {
@@ -1767,10 +1767,12 @@
                 });
             }
 
-            const temp = 4;
+            const temp = 3;
             if (temp === 4) {
                 console.log('Preskakujem second pass');
                 return;
+            } else {
+                console.log('Idem na second pass');
             }
 
             // use program for two-pass rendering => parameter 2
@@ -1781,7 +1783,8 @@
                 tiledImage.compositeOperation ||
                 tiledImage._clip ||
                 tiledImage._croppingPolygons ||
-                tiledImage.debugMode
+                tiledImage.debugMode ||
+                true // always use context2d pipeline for now
             );
 
             // useContext2DPipeline or else TODO - use instanced rendering ???
@@ -1795,7 +1798,7 @@
 
                     const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     const renderInfo = {
-                        transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
+                        transform: new Float32Array([2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0]), // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                         zoom: viewport.zoom,
                         pixelSize: this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom),
                         globalOpacity: tiledImage.getOpacity(),
@@ -1834,7 +1837,7 @@
 
                     const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     const renderInfo = {
-                        transform: [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0], // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
+                        transform: new Float32Array([2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0]), // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                         zoom: viewport.zoom,
                         pixelSize: this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom),
                         globalOpacity: tiledImage.getOpacity(),

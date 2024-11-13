@@ -1045,10 +1045,10 @@ void main() {
             //     1.0, 1.0
             // ]);
             this._secondPassViewport = new Float32Array([
-                0.0, 0.0,
-                0.0, 1.0,
-                1.0, 0.0,
-                1.0, 1.0
+                0.0, 0.0, 1.0,
+                0.0, 1.0, 1.0,
+                1.0, 0.0, 1.0,
+                1.0, 1.0, 1.0
             ]);
 
             // SECOND PASS PROGRAM
@@ -1469,7 +1469,9 @@ void main() {
          * @param {Object} shaderLayers map of shaderLayers to load {shaderID: ShaderLayer}
          */
         programLoaded(program, shaderLayers) {
+            // console.log('ProgramLoaded called!');
             const gl = this.gl;
+            gl.useProgram(this._secondPassProgram);
 
             // load clip and blend shaderLayer's glsl locations, load shaderLayer's control's glsl locations
             for (const shaderLayer of Object.values(shaderLayers)) {
@@ -1496,7 +1498,7 @@ void main() {
             this._locationPosition = gl.getAttribLocation(program, "a_position");
             this._bufferPosition = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferPosition);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0, 0.0]), gl.STATIC_DRAW);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), gl.STATIC_DRAW);
             gl.enableVertexAttribArray(this._locationPosition);
             gl.vertexAttribPointer(this._locationPosition, 3, gl.FLOAT, false, 0, 0);
 
@@ -1507,7 +1509,7 @@ void main() {
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
             // Fill the buffer with initial thrash and then call vertexAttribPointer.
             // This ensures correct buffer's initialization -> binds this._locationTextureCoords to this._bufferTextureCoords and tells webgl how to read the data from the buffer.
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]), gl.STATIC_DRAW);
             gl.enableVertexAttribArray(this._locationTextureCoords);
             gl.vertexAttribPointer(this._locationTextureCoords, 2, gl.FLOAT, false, 0, 0);
 
@@ -1537,7 +1539,7 @@ void main() {
          * @param {number} secondPassTextureLayer index to layer in texture array to use
          */
         programUsed(program, tileInfo, shaderLayer, controlId, texture) {
-            // console.debug('Drawujem programom webgl1! texcoords:', tileInfo.textureCoords, 'transformMatrix:', tileInfo.transform);
+            // console.debug('programUsed! texcoords:', tileInfo.textureCoords, 'transformMatrix:', tileInfo.transform);
             const gl = this.gl;
 
             // tell the controls to fill its uniforms
@@ -1556,12 +1558,11 @@ void main() {
             // viewport attribute
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferPosition);
             if (this._renderingType === 1) {
+                // console.debug('Setting first pass viewport');
                 gl.bufferData(gl.ARRAY_BUFFER, this._firstPassViewport, gl.STATIC_DRAW);
-                // const positionLocation = gl.getAttribLocation(program, "a_position");
-                // gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
-                // gl.enableVertexAttribArray(positionLocation);
 
             } else {
+                // console.debug('Setting second pass viewport');
                 gl.bufferData(gl.ARRAY_BUFFER, this._secondPassViewport, gl.STATIC_DRAW);
             }
 
