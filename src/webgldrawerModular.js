@@ -107,7 +107,6 @@
             this._renderingCanvasHasImageData = false;
 
             this._backupCanvasDrawer = null;
-            this.context = this._outputContext; // API required by tests
 
             /***** SETUP RENDERER *****/
             const rendererOptions = $.extend({
@@ -140,6 +139,8 @@
 
             /***** SETUP CANVASES *****/
             this._setupCanvases();
+            this.context = this._outputContext; // API required by tests
+
 
             // TWO-PASS RENDERING attributes
             this._offScreenBuffer = this._gl.createFramebuffer();
@@ -249,7 +250,8 @@
                 }
             });
 
-            this.viewer.addHandler("resize", (e) => {
+            // added with merge master
+            this._resizeHandler = (e) => {
                 if(this._outputCanvas !== this.viewer.drawer.canvas) {
                     this._outputCanvas.style.width = this.viewer.drawer.canvas.clientWidth + 'px';
                     this._outputCanvas.style.height = this.viewer.drawer.canvas.clientHeight + 'px';
@@ -273,7 +275,8 @@
 
                 // reinitialize offScreenTextures (size of the textures needs to be changed)
                 this._initializeOffScreenTextures();
-            });
+            };
+            this.viewer.addHandler("resize", this._resizeHandler);
         }//end of constructor
 
         /**
@@ -579,6 +582,7 @@
             // unbind our event listeners from the viewer
             this.viewer.removeHandler("tile-ready", this._boundToTileReady);
             this.viewer.removeHandler("image-unloaded", this._boundToImageUnloaded);
+            this.viewer.removeHandler("resize", this._resizeHandler);
 
             if(this._backupCanvasDrawer){
                 this._backupCanvasDrawer.destroy();
@@ -613,7 +617,7 @@
             let canvasElement = document.createElement('canvas');
             let webglContext = $.isFunction(canvasElement.getContext) &&
                         canvasElement.getContext('webgl');
-            let ext = webglContext.getExtension('WEBGL_lose_context');
+            let ext = webglContext && webglContext.getExtension('WEBGL_lose_context');
             if (ext) {
                 ext.loseContext();
             }
@@ -627,6 +631,18 @@
         getType() {
             return 'myImplementation';
         }
+
+        // ADDED with merge master
+        /**
+         * @param {TiledImage} tiledImage the tiled image that is calling the function
+         * @returns {Boolean} Whether this drawer requires enforcing minimum tile overlap to avoid showing seams.
+         * @private
+         */
+        minimumOverlapRequired(tiledImage) {
+            // return true if the tiled image is tainted, since the backup canvas drawer will be used.
+            return tiledImage.isTainted();
+        }
+
 
         /**
          * Creates an HTML element into which will be drawn.
@@ -675,12 +691,20 @@
                 return;
             }
 
+            const bounds = this.viewport.getBoundsNoRotateWithMargins(true);
             let view = {
-                bounds: this.viewport.getBoundsNoRotate(true),
-                center: this.viewport.getCenter(true),
+                bounds: bounds,
+                center: new OpenSeadragon.Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
                 rotation: this.viewport.getRotation(true) * Math.PI / 180,
                 zoom: this.viewport.getZoom(true)
             };
+            // STARY pristup a podla mna fungoval lepsie...
+            // let view = {
+            //     bounds: this.viewport.getBoundsNoRotate(true),
+            //     center: this.viewport.getCenter(true),
+            //     rotation: this.viewport.getRotation(true) * Math.PI / 180,
+            //     zoom: this.viewport.getZoom(true)
+            // };
 
             // calculate view matrix for viewer
             let flipMultiplier = this.viewport.flipped ? -1 : 1;
@@ -820,10 +844,19 @@
             }
             this._outputContext.restore();
             if(tiledImage.debugMode){
-                let colorIndex = this.viewer.world.getIndexOfItem(tiledImage) % this.debugGridColor.length;
-                let strokeStyle = this.debugGridColor[colorIndex];
-                let fillStyle = this.debugGridColor[colorIndex];
-                this._drawDebugInfo(tilesToDraw, tiledImage, strokeStyle, fillStyle);
+                const flipped = this.viewer.viewport.getFlip();
+                if(flipped){
+                    this._flip();
+                }
+                this._drawDebugInfo(tilesToDraw, tiledImage, flipped);
+                if(flipped){
+                    this._flip();
+                }
+                // old with master merge
+                // let colorIndex = this.viewer.world.getIndexOfItem(tiledImage) % this.debugGridColor.length;
+                // let strokeStyle = this.debugGridColor[colorIndex];
+                // let fillStyle = this.debugGridColor[colorIndex];
+                // this._drawDebugInfo(tilesToDraw, tiledImage, strokeStyle, fillStyle);
             }
         }
 
@@ -893,61 +926,111 @@
             this._clippingContext.restore();
         }
 
+        // NEW with merge master
+        /**
+         * Set rotations for viewport & tiledImage
+         * @private
+         * @param {OpenSeadragon.TiledImage} tiledImage
+         */
+        _setRotations(tiledImage) {
+            var saveContext = false;
+            if (this.viewport.getRotation(true) % 360 !== 0) {
+                this._offsetForRotation({
+                    degrees: this.viewport.getRotation(true),
+                    saveContext: saveContext
+                });
+                saveContext = false;
+            }
+            if (tiledImage.getRotation(true) % 360 !== 0) {
+                this._offsetForRotation({
+                    degrees: tiledImage.getRotation(true),
+                    point: this.viewport.pixelFromPointNoRotate(
+                        tiledImage._getRotationPoint(true), true),
+                    saveContext: saveContext
+                });
+            }
+        }
+
         _offsetForRotation(options) {
             var point = options.point ?
                 options.point.times($.pixelDensityRatio) :
-                new $.Point(this._outputCanvas.width / 2, this._outputCanvas.height / 2);
+                this._getCanvasCenter();
+                // new $.Point(this._outputCanvas.width / 2, this._outputCanvas.height / 2); OLD with master merge
 
             var context = this._outputContext;
             context.save();
 
             context.translate(point.x, point.y);
-            if (this.viewport.flipped) {
-                context.rotate(Math.PI / 180 * -options.degrees);
-                context.scale(-1, 1);
-            } else {
+            // if (this.viewport.flipped) { OLD with master merge
+            //     context.rotate(Math.PI / 180 * -options.degrees);
+            //     context.scale(-1, 1);
+            // } else {
                 context.rotate(Math.PI / 180 * options.degrees);
-            }
+            // }
             context.translate(-point.x, -point.y);
         }
 
-        _drawDebugInfo( tilesToDraw, tiledImage, stroke, fill ) {
+        // NEW with merge master
+        _flip(options) {
+            options = options || {};
+            var point = options.point ?
+            options.point.times($.pixelDensityRatio) :
+            this._getCanvasCenter();
+            var context = this._outputContext;
+
+            context.translate(point.x, 0);
+            context.scale(-1, 1);
+            context.translate(-point.x, 0);
+        }
+
+        _drawDebugInfo( tilesToDraw, tiledImage, flipped) { // stroke, fill ) { OLD with master merge
 
             for ( var i = tilesToDraw.length - 1; i >= 0; i-- ) {
                 var tile = tilesToDraw[ i ].tile;
                 try {
-                    this._drawDebugInfoOnTile(tile, tilesToDraw.length, i, tiledImage, stroke, fill);
+                    this._drawDebugInfoOnTile(tile, tilesToDraw.length, i, tiledImage, flipped);
+                    // this._drawDebugInfoOnTile(tile, tilesToDraw.length, i, tiledImage, stroke, fill);
                 } catch(e) {
                     $.console.error(e);
                 }
             }
         }
 
-        _drawDebugInfoOnTile(tile, count, i, tiledImage, stroke, fill) {
+        _drawDebugInfoOnTile(tile, count, i, tiledImage, flipped) { // stroke, fill) { OLD with master merge
 
-            var context = this._outputContext;
+            var colorIndex = this.viewer.world.getIndexOfItem(tiledImage) % this.debugGridColor.length;
+            var context = this.context;
+            // var context = this._outputContext;
             context.save();
             context.lineWidth = 2 * $.pixelDensityRatio;
             context.font = 'small-caps bold ' + (13 * $.pixelDensityRatio) + 'px arial';
-            context.strokeStyle = stroke;
-            context.fillStyle = fill;
+            context.strokeStyle = this.debugGridColor[colorIndex];
+            context.fillStyle = this.debugGridColor[colorIndex];
+            // context.strokeStyle = stroke;
+            // context.fillStyle = fill;
 
-            if (this.viewport.getRotation(true) % 360 !== 0 ) {
-                this._offsetForRotation({degrees: this.viewport.getRotation(true)});
+            this._setRotations(tiledImage);
+            // nebolo nic
+
+            if(flipped){
+                this._flip({point: tile.position.plus(tile.size.divide(2))});
             }
-            if (tiledImage.getRotation(true) % 360 !== 0) {
-                this._offsetForRotation({
-                    degrees: tiledImage.getRotation(true),
-                    point: tiledImage.viewport.pixelFromPointNoRotate(
-                        tiledImage._getRotationPoint(true), true)
-                });
-            }
-            if (tiledImage.viewport.getRotation(true) % 360 === 0 &&
-                tiledImage.getRotation(true) % 360 === 0) {
-                if(tiledImage._drawer.viewer.viewport.getFlip()) {
-                    tiledImage._drawer._flip();
-                }
-            }
+            // if (this.viewport.getRotation(true) % 360 !== 0 ) {
+            //     this._offsetForRotation({degrees: this.viewport.getRotation(true)});
+            // }
+            // if (tiledImage.getRotation(true) % 360 !== 0) {
+            //     this._offsetForRotation({
+            //         degrees: tiledImage.getRotation(true),
+            //         point: tiledImage.viewport.pixelFromPointNoRotate(
+            //             tiledImage._getRotationPoint(true), true)
+            //     });
+            // }
+            // if (tiledImage.viewport.getRotation(true) % 360 === 0 &&
+            //     tiledImage.getRotation(true) % 360 === 0) {
+            //     if(tiledImage._drawer.viewer.viewport.getFlip()) {
+            //         tiledImage._drawer._flip();
+            //     }
+            // }
 
             context.strokeRect(
                 tile.position.x * $.pixelDensityRatio,
@@ -962,7 +1045,11 @@
 
             // Rotate the text the right way around.
             context.translate( tileCenterX, tileCenterY );
-            context.rotate( Math.PI / 180 * -this.viewport.getRotation(true) );
+
+            const angleInDegrees = this.viewport.getRotation(true);
+            context.rotate( Math.PI / 180 * -angleInDegrees );
+            // context.rotate( Math.PI / 180 * -this.viewport.getRotation(true) ); OLD with master merge
+
             context.translate( -tileCenterX, -tileCenterY );
 
             if( tile.x === 0 && tile.y === 0 ){
@@ -1015,12 +1102,12 @@
                 this._restoreRotationChanges();
             }
 
-            if (tiledImage.viewport.getRotation(true) % 360 === 0 &&
-                tiledImage.getRotation(true) % 360 === 0) {
-                if(tiledImage._drawer.viewer.viewport.getFlip()) {
-                    tiledImage._drawer._flip();
-                }
-            }
+            // if (tiledImage.viewport.getRotation(true) % 360 === 0 && OLD with master merge
+            //     tiledImage.getRotation(true) % 360 === 0) {
+            //     if(tiledImage._drawer.viewer.viewport.getFlip()) {
+            //         tiledImage._drawer._flip();
+            //     }
+            // }
 
             context.restore();
         }
@@ -1924,6 +2011,14 @@
             this._restoreRotationChanges();
         }
 
+        /**
+         * Get the canvas center
+         * @private
+         * @returns {OpenSeadragon.Point} The center point of the canvas
+         */
+        _getCanvasCenter() {
+            return new $.Point(this.canvas.width / 2, this.canvas.height / 2);
+        }
 
 
         // ***** UNUSED FUNCTIONS ***** //
