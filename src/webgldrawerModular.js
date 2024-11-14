@@ -423,10 +423,11 @@
                 let shaderObject = spec.shaders[sourceIndex] = {};
                 // shaderObject.originalShaderDefinition = originalShaderDefinition;
                 shaderObject.id = shaderID;
+                shaderObject.externalId = config.externalId;
+
                 shaderObject.type = shaderType;
                 shaderObject.name = originalShaderDefinition.name;
                 shaderObject.params = shaderParams;
-                shaderObject.externalId = config.externalId;
 
                 shaderObject._controls = {};
                 shaderObject._cache = {};
@@ -1621,7 +1622,9 @@
 
                         // need to render in correct order
                         for (const shaderKey of tiledImage.source.__renderInfo.sources) {
-                            const shader = shaders[shaderKey]._renderContext;
+                            const shaderObject = shaders[shaderKey];
+                            const shaderInstantion = shaderObject._renderContext;
+                            const shaderID = shaderObject.id;
 
                             const source = {
                                 textures: tileInfo.textures,
@@ -1629,10 +1632,7 @@
                                 index: shaderKey
                             };
 
-                            this.renderer.processData(renderInfo, shader,
-                                tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId
-                                source);
-
+                            this.renderer.processData(renderInfo, shaderInstantion, shaderID, source);
                         }
                     }
 
@@ -1705,52 +1705,6 @@
                 order: order
             };
         }
-
-        // Function to extract an image from a TEXTURE_2D
-        // extractTexture2D(index, order) {
-        //     const gl = this._gl,
-        //     texture = this._offScreenTextures[index],  // The TEXTURE_2D to extract from
-        //     width = this._size.x,  // Assuming texture size is available
-        //     height = this._size.y;
-
-        //     // Create framebuffer to read from the texture
-        //     const framebuffer = gl.createFramebuffer();
-        //     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-
-        //     // Attach the texture to the framebuffer (no need for layerIndex since it's a 2D texture)
-        //     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-
-        //     // Check if framebuffer is complete
-        //     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-        //         console.error('Framebuffer is not complete');
-        //         return;
-        //     }
-
-        //     // Read pixels from the framebuffer
-        //     const pixels = new Uint8Array(width * height * 4);  // RGBA format
-        //     gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-
-        //     // Unbind the framebuffer
-        //     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-        //     // Create a canvas to convert raw pixel data to an image
-        //     const outputCanvas = document.createElement('canvas');
-        //     outputCanvas.width = width;
-        //     outputCanvas.height = height;
-        //     const ctx = outputCanvas.getContext('2d');
-        //     const imageData = ctx.createImageData(width, height);
-
-        //     // Optimized copying of pixel data directly into ImageData
-        //     imageData.data.set(pixels);  // Directly copy pixels to ImageData data
-        //     ctx.putImageData(imageData, 0, 0);
-
-        //     // Store the canvas in an object, assuming you need to keep track of it
-        //     this.offScreenTexturesAsCanvases[index] = {
-        //         canvas: outputCanvas,
-        //         order: order
-        //     };
-        // }
-
 
         /**
          * Called only from draw function. Context2DPipeline not working with two-pass rendering, because everything is rendered onto this._renderingCanvas.
@@ -1876,7 +1830,6 @@
                         return;
                     }
 
-                    const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     const renderInfo = {
                         transform: new Float32Array([2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0]), // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                         zoom: viewport.zoom,
@@ -1885,17 +1838,21 @@
                         textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
                     };
 
+                    const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     for (const shaderKey of tiledImage.source.__renderInfo.sources) {
-                        const shader = shaders[shaderKey]._renderContext;
+                        const shaderObject = shaders[shaderKey];
+                        const shader = shaderObject._renderContext;
+                        const shaderID = shaderObject.id;
+                        const offScreenTextureIndex = shaderObject._textureLayerIndex;
+
                         const source = {
                             textures: this._offScreenTextures,
                             texture2DArray: this._offscreenTextureArray,
-                            index: tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._textureLayerIndex
+                            index: offScreenTextureIndex
                         };
-                        this.renderer.processData(renderInfo, shader,
-                            tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId TODO: rework
-                            source);
-                        }
+
+                        this.renderer.processData(renderInfo, shader, shaderID, source);
+                    }
 
                     // TODO: - apply context2dpipeline for every source?
                     // draw from the rendering canvas onto the output canvas
@@ -1915,7 +1872,6 @@
                         return;
                     }
 
-                    const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     const renderInfo = {
                         transform: new Float32Array([2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0]), // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                         zoom: viewport.zoom,
@@ -1924,23 +1880,25 @@
                         textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
                     };
 
+                    const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     for (const shaderKey of tiledImage.source.__renderInfo.sources) {
-                        const shader = shaders[shaderKey]._renderContext;
-
                         // DEBUG
                         // const textureLayer = tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._textureLayerIndex;
                         // const shaderType = tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey].type;
                         // console.debug(`Kreslim do layeru ${textureLayer} pomocou ${shaderType}`);
+                        const shaderObject = shaders[shaderKey];
+                        const shader = shaderObject._renderContext;
+                        const shaderID = shaderObject.id;
+                        const offScreenTextureIndex = shaderObject._textureLayerIndex;
 
                         const source = {
                             textures: this._offScreenTextures,
                             texture2DArray: this._offscreenTextureArray,
-                            index: tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._textureLayerIndex
+                            index: offScreenTextureIndex
                         };
-                        this.renderer.processData(renderInfo, shader,
-                            tiledImage.source.__renderInfo.id.toString() + '_' + shaderKey.toString(), // controlId TODO: rework
-                            source);
-                        }
+
+                        this.renderer.processData(renderInfo, shader, shaderID, source);
+                    }
                 }); // end of tiledImages for cycle
 
                 // flag that the data needs to be put to the output canvas and that the rendering canvas needs to be cleared
