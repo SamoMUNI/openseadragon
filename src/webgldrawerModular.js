@@ -333,7 +333,6 @@
                 info.shaders = {};
                 // TODO: warn: sourceIndex might change dynamically at runtime... use unique tiled image
                 //   keys instead... these keys shall be the shaderID values
-                // TODO: no
                 info.shaders[sourceIndex] = {
                     originalShaderDefinition: {
                         name: shaderType + " shader",
@@ -1240,7 +1239,7 @@
                 debugId: this._tileIdCounter++ // tiez nechat
             };
 
-            // TODO: upload the data corresponding to it's source index, this puts one canvas everywhere
+            // TODO: <MORE SOURCES FEATURE> Supply the data corresponding to it's source index, this puts one canvas everywhere
             if (this.webGLVersion === "1.0") {
                 const textureArray = [];
 
@@ -1715,6 +1714,7 @@
         _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
             // console.log('Two pass rendering. Number of tiles =', this._TextureMap.size);
             const gl = this._gl;
+            const skippedTiledImages = {};
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
@@ -1723,11 +1723,12 @@
                 if (tiledImage.isTainted()) {
                     throw new Error("TiledImage.isTainted during two pass! -> not implemented!");
                 } else {
-                const tilesToDraw = tiledImage.getTilesToDraw();
-                if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
-                    // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
-                    return;
-                }
+                    const tilesToDraw = tiledImage.getTilesToDraw();
+                    if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
+                        // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
+                        skippedTiledImages[tiledImageIndex] = true;
+                        return;
+                    }
 
                     // pridane z merge-u
                     if ( tiledImage.placeholderFillStyle && tiledImage._hasOpaqueTile === false ) {
@@ -1794,23 +1795,28 @@
             gl.finish();
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
+            // DEBUG things
             if (this.debug && this._id === 0) {
                 // reset the object that may hold some unnecessary old data
                 this.offScreenTexturesAsCanvases = {};
 
                 // put the offScreenTexture's data into the canvases to enable exporting it as an image
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
+                    if (skippedTiledImages[tiledImageIndex]) {
+                        return;
+                    }
+
                     const numOfSources = tiledImage.source.__renderInfo.sources.length;
                     tiledImage.source.__renderInfo.sources.forEach((value, i) => {
-                        const layerIndex = tiledImage.source.__renderInfo.drawers[this._id].shaders[value]._textureLayerIndex;
+                        const textureIndex = tiledImage.source.__renderInfo.drawers[this._id].shaders[value]._textureLayerIndex;
                         const order = tiledImageIndex * numOfSources + i;
 
-                        this.extractOffScreenTexture(layerIndex, order);
+                        this.extractOffScreenTexture(textureIndex, order);
                     });
                 });
             }
 
-            // use program for two-pass rendering => parameter 2
+            // USE SECOND-PASS PROGRAM => parameter 2
             this.renderer.useDefaultProgram(2);
 
             const useContext2DPipeline = this.viewer.compositeOperation || tiledImages.some(
@@ -1821,12 +1827,10 @@
                 tiledImage.debugMode
             );
 
-            // useContext2DPipeline or else TODO - use instanced rendering ???
+            // useContext2DPipeline or else TODO use instanced rendering ???
             if (useContext2DPipeline) {
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
-                    const tilesToDraw = tiledImage.getTilesToDraw();
-                    if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
-                        // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
+                    if (skippedTiledImages[tiledImageIndex]) {
                         return;
                     }
 
@@ -1854,10 +1858,10 @@
                         this.renderer.processData(renderInfo, shader, shaderID, source);
                     }
 
-                    // TODO: - apply context2dpipeline for every source?
-                    // draw from the rendering canvas onto the output canvas
+                    // TODO: <MORE SOURCES FEATURE> apply context2dpipeline for every source? Probably not because only tiledImage has _clip, _crop, debugmode...
+
+                    // draw from the rendering canvas onto the output canvas and clear the rendering canvas
                     this._applyContext2dPipeline(tiledImage, tiledImage.getTilesToDraw(), tiledImageIndex);
-                    // clear the rendering canvas
                     gl.clear(gl.COLOR_BUFFER_BIT);
                 });
 
@@ -1866,9 +1870,7 @@
 
             } else {
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
-                    const tilesToDraw = tiledImage.getTilesToDraw();
-                    if (tilesToDraw.length === 0 || tiledImage.getOpacity() === 0) {
-                        // console.log('Bud neni co kreslit alebo opacity je nula, vyhadzujem sa z tohto tiledImage-u, dovod:', tilesToDraw.length === 0, tiledImage.getOpacity() === 0);
+                    if (skippedTiledImages[tiledImageIndex]) {
                         return;
                     }
 
@@ -1904,7 +1906,6 @@
                 // flag that the data needs to be put to the output canvas and that the rendering canvas needs to be cleared
                 this._renderingCanvasHasImageData = true;
             } // end of not using context2DPipeline method
-
         } // end of function
 
 
