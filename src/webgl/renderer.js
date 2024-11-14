@@ -588,29 +588,31 @@
         } // unused
 
 
-        /** DRAWING !
-         * Renders data using WebGL
-         * @param {Object} spec object specification of shader to use
-         * @param {GLuint|[GLuint]} textureArray texture array for instanced drawing
-         * @param {Number} textureLayer
-         * @param {Number} shaderLayerIndex uniform for fragment shader to decide which shaderLayer to use for rendering
+        /**
+         * Draw call.
          * @param {Object} renderInfo
-         * @param {OpenSeadragon.Mat3|[OpenSeadragon.Mat3]} renderInfo.transform position transform
-         *      matrix or flat matrix array (instance drawing)
+         * @param {Float32Array} renderInfo.transform position transform matrix or flat matrix array (instance drawing)
          * @param {number} renderInfo.zoom value passed to the shaders as zoom_level
          * @param {number} renderInfo.pixelSize value passed to the shaders as pixel_size_in_fragments
          * @param {number} renderInfo.globalOpacity value passed to the shaders as global_alpha
-         * @param {[8 Numbers]} renderInfo.textureCoords 8 numbers representing triangle strip
-         * @param {number?} renderInfo.instanceCount OPTIONAL how many instances to draw in case instanced drawing is enabled
+         * @param {Float32Array} renderInfo.textureCoords 8 numbers representing triangle strip
+         *
+         * @param {ShaderLayer} shaderLayer instantion of shaderLayer to use
+         * @param {string} shaderID unique identifier of shaderLayer
+
+         * @param {object} source
+         * @param {[WebGLTexture]} source.textures     // [TEXTURE_2D]
+         * @param {WebGLTexture} source.texture2DArray // TEXTURE_2D_ARRAY
+         * @param {number} source.index                // index of texture in textures array or index of layer in texture2DArray
          *
          * @instance
          * @memberOf WebGLModule
          */
-        processData(renderInfo, shaderLayer, controlId, source) {
+        processData(renderInfo, shaderLayer, shaderID, source) {
             if (this.webGLPreferredVersion === "2.0") {
-                this.webglContext.programUsed(this._program, renderInfo, shaderLayer, controlId, source.texture2DArray, source.index);
+                this.webglContext.programUsed(this._program, renderInfo, shaderLayer, shaderID, source.texture2DArray, source.index);
             } else {
-                this.webglContext.programUsed(this._program, renderInfo, shaderLayer, controlId, source.textures[source.index]);
+                this.webglContext.programUsed(this._program, renderInfo, shaderLayer, shaderID, source.textures[source.index]);
                 // this.webglContext.loadFirstPassProgram();
                 // this.webglContext.drawFirstPassProgram(source.textures[source.index], renderInfo.textureCoords, renderInfo.transform);
             }

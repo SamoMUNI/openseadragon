@@ -977,17 +977,18 @@ void main() {
          * @param {Float32Array} tileInfo.textureCoords 8 suradnic, (2 pre kazdy vrchol triangle stripu)
          *
          * @param {ShaderLayer} shaderLayer shaderLayer
+         * @param {string} shaderID shaderLayer's ID
          * @param {WebGLTexture} textureArray gl.TEXTURE_2D_ARRAY used as source of data for rendering
          * @param {number} textureLayer index to layer in textureArray to use
          */
-        programUsed(program, tileInfo, shaderLayer, controlId, textureArray, textureLayer) {
+        programUsed(program, tileInfo, shaderLayer, shaderID, textureArray, textureLayer) {
             // console.debug('Drawujem programom webgl2! textureCoords:', tileInfo.textureCoords, 'transform=', tileInfo.transform, 'zoom=');
             const gl = this.gl;
 
             // tell the controls to fill its uniforms
-            shaderLayer.glDrawing(program, gl, controlId);
+            shaderLayer.glDrawing(program, gl);
             // tell glsl which shaderLayer to use
-            const shaderLayerIndex = this._shadersMapping[controlId]; // malo by sediet ze controlID je to iste ako shaderID hadam...
+            const shaderLayerIndex = this._shadersMapping[shaderID]; // malo by sediet ze controlID je to iste ako shaderID hadam...
             gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
 
             // fill FRAGMENT shader's uniforms (that are unused)
@@ -1527,15 +1528,15 @@ void main() {
          * @param {string} controlId shaderLayer's control's id
          * @param {WebGLTexture} texture gl.TEXTURE_2D used as a source of data for rendering
          */
-        programUsed(program, tileInfo, shaderLayer, controlId, texture) {
+        programUsed(program, tileInfo, shaderLayer, shaderID, texture) {
             // console.debug('programUsed! texcoords:', tileInfo.textureCoords, 'transformMatrix:', tileInfo.transform);
             const gl = this.gl;
 
             // tell the controls to fill its uniforms
-            shaderLayer.glDrawing(program, gl, controlId);
+            shaderLayer.glDrawing(program, gl);
 
             // tell glsl which shaderLayer to use
-            const shaderLayerIndex = this._shadersMapping[controlId]; // malo by sediet ze controlID je to iste ako shaderID hadam...
+            const shaderLayerIndex = this._shadersMapping[shaderID]; // malo by sediet ze controlID je to iste ako shaderID hadam...
             gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
 
 
