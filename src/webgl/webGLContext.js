@@ -415,13 +415,12 @@
             this._firstPassProgramTextureArrayLocation = gl.getUniformLocation(program, "u_textureArray");
             this._firstPassProgramTextureLayerLocation = gl.getUniformLocation(program, "u_textureLayer");
 
-            // FIXME: location instead of buffer
             // Initialize texture coords attribute
             this._firstPassProgramTexcoordBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramTexcoordBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
-            gl.enableVertexAttribArray(this._firstPassProgramTexcoordBuffer);
-            gl.vertexAttribPointer(this._firstPassProgramTexcoordBuffer, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(this._firstPassProgramTexcoordLocation);
+            gl.vertexAttribPointer(this._firstPassProgramTexcoordLocation, 2, gl.FLOAT, false, 0, 0);
 
             // Initialize texture
             gl.uniform1i(this._firstPassProgramTextureArrayLocation, 0);
