@@ -1198,6 +1198,9 @@
                 // this.gl.enable(this.gl.BLEND);
                 // this.gl.blendEquation(this.gl.FUNC_ADD);
                 // this.gl.blendFuncSeparate(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA, this.gl.ONE, this.gl.ONE);
+
+                // this blending setup is typically used for standard alpha blending, where the transparency of the source (source pixel = the one being drawn)
+                // determines how much of the destination color shows through
                 this.gl.enable(this.gl.BLEND);
                 this.gl.blendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
             } else {
