@@ -107,6 +107,7 @@
             this._renderingCanvasHasImageData = false;
 
             this._backupCanvasDrawer = null;
+            this._imageSmoothingEnabled = true; // will be updated by setImageSmoothingEnabled
 
             /***** SETUP RENDERER *****/
             const rendererOptions = $.extend({
@@ -540,10 +541,7 @@
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
             // Delete all our created resources
-            let canvases = Array.from(this._TextureMap.keys());
-            canvases.forEach(canvas => {
-                this._cleanupImageData(canvas); // deletes texture, removes from _TextureMap
-            });
+            this._unloadTextures();
             // for (const id in this._TextureMap) {
             //     this._cleanupImageData(id);
             // }
@@ -1326,13 +1324,25 @@
 
 
         // Public API required by all Drawer implementations
+
         /**
-         * Required by DrawerBase, but has no effect on WebGLDrawer.
-         * @param {Boolean} enabled
-         */
+        * Sets whether image smoothing is enabled or disabled
+        * @param {Boolean} enabled If true, uses gl.LINEAR as the TEXTURE_MIN_FILTER and TEXTURE_MAX_FILTER, otherwise gl.NEAREST.
+        */
         setImageSmoothingEnabled(enabled){
-            // noop - this property does not impact WebGLDrawer
-        } //unused
+            if( this._imageSmoothingEnabled !== enabled ){
+                this._imageSmoothingEnabled = enabled;
+                this._unloadTextures();
+                this.viewer.world.draw();
+            }
+        }
+
+        _unloadTextures(){
+            let canvases = Array.from(this._TextureMap.keys());
+            canvases.forEach(canvas => {
+                this._cleanupImageData(canvas); // deletes texture, removes from _TextureMap
+            });
+        }
 
         /**
          * Draw a rect onto the output canvas for debugging purposes
