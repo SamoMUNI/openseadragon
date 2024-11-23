@@ -1478,6 +1478,65 @@
             }
         }
 
+        /**
+         * Extract texture data into the canvas in this.offScreenTexturesAsCanvases[index].
+         * @param {number} index of the offScreenTexture in this._offScreenTextures or index of the layer in this._offscreenTextureArray
+         * @param {number} order in which this offScreenTexture was drawn
+         * @returns
+         */
+        extractOffScreenTexture(index, order) {
+            const gl = this._gl;
+            const width = this._size.x;
+            const height = this._size.y;
+
+            // create framebuffer to read from the texture layer
+            const framebuffer = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+
+            if (this.webGLVersion === "1.0") {
+                // attach the texture to the framebuffer
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._offScreenTextures[index], 0);
+            } else {
+                // attach the specific layer of the textureArray to the framebuffer
+                gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this._offscreenTextureArray, 0, index);
+            }
+
+            // check if framebuffer is complete
+            if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+                console.error(`Framebuffer is not complete, could not extract offScreenTexture index ${index}`);
+                return;
+            }
+
+            // read pixels from the framebuffer
+            const pixels = new Uint8Array(width * height * 4);  // RGBA format needed???
+            gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+            // unbind the framebuffer
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+            // use a canvas to convert raw pixel data to image
+            const outputCanvas = document.createElement('canvas');
+            outputCanvas.width = width;
+            outputCanvas.height = height;
+            const ctx = outputCanvas.getContext('2d');
+            const imageData = ctx.createImageData(width, height);
+
+            // copy the pixel data into the canvas's ImageData
+            // for (let i = 0; i < pixels.length; i++) {
+            //     imageData.data[i] = pixels[i];
+            // }
+            // ctx.putImageData(imageData, 0, 0);
+
+            // optimized copying of pixel data directly into ImageData
+            imageData.data.set(pixels);
+            ctx.putImageData(imageData, 0, 0);
+
+            this.offScreenTexturesAsCanvases[index] = {
+                canvas: outputCanvas,
+                order: order
+            };
+        }
+
 
         // /**
         //  * WebGL 2.0 - Two pass rendering
@@ -1659,61 +1718,6 @@
                 } //end of tiledImage.isTainted condition
             }); //end of for tiledImage of tiledImages
         } // end of function
-
-
-        // Function to extract an image from the offScreenTexture
-        extractOffScreenTexture(index, order) {
-            const gl = this._gl;
-            const width = this._size.x;
-            const height = this._size.y;
-
-            // create framebuffer to read from the texture layer
-            const framebuffer = gl.createFramebuffer();
-            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-
-            if (this.webGLVersion === "1.0") {
-                // attach the texture to the framebuffer
-                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._offScreenTextures[index], 0);
-            } else {
-                // attach the specific layer of the textureArray to the framebuffer
-                gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this._offscreenTextureArray, 0, index);
-            }
-
-            // check if framebuffer is complete
-            if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-                console.error(`Framebuffer is not complete, could not extract offScreenTexture index ${index}`);
-                return;
-            }
-
-            // read pixels from the framebuffer
-            const pixels = new Uint8Array(width * height * 4);  // RGBA format needed???
-            gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-
-            // unbind the framebuffer
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-            // use a canvas to convert raw pixel data to image
-            const outputCanvas = document.createElement('canvas');
-            outputCanvas.width = width;
-            outputCanvas.height = height;
-            const ctx = outputCanvas.getContext('2d');
-            const imageData = ctx.createImageData(width, height);
-
-            // copy the pixel data into the canvas's ImageData
-            // for (let i = 0; i < pixels.length; i++) {
-            //     imageData.data[i] = pixels[i];
-            // }
-            // ctx.putImageData(imageData, 0, 0);
-
-            // optimized copying of pixel data directly into ImageData
-            imageData.data.set(pixels);
-            ctx.putImageData(imageData, 0, 0);
-
-            this.offScreenTexturesAsCanvases[index] = {
-                canvas: outputCanvas,
-                order: order
-            };
-        }
 
         /**
          * Called only from draw function. Context2DPipeline not working with two-pass rendering, because everything is rendered onto this._renderingCanvas.
