@@ -675,6 +675,8 @@
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          */
         draw(tiledImages) {
+            const gl = this._gl;
+
             if (this._id !== 0) {
                 return;
             }
@@ -711,16 +713,27 @@
             let rotMatrix = $.Mat3.makeRotation(-view.rotation);
             let viewMatrix = scaleMatrix.multiply(rotMatrix).multiply(posMatrix);
 
-            const gl = this._gl;
 
-            // use two-pass rendering if any tiledImage (or tiles in the tiledImage) has opacity lower than zero or if it utilizes local methods (looking at neighbour's pixels)
-            let twoPassRendering = tiledImages.some(
-                tiledImage =>
-                    tiledImage.source.__renderInfo.drawers[this._id]._utilizeLocalMethods ||
+            let useContext2DPipeline = this.viewer.compositeOperation || false;
+            let twoPassRendering = false;
+            for (const tiledImage of tiledImages) {
+                // use context2DPipeline if any tiledImage has compositeOperation, clip, crop or debugMode
+                if (tiledImage.compositeOperation ||
+                    tiledImage._clip ||
+                    tiledImage._croppingPolygons ||
+                    tiledImage.debugMode) {
+                        useContext2DPipeline = true;
+                    }
+
+                // use two-pass rendering if any tiledImage (or tile in the tiledImage) has opacity lower than zero or if it utilizes local methods (looking at neighbour's pixels)
+                if (tiledImage.source.__renderInfo.drawers[this._id]._utilizeLocalMethods ||
                     tiledImage.getOpacity() < 1 ||
-                    (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency)
-                    // true // for testing purposes
-            );
+                    (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency)) {
+                        twoPassRendering = true;
+                    }
+            }
+            // use twoPassRendering also when context2DPipeline is used
+            twoPassRendering = twoPassRendering || useContext2DPipeline;
 
             if (!twoPassRendering) {
                 console.log('Single pass.');
@@ -732,7 +745,7 @@
                 console.log('Two pass.');
                 // this._drawSinglePassNew(tiledImages, view, viewMatrix);
 
-                this._drawTwoPassNew(tiledImages, view, viewMatrix);
+                this._drawTwoPassNew(tiledImages, view, viewMatrix, useContext2DPipeline);
             }
 
             // this._drawTwoPassEZ(tiledImages, view, viewMatrix);
@@ -1633,19 +1646,6 @@
                         this._drawPlaceholder(tiledImage);
                     }
 
-                    const useContext2dPipeline = (tiledImage.compositeOperation ||
-                        this.viewer.compositeOperation ||
-                        tiledImage._clip ||
-                        tiledImage._croppingPolygons ||
-                        tiledImage.debugMode
-                    );
-                    if (useContext2dPipeline) {
-                        if (this._renderingCanvasHasImageData) {
-                            this._outputContext.drawImage(this._renderingCanvas, 0, 0);
-                        }
-                        gl.clear(gl.COLOR_BUFFER_BIT);
-                    }
-
                     // MATRIX
                     let overallMatrix = viewMatrix;
                     let imageRotation = tiledImage.getRotation(true);
@@ -1702,21 +1702,12 @@
 
                             this.renderer.processData(renderInfo, shaderInstantion, shaderID, source);
                         }
-                    }
 
-                    this._renderingCanvasHasImageData = true;
-
-                    // CONTEXT2DPIPELINE
-                    // draw from the rendering canvas onto the output canvas, clipping/cropping/debugInfo if needed
-                    if (useContext2dPipeline) {
-                        this._applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex);
-
-                        // clear the rendering canvas
-                        gl.clear(gl.COLOR_BUFFER_BIT);
-                        this._renderingCanvasHasImageData = false;
-                    }
+                    } //end of for tiles of tilesToDraw
                 } //end of tiledImage.isTainted condition
             }); //end of for tiledImage of tiledImages
+
+            this._renderingCanvasHasImageData = true;
         } // end of function
 
         /**
@@ -1725,7 +1716,7 @@
          * @param {Object} viewport has bounds, center, rotation, zoom
          * @param {OpenSeadragon.Mat3} viewMatrix to apply
          */
-        _drawTwoPassNew(tiledImages, viewport, viewMatrix) {
+        _drawTwoPassNew(tiledImages, viewport, viewMatrix, useContext2DPipeline) {
             // console.log('Two pass rendering. Number of tiles =', this._TextureMap.size);
             const gl = this._gl;
             const skippedTiledImages = {};
@@ -1832,16 +1823,7 @@
 
             // USE SECOND-PASS PROGRAM => parameter 2
             this.renderer.useDefaultProgram(2);
-
-            const useContext2DPipeline = this.viewer.compositeOperation || tiledImages.some(
-                tiledImage =>
-                tiledImage.compositeOperation ||
-                tiledImage._clip ||
-                tiledImage._croppingPolygons ||
-                tiledImage.debugMode
-            );
-
-            // useContext2DPipeline or else TODO use instanced rendering ???
+            // useContext2DPipeline or else use instanced rendering ???
             if (useContext2DPipeline) {
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
                     if (skippedTiledImages[tiledImageIndex]) {
