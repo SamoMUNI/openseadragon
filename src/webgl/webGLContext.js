@@ -296,10 +296,8 @@
             this._locationZoomLevel = null; // u_zoom_level ?
             this._locationGlobalAlpha = null; // u_global_alpha
 
-            this._locationTextureArray1 = null; // u_textureArray1 TEXTURE_2D_ARRAY to use during single-pass rendering
-            this._locationTextureLayer1 = null; // u_textureLayer1 which layer from TEXTURE_2D_ARRAY to use
-            this._locationTextureArray2 = null; // u_textureArray2 TEXTURE_2D_ARRAY to use during two-pass rendering
-            this._locationTextureLayer2 = null; // u_textureLayer2 which layer from TEXTURE_2D_ARRAY to use
+            this._locationTextureArray = null; // u_textureArray TEXTURE_2D_ARRAY to use as a source of data
+            this._locationTextureLayer = null; // u_textureLayer which layer from TEXTURE_2D_ARRAY to use
 
             this._locationShaderLayerIndex = null; // u_shaderLayerIndex which shaderLayer to use for rendering
 
@@ -660,8 +658,6 @@
          * @returns {string} vertex shader's glsl code
          */
         compileVertexShader(options) {
-        const textureId = options.instanceCount > 1 ? 'gl_InstanceID' : '0';
-
         const vertexShaderCode = `#version 300 es
 precision mediump float;
 /* This program is used for single-pass rendering and for second pass during two-pass rendering. */
@@ -670,7 +666,6 @@ precision mediump float;
 uniform int u_nPassRendering;
 flat out int nPassRendering;
 
-flat out int v_texture_id;
 in vec2 a_texture_coords;
 out vec2 v_texture_coords;
 
@@ -691,15 +686,18 @@ const vec3 second_pass_viewport[4] = vec3[4] (
 );
 
 void main() {
-    v_texture_id = ${textureId};
     v_texture_coords = a_texture_coords;
     nPassRendering = u_nPassRendering;
 
-    if (nPassRendering == 1) {
-        gl_Position = vec4(u_transform_matrix * single_pass_viewport[gl_VertexID], 1);
-    } else {
-        gl_Position = vec4(u_transform_matrix * second_pass_viewport[gl_VertexID], 1);
-    }
+    // if (nPassRendering == 1 || nPassRendering == 2) {
+    //     gl_Position = vec4(u_transform_matrix * single_pass_viewport[gl_VertexID], 1);
+    // } else {
+    //     gl_Position = vec4(u_transform_matrix * second_pass_viewport[gl_VertexID], 1);
+    // }
+
+        gl_Position = vec4(u_transform_matrix * single_pass_viewport[gl_VertexID], 1.0);
+        // v_texture_coords = single_pass_viewport[gl_VertexID].xy;
+        v_texture_coords = a_texture_coords;
 }`;
 
         return vertexShaderCode;
@@ -715,7 +713,6 @@ void main() {
         compileFragmentShader(definition, execution, options, globalScopeCode) {
             const fragmentShaderCode = `#version 300 es
     precision mediump float;
-    precision mediump sampler2D;
     precision mediump sampler2DArray;
 
     uniform float u_pixel_size_in_fragments;
@@ -728,27 +725,13 @@ void main() {
     flat in int nPassRendering;
 
     // TEXTURES
-    flat in int v_texture_id;
     in vec2 v_texture_coords;
-    uniform float u_textureWidth;     // Width of the texture
-    uniform float u_textureHeight;    // Height of the texture
 
-    // for single-pass rendering
-    uniform sampler2DArray u_textureArray1;
-    uniform int u_textureLayer1;
-
-    // for two-pass rendering
-    uniform sampler2DArray u_textureArray2;
-    uniform int u_textureLayer2;
+    uniform sampler2DArray u_textureArray;
+    uniform int u_textureLayer;
 
     vec4 osd_texture(int index, vec2 coords) {
-        if (nPassRendering == 1) {
-            return texture(u_textureArray1, vec3(coords, float(u_textureLayer1)));
-        } else if (nPassRendering == 2) {
-            return texture(u_textureArray2, vec3(coords, float(u_textureLayer2)));
-        } else { // more-pass renderings not implemented
-            return vec4(0,1,0,0.5);
-        }
+        return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
     }
 
     // utility function
@@ -898,15 +881,8 @@ void main() {
             const gl = this.gl;
             // console.log('Nahravam do nPassRendering cislo', n);
             gl.uniform1i(this._locationNPassRendering, n);
-            gl.activeTexture(gl.TEXTURE0 + n);
+            // gl.activeTexture(gl.TEXTURE0 + n);
             this._renderingType = n;
-        }
-
-        setTextureSize(width, height) {
-            // console.info('Setting texture size to', width, height);
-            const gl = this.gl;
-            gl.uniform1f(this._locationTextureWidth, width);
-            gl.uniform1f(this._locationTextureHeight, height);
         }
 
         /**
@@ -937,12 +913,8 @@ void main() {
             this._locationGlobalAlpha = gl.getUniformLocation(program, "u_global_alpha");
 
             this._locationTexture = gl.getUniformLocation(program, "u_texture");
-            this._locationTextureArray1 = gl.getUniformLocation(program, "u_textureArray1");
-            this._locationTextureLayer1 = gl.getUniformLocation(program, "u_textureLayer1");
-            this._locationTextureArray2 = gl.getUniformLocation(program, "u_textureArray2");
-            this._locationTextureLayer2 = gl.getUniformLocation(program, "u_textureLayer2");
-            this._locationTextureWidth = gl.getUniformLocation(program, "u_textureWidth");
-            this._locationTextureHeight = gl.getUniformLocation(program, "u_textureHeight");
+            this._locationTextureArray = gl.getUniformLocation(program, "u_textureArray");
+            this._locationTextureLayer = gl.getUniformLocation(program, "u_textureLayer");
 
             this._locationShaderLayerIndex = gl.getUniformLocation(program, "u_shaderLayerIndex");
 
@@ -960,8 +932,9 @@ void main() {
             // Initialize texture arrays
             // single-pass rendering uses gl.TEXTURE1 unit to which it binds TEXTURE_2D_ARRAY,
             // two-pass rendering uses gl.TEXTURE2 unit to which it binds TEXTURE_2D_ARRAY.
-            gl.uniform1i(this._locationTextureArray1, 1);
-            gl.uniform1i(this._locationTextureArray2, 2);
+            gl.uniform1i(this._locationTextureArray, 0);
+            gl.activeTexture(gl.TEXTURE0);
+            // gl.uniform1i(this._locationTextureArray2, 2);
         }
 
 
@@ -1000,17 +973,15 @@ void main() {
             // texture coords
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
             gl.bufferData(gl.ARRAY_BUFFER, tileInfo.textureCoords, gl.STATIC_DRAW);
+            // console.log('bufferTextureCoords:', tileInfo.textureCoords);
 
             // transform matrix
             gl.uniformMatrix3fv(this._locationTransformMatrix, false, tileInfo.transform);
 
             // texture
             gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
-            if (this._renderingType === 1) {
-                gl.uniform1i(this._locationTextureLayer1, textureLayer);
-            } else if (this._renderingType === 2) {
-                gl.uniform1i(this._locationTextureLayer2, textureLayer);
-            }
+            gl.uniform1i(this._locationTextureLayer, textureLayer);
+
 
             // draw triangle strip (two triangles) from a static array defined in the vertex shader,
             // 0: start reading vertex data from the first vertex,
@@ -1249,7 +1220,6 @@ void main() {
          * @returns {string} vertex shader's glsl code
          */
         compileVertexShader(options) {
-        const textureId = options.instanceCount > 1 ? 'gl_InstanceID' : '0';
 
         const vertexShaderCode = `
     precision mediump float;
@@ -1259,7 +1229,7 @@ void main() {
     // uniform int u_nPassRendering;
     // varying int v_nPassRendering;
 
-    // varying int v_texture_id;
+    // varying int ;
     attribute vec2 a_texture_coords;
     varying vec2 v_texture_coords;
 
@@ -1267,7 +1237,6 @@ void main() {
     uniform mat3 u_transform_matrix;
 
     void main() {
-        // v_texture_id = ${textureId};
         v_texture_coords = a_texture_coords;
         // v_nPassRendering = u_nPassRendering;
 
@@ -1299,7 +1268,6 @@ void main() {
     // varying int v_nPassRendering;
 
     // TEXTURES
-    // varying int v_texture_id;
     varying vec2 v_texture_coords;
     ${this.getTextureSampling()}
 
