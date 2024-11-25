@@ -610,11 +610,20 @@
          */
         processData(renderInfo, shaderLayer, shaderID, source) {
             if (this.webGLPreferredVersion === "2.0") {
+                // console.log('V processe, renderInfo.textureCoords =', renderInfo.textureCoords);
                 this.webglContext.programUsed(this._program, renderInfo, shaderLayer, shaderID, source.texture2DArray, source.index);
             } else {
                 this.webglContext.programUsed(this._program, renderInfo, shaderLayer, shaderID, source.textures[source.index]);
                 // this.webglContext.loadFirstPassProgram();
                 // this.webglContext.drawFirstPassProgram(source.textures[source.index], renderInfo.textureCoords, renderInfo.transform);
+            }
+        }
+
+        firstPassProcessData(textureCoords, transformMatrix, source) {
+            if (this.webGLPreferredVersion === "2.0") {
+                this.webglContext.firstPassProgramUsed(textureCoords, transformMatrix, source.texture2DArray, source.index);
+            } else {
+                this.webglContext.firstPassProgramUsed(textureCoords, transformMatrix, source.textures[source.index]);
             }
         }
 
@@ -861,15 +870,39 @@
         }
 
 
-        _getShaders() {
-            let shaders = [];
-            for (const shaderType in this.shadersCounter) {
-                shaders.push(this.shadersCounter[shaderType].shaderLayer);
-            }
-            return shaders;
-        }
+        // _getShaders() {
+        //     let shaders = [];
+        //     for (const shaderType in this.shadersCounter) {
+        //         shaders.push(this.shadersCounter[shaderType].shaderLayer);
+        //     }
+        //     return shaders;
+        // }
 
         createProgram() {
+            const Shader = $.WebGLModule.ShaderMediator.getClass("firstPass");
+            if (!Shader) {
+                throw new Error("$.WebGLModule::createProgram: Could not create WebGL program!");
+            }
+
+            const shader = new Shader("first_pass_identity", {
+                shaderObject: {},
+                webglContext: this.webglContext,
+                controls: {},
+                interactive: false,
+                cache: {},
+                invalidate: () => {},
+                rebuild: () => {}, // need to rebuild the whole shaderLayer
+                refetch: () => {}  // need to reinitialize whole drawer? probably not needed
+            });
+            shader.__channels = {};
+            shader.__channels[0] = "rgba";
+
+            this._firstPassShader = shader;
+
+            this.recreateProgram();
+        }
+
+        recreateProgram() {
             const program = this.webglContext.programCreated(this.shadersCounter);
             this.gl.useProgram(program);
 
@@ -892,7 +925,7 @@
             }
             this.running = true;
 
-            console.info('$.WebGLModule::createProgram: PROGRAM CREATED!');
+            console.info('$.WebGLModule::recreateProgram: PROGRAM CREATED!');
         }
 
         /**
@@ -929,7 +962,7 @@
             shader.newAddControl(shaderObject, shaderID, this.htmlControlsElement, this.resetCallback);
 
             this.shadersCounter[shaderID] = shader;
-            this.createProgram();
+            this.recreateProgram();
 
             // console.log('renderer.js::addShader(): PROGRAM UPDATED!');
             return shader;
@@ -971,7 +1004,7 @@
             shader.newRemoveControl(shaderObject, shaderID);
 
             delete this.shadersCounter[shaderID];
-            this.createProgram();
+            this.recreateProgram();
             console.log('removeShader, this.shadersCounter po odobrati =', this.shadersCounter);
         }
 

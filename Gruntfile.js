@@ -73,6 +73,7 @@ module.exports = function(grunt) {
             "src/webgl/shaderLayer.js",
             "src/webgl/webGLContext.js",
             "src/webgl/drawer.js",
+            "src/webgl/firstPassShader.js",
             "src/webgl/plainShader.js",
             "src/webgl/edgeShader.js",
             "src/webgl/negativeShader.js",

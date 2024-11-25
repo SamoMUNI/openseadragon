@@ -286,7 +286,7 @@
 
             // SECOND PASS PROGRAM
             this._secondPassProgram = null;
-            this._shadersMapping = {default: -1}; // {identity: 0, edge: 1, ...} maps shaderType to u_shaderLayerIndex
+            this._shadersMapping = {}; // {identity_for_first_pass: <always -1>, identity: 0, edge: 1, ...} maps shaderType to u_shaderLayerIndex
 
             this._bufferTextureCoords = null; // :glBuffer, pre kazdu tile-u sa sem nahraju data jej textureCoords
             this._locationTextureCoords = null; // :glAttribLocation, atribut na previazanie s buffrom hore, nahra sa skrze neho do glsl
@@ -806,6 +806,21 @@ void main() {
                 execution = '',
                 html = '';
 
+            // first pass identity shader is a special case, no blend nor clip, no controls, just pure identity, generate glsl manually here
+            definition += `\n    // Definition of identity shader used for the first-pass:`;
+            definition += `
+    vec4 first_pass_identity_execution() {${this.renderer._firstPassShader.getFragmentShaderExecution()}
+    }`;
+            definition += '\n\n';
+
+            execution += `
+            case -1:`;
+            execution += `
+                final_color = first_pass_identity_execution();
+                return;\n`;
+
+
+            // generate glsl code for each shaderLayer
             let i = 0;
             for (const shaderID in shaderLayers) {
                 const shaderLayer = shaderLayers[shaderID];
@@ -852,6 +867,7 @@ void main() {
                         true);
                 // }
             } // end of for cycle
+
 
             const vertexShaderCode = this.compileVertexShader({});
             const globalScopeCode = $.WebGLModule.ShaderLayer.__globalIncludes;
@@ -957,8 +973,9 @@ void main() {
             // console.debug('Drawujem programom webgl2! textureCoords:', tileInfo.textureCoords, 'transform=', tileInfo.transform, 'zoom=');
             const gl = this.gl;
 
-            // tell the controls to fill its uniforms
+            // tell the shaderLayer's controls to fill its uniforms
             shaderLayer.glDrawing(program, gl);
+
             // tell glsl which shaderLayer to use
             const shaderLayerIndex = this._shadersMapping[shaderID]; // malo by sediet ze controlID je to iste ako shaderID hadam...
             gl.uniform1i(this._locationShaderLayerIndex, shaderLayerIndex);
@@ -967,8 +984,6 @@ void main() {
             gl.uniform1f(this._locationPixelSize, tileInfo.pixelSize || 1);
             gl.uniform1f(this._locationZoomLevel, tileInfo.zoom || 1);
             gl.uniform1f(this._locationGlobalAlpha, tileInfo.globalOpacity || 1);
-
-            // const textureType = program._osdOptions.textureType; // nechal som aby som videl ze existuju nejake _osdOptions
 
             // texture coords
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
@@ -986,6 +1001,34 @@ void main() {
             // draw triangle strip (two triangles) from a static array defined in the vertex shader,
             // 0: start reading vertex data from the first vertex,
             // 4: use 4 vertices per instance (to form one triangle strip)
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+        /**
+         * Draw using identity shaderLayer into an offScreenTexture (should be already bound).
+         * @param {Float32Array} textureCoords
+         * @param {Float32Array} transformMatrix
+         * @param {WebGLTexture} textureArray gl.TEXTURE_2D_ARRAY used as a source of data for rendering
+         * @param {number} textureLayer index to layer in textureArray to use
+         */
+        firstPassProgramUsed(textureCoords, transformMatrix, textureArray, textureLayer) {
+            const gl = this.gl;
+
+            // Use shaderLayer for the first pass
+            gl.uniform1i(this._locationShaderLayerIndex, -1);
+
+            // Texture coords
+            gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
+            gl.bufferData(gl.ARRAY_BUFFER, textureCoords, gl.STATIC_DRAW);
+
+            // Transform matrix
+            gl.uniformMatrix3fv(this._locationTransformMatrix, false, transformMatrix);
+
+            // Texture
+            gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
+            gl.uniform1i(this._locationTextureLayer, textureLayer);
+
+            // Draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
     };
@@ -1018,7 +1061,7 @@ void main() {
 
             // SECOND PASS PROGRAM
             this._secondPassProgram = null;
-            this._shadersMapping = {default: -1}; // {identity: 0, edge: 1, ...} maps shaderType to u_shaderLayerIndex
+            this._shadersMapping = {}; // {identity_for_first_pass: <always -1>, identity: 0, edge: 1, ...} maps shaderType to u_shaderLayerIndex
 
             this._bufferTextureCoords = null; // :glBuffer, pre kazdu tile-u sa sem nahraju data jej textureCoords
             this._locationTextureCoords = null; // :glAttribLocation, atribut na previazanie s buffrom hore, nahra sa skrze neho do glsl
@@ -1313,12 +1356,14 @@ void main() {
     void main() {
         // EXECUTIONS OF SHADERLAYERS:
         // default case -> should not happen
-        if (u_shaderLayerIndex == -1) {
+        if (u_shaderLayerIndex == -1000) {
             if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
                 final_color = vec4(.0);
             } else { // render only where there's data in the texture
                 final_color = vec4(1, 0, 0, 0.5);
             }
+            gl_FragColor = final_color;
+            return;
         }${execution}
 
         //blend last level
@@ -1345,6 +1390,22 @@ void main() {
                 execution = '',
                 html = '';
 
+
+            // first pass identity shader is a special case, no blend nor clip, no controls, just pure identity, generate glsl manually here
+            definition += `\n    // Definition of identity shader used for the first-pass:`;
+            definition += `
+    vec4 first_pass_identity_execution() {${this.renderer._firstPassShader.getFragmentShaderExecution()}
+    }`;
+            definition += '\n\n';
+
+            execution += ` else if (u_shaderLayerIndex == -1) {`;
+            execution += `
+            gl_FragColor = first_pass_identity_execution();
+            return;
+        }`;
+
+
+            // generate glsl code for each shaderLayer
             let i = 0;
             for (const shaderID in shaderLayers) {
                 const shaderLayer = shaderLayers[shaderID];
@@ -1516,13 +1577,7 @@ void main() {
 
             // viewport attribute
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferPosition);
-            if (this._renderingType === 1) {
-                // console.debug('Setting first pass viewport');
-                gl.bufferData(gl.ARRAY_BUFFER, this._firstPassViewport, gl.STATIC_DRAW);
-            } else {
-                // console.debug('Setting second pass viewport');
-                gl.bufferData(gl.ARRAY_BUFFER, this._secondPassViewport, gl.STATIC_DRAW);
-            }
+            gl.bufferData(gl.ARRAY_BUFFER, this._firstPassViewport, gl.STATIC_DRAW);
 
 
             // texture coords
@@ -1541,6 +1596,37 @@ void main() {
             // draw triangle strip (two triangles) from a static array defined in the vertex shader,
             // 0: start reading vertex data from the first vertex,
             // 4: use 4 vertices per instance (to form one triangle strip)
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+
+        /** Draw using firstPassProgram.
+         * @param {WebGLTexture} texture gl.TEXTURE_2D used as a source of data for rendering
+         * @param {Float32Array} textureCoords
+         * @param {Float32Array} transformMatrix
+         */
+        firstPassProgramUsed(textureCoords, transformMatrix, texture) {
+            // console.debug('Drawujem first pass programom! texcoords:', textureCoords, 'transformMatrix:', transformMatrix);
+            const gl = this.gl;
+
+            // Use shaderLayer for the first pass
+            gl.uniform1i(this._locationShaderLayerIndex, -1);
+
+            // Position
+            gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferPosition);
+            gl.bufferData(gl.ARRAY_BUFFER, this._firstPassViewport, gl.STATIC_DRAW);
+
+            // Texture coords
+            gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
+            gl.bufferData(gl.ARRAY_BUFFER, textureCoords, gl.STATIC_DRAW);
+
+            // Transform matrix
+            gl.uniformMatrix3fv(this._locationTransformMatrix, false, transformMatrix);
+
+            // Texture
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            // Draw triangle strip (two triangles) from a static array defined in the vertex shader
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
     };

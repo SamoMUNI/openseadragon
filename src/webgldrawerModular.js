@@ -83,11 +83,11 @@
             // private members
             // this._id = Date.now();
             this._id = this.constructor.numOfDrawers;
-            if (this._id !== 0) {
-                return;
-            }
+            // if (this._id !== 0) {
+            //     return;
+            // }
             console.log('Drawer ID =', this._id);
-            this.webGLVersion = "2.0";
+            this.webGLVersion = "1.0";
             this.debug = this.webGLOptions.debug || true;
             console.log('Debug =', this.debug);
 
@@ -407,9 +407,9 @@
         }
 
         tiledImageCreated(tiledImage) {
-            if (this._id !== 0) {
-                return;
-            }
+            // if (this._id !== 0) {
+            //     return;
+            // }
 
             const tiledImageInfo = this.configureTiledImage(tiledImage);
 
@@ -681,9 +681,9 @@
         draw(tiledImages) {
             const gl = this._gl;
 
-            if (this._id !== 0) {
-                return;
-            }
+            // if (this._id !== 0) {
+            //     return;
+            // }
             // console.log('Draw called with tiledImages lenght=', tiledImages.length);
 
             // clear the output canvas
@@ -811,6 +811,7 @@
 
             //release the texture from the GPU
             if(textureInfo){
+                // console.warn('Removing textureInfo:', textureInfo);
                 this._gl.deleteTexture(textureInfo.texture);
             }
         }
@@ -1735,7 +1736,8 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
-            this.renderer.useFirstPassProgram();
+            // this.renderer.useFirstPassProgram();
+            this.renderer.useDefaultProgram(1);
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 if (tiledImage.isTainted()) {
                     throw new Error("TiledImage.isTainted during two pass! -> not implemented!");
@@ -1801,7 +1803,8 @@
                                 index: i
                             };
 
-                            this.renderer.drawFirstPassProgram(source, tileInfo.position, matrix);
+                            // this.renderer.drawFirstPassProgram(source, tileInfo.position, matrix);
+                            this.renderer.firstPassProcessData(tileInfo.position, matrix, source);
                         } // end of TILES iteration
                     }
                 }
@@ -1847,7 +1850,8 @@
                         zoom: viewport.zoom,
                         pixelSize: this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom),
                         globalOpacity: tiledImage.getOpacity(),
-                        textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
+                        // textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
+                        textureCoords: new Float32Array([0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0]) // tileInfo.position
                     };
 
                     const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
@@ -1887,7 +1891,8 @@
                         zoom: viewport.zoom,
                         pixelSize: this.tiledImageViewportToImageZoom(tiledImage, viewport.zoom),
                         globalOpacity: tiledImage.getOpacity(),
-                        textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
+                        // textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
+                        textureCoords: new Float32Array([0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0]) // tileInfo.position
                     };
 
                     const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
