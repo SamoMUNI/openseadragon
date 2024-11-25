@@ -810,9 +810,15 @@
             this._TextureMap.delete(tileCanvas);
 
             //release the texture from the GPU
-            if(textureInfo){
-                // console.warn('Removing textureInfo:', textureInfo);
-                this._gl.deleteTexture(textureInfo.texture);
+            if (textureInfo) {
+                console.warn('Removing textureInfo:', textureInfo);
+                if (this.webGLVersion === "1.0") {
+                    for (const texture of textureInfo.textures) {
+                        this._gl.deleteTexture(texture);
+                    }
+                } else {
+                    this._gl.deleteTexture(textureInfo.texture2DArray);
+                }
             }
         }
         // _cleanupImageData(id) {
