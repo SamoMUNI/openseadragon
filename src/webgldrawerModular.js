@@ -146,6 +146,7 @@
             // TWO-PASS RENDERING attributes
             this._offScreenBuffer = this._gl.createFramebuffer();
             this._offScreenTexturesCount = 0;
+            this._offScreenTexturesUnusedIndices = [];
             if (this.webGLVersion === "1.0") {
                 this._offScreenTextures = []; // [TEXTURE_2D, TEXTURE_2D, ...]
             } else {
@@ -236,10 +237,13 @@
                 delete this._export[e.item.source.__renderInfo.externalID];
                 this.export();
 
-                for (const sourceIndex of Object.keys(e.item.source.__renderInfo.drawers[this._id].shaders)) {
+                for (const sourceID of Object.keys(e.item.source.__renderInfo.drawers[this._id].shaders)) {
                     // console.log('Mazem shaderType =', shaderType);
-                    const sourceJSON = e.item.source.__renderInfo.drawers[this._id].shaders[sourceIndex];
-                    this.renderer.removeShader(sourceJSON, e.item.source.__renderInfo.id.toString() + '_' + sourceIndex.toString());
+
+                    // TODO: pozriet ci funguje dobre este
+                    const sourceJSON = e.item.source.__renderInfo.drawers[this._id].shaders[sourceID];
+                    this.renderer.removeShader(sourceJSON, e.item.source.__renderInfo.id.toString() + '_' + sourceID.toString());
+                    this._offScreenTexturesUnusedIndices.push(sourceJSON._textureLayerIndex);
                 }
 
 
@@ -434,7 +438,7 @@
 
                 const shader = this.renderer.createShader(shaderObject, shaderType, shaderID);
                 shaderObject._renderContext = shader;
-                shaderObject._textureLayerIndex = this._offScreenTexturesCount++;
+                shaderObject._textureLayerIndex = this._getOffScreenTextureIndex(); //this._offScreenTexturesCount++;
 
                 // shaderObject._index = 0;
                 shaderObject.visible = true;
@@ -1413,6 +1417,14 @@
                 tiledImage.viewport._containerInnerSize.x /
                 tiledImage.source.dimensions.x;
             return ratio * viewportZoom;
+        }
+
+        _getOffScreenTextureIndex() {
+            if (this._offScreenTexturesUnusedIndices.length > 0) {
+                console.info('Recyklujem uz pouzity offScreenIndex');
+                return this._offScreenTexturesUnusedIndices.pop();
+            }
+            return this._offScreenTexturesCount++;
         }
 
         /**
