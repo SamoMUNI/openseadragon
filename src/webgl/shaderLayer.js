@@ -341,7 +341,7 @@
          * @param {WebGLProgram} program WebglProgram instance
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
-        glDrawing(program, gl, controlId) {
+        glDrawing(program, gl) {
             if (this._blendUniform) {
                 // console.log(`shaderLayer ${this.constructor.name()} filling it's variables blend and clip!`);
                 // console.error(`shaderLayer ${this.constructor.name()} nastavuje blend_mode na ${this.blendMode}`); -> bolo undefined tak som zakomentoval dalsi riadok a dal ten pod nim
