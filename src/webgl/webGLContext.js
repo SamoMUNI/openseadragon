@@ -864,7 +864,8 @@ void main() {
                         shaderObject.shaderID,
                         shaderObject.visible,
                         shaderObject,
-                        true);
+                        true,
+                        shaderLayer);
                 // }
             } // end of for cycle
 
@@ -1448,7 +1449,8 @@ void main() {
                         shaderObject.shaderID,
                         shaderObject.visible,
                         shaderObject,
-                        true);
+                        true,
+                        shaderLayer);
                 // }
             } // end of for cycle
 

@@ -83,9 +83,9 @@
             // private members
             // this._id = Date.now();
             this._id = this.constructor.numOfDrawers;
-            // if (this._id !== 0) {
-            //     return;
-            // }
+            if (this._id !== 0) {
+                return;
+            }
             console.log('Drawer ID =', this._id);
             this.webGLVersion = "1.0";
             this.debug = this.webGLOptions.debug || true;
@@ -115,12 +115,13 @@
                 webGLPreferredVersion: this.webGLVersion,
                 webGLOptions: {},
                 htmlControlsId: ++this.constructor.numOfDrawers === 1 ? "drawer-controls" : undefined,
-                htmlShaderPartHeader: (html, shaderName, isVisible, layer, isControllable = true) => {
+                htmlShaderPartHeader: (html, shaderName, isVisible, layer, isControllable = true, shaderLayer = {}) => {
                     return `<div class="configurable-border"><div class="shader-part-name">${shaderName}</div>${html}</div>`;
                 },
                 ready: () => {
                 },
                 resetCallback: () => { this.draw(this.lastDrawArray); },
+                refetchCallback: () => {},
                 // resetCallback: () => {},
                 debug: false,
             }, this.webGLOptions, {
@@ -407,9 +408,9 @@
         }
 
         tiledImageCreated(tiledImage) {
-            // if (this._id !== 0) {
-            //     return;
-            // }
+            if (this._id !== 0) {
+                return;
+            }
 
             const tiledImageInfo = this.configureTiledImage(tiledImage);
 
@@ -430,6 +431,7 @@
                 shaderObject.externalId = config.externalId;
 
                 shaderObject.type = shaderType;
+                shaderObject.fixed = originalShaderDefinition.fixed;
                 shaderObject.name = originalShaderDefinition.name;
                 shaderObject.params = shaderParams;
 
@@ -681,9 +683,9 @@
         draw(tiledImages) {
             const gl = this._gl;
 
-            // if (this._id !== 0) {
-            //     return;
-            // }
+            if (this._id !== 0) {
+                return;
+            }
             // console.log('Draw called with tiledImages lenght=', tiledImages.length);
 
             // clear the output canvas
@@ -1354,6 +1356,9 @@
         * @param {Boolean} enabled If true, uses gl.LINEAR as the TEXTURE_MIN_FILTER and TEXTURE_MAX_FILTER, otherwise gl.NEAREST.
         */
         setImageSmoothingEnabled(enabled){
+            if (this._id !== 0) {
+                return;
+            }
             if( this._imageSmoothingEnabled !== enabled ){
                 this._imageSmoothingEnabled = enabled;
                 this._unloadTextures();

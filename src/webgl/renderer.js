@@ -40,8 +40,9 @@
          * @param {string} html
          * @param {string} dataId
          * @param {boolean} isVisible
-         * @param {OpenSeadragon.WebGLModule.ShaderLayer} layer
+         * @param {Object} layer
          * @param {boolean} wasErrorWhenLoading
+         * @param {OpenSeadragon.WebGLModule.ShaderLayer} shaderLayer
          */
 
 
@@ -63,6 +64,8 @@
          * @param {function} incomingOptions.onFatalError (error) => {}, function called when fatal error occurs -> stops the rendering
          * @param {function} incomingOptions.ready () => {}, function called when ready
          * @param {function} incomingOptions.resetCallback () => {}, function called when user input changed, e.g. changed output of the current rendering
+
+         * @param {function} incomingOptions.refetchCallback () => {}, function called when underlying data changed
 
          * @param {string} incomingOptions.uniqueId
 
@@ -99,6 +102,9 @@
 
             this.ready = incomingOptions.ready;
             this.resetCallback = incomingOptions.resetCallback;
+
+            this.refetchCallback = incomingOptions.refetchCallback;
+
             this.debug = incomingOptions.debug;
 
             this.visualisationReady = (i, visualisation) => { }; // called once a visualisation is compiled and linked (might not happen) [spec + program + shaders ready I guess]
@@ -956,7 +962,7 @@
                 cache: shaderObject._cache,
                 invalidate: this.resetCallback,
                 rebuild: () => {}, // need to rebuild the whole shaderLayer
-                refetch: () => {}  // need to reinitialize whole drawer? probably not needed
+                refetch: this.refetchCallback // need to reinitialize whole drawer? probably not needed
             });
             shader.newConstruct();
             shader.newAddControl(shaderObject, shaderID, this.htmlControlsElement, this.resetCallback);
