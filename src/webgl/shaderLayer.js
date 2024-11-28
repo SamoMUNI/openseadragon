@@ -162,10 +162,14 @@
             this._controls = privateOptions.controls; // shaderObject._controls
             this._hasInteractiveControls = privateOptions.interactive;
             this._cache = privateOptions.cache; // shaderObject._cache
+            this._customControls = privateOptions.shaderObject.params;
 
             this.invalidate = privateOptions.invalidate;
             this._rebuild = privateOptions.rebuild;
             this._refetch = privateOptions.refetch;
+
+            this.__scalePrefix = "";
+            this.__scaleSuffix = "";
         }
 
         /**
@@ -199,6 +203,8 @@
             this.resetChannel(options);
             // nastavi this._mode a this.__mode na "show", inak by mohla aj do cache nastavovat...
             this.resetMode(options);
+
+            this.resetFilters(this._customControls);
         }
 
         /**
@@ -210,29 +216,29 @@
          */
         newAddControl(shaderObject, shaderID, controlsParentHTMLElement = null, controlsChangeHandler = null) {
             const defaultControls = this.constructor.defaultControls;
-            if (defaultControls.opacity === undefined || (typeof defaultControls.opacity === "object" && !defaultControls.opacity.accepts("float"))) {
-                defaultControls.opacity = {
-                    default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
-                    accepts: (type, instance) => type === "float"
-                };
-            }
 
-            console.info(`defaultControls of ${this.constructor.name()} shader =`, defaultControls);
+            // if (defaultControls.opacity === undefined || (typeof defaultControls.opacity === "object" && !defaultControls.opacity.accepts("float"))) {
+            //     defaultControls.opacity = {
+            //         default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
+            //         accepts: (type, instance) => type === "float"
+            //     };
+            // }
+
+            // console.debug(`defaultControls of ${this.constructor.name()} shader =`, defaultControls);
             for (let controlName in defaultControls) {
                 if (controlName.startsWith("use_")) {
                     continue;
                 }
 
-                console.debug('newAddControl, prechadzam defaultControls, controlName =', controlName);
+                // console.debug('newAddControl, prechadzam defaultControls, controlName =', controlName);
                 const controlObject = defaultControls[controlName];
-                if (!controlObject) { // pridane iba kvoli codingVisualizationLayer, ktory ma ze opacity: false -.-
-                    console.warn(`Control ${controlName} not defined in ${this.constructor.name()} shader's defaultControls!`);
-                    continue;
-                }
-                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, shaderID + '_' + controlName, {});
-                console.debug('newAddControl, vytvoril som control', controlName, control);
+                // if (!controlObject) { // pridane iba kvoli codingVisualizationLayer, ktory ma ze opacity: false -.- -> vykomentoval som to tam
+                //     console.warn(`Control ${controlName} not defined in ${this.constructor.name()} shader's defaultControls!`);
+                //     continue;
+                // }
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, shaderID + '_' + controlName, this._customControls[controlName]);
 
-
+                // console.debug('newAddControl, vytvoril som control', controlName, control);
                 this._controls[controlName] = control;
                 this[controlName] = control;
             }
@@ -516,9 +522,12 @@
             }
             // return `osd_texture(${index}, ${vec2coords})`;
             let sampled = `${this.webglContext.sampleTexture(refs[otherDataIndex], textureCoords)}.${chan}`;
-            // if (raw) return sampled;
-            // return this.filter(sampled);
-            return sampled;
+            if (raw) {
+                return sampled;
+            }
+            return this.filter(sampled);
+
+            // return sampled;
         }
 
         /**
@@ -623,6 +632,8 @@
                 }
                 return def;
             };
+
+
             /* source = { acceptsChannelCount: (x) => x === 4, description: "4d texture to render AS-IS" } */
             this.__channels = this.constructor.sources().map((source, i) => parseChannel(`use_channel${i}`, "r", source));
             /* nastavuje __channels = ["rgba"] */
@@ -655,6 +666,76 @@
             /* ani nerozumiem preco sa pouziva _mode a __mode, naco? */
             this.__mode = this.constructor.modes[this._mode] || "show";
         }
+
+
+        /************************** FILTERING ****************************/
+        /**
+         * Can be used to re-set filters for a shader
+         * @param {object} options filters configuration, currently supported are
+         *  'use_gamma', 'use_exposure', 'use_logscale'
+         */
+        resetFilters(options) {
+            if (!options) {
+                options = this._customControls;
+            }
+
+            this.__scalePrefix = [];
+            this.__scaleSuffix = [];
+            for (let key in this.constructor.filters) {
+                const predefined = this.constructor.defaultControls[key];
+                let value = predefined ? predefined.required : undefined;
+                if (value === undefined) {
+                    if (options[key]) {
+                        value = this.loadProperty(key, options[key]);
+                    }
+                    else {
+                        value = predefined ? predefined.default : undefined;
+                    }
+                }
+
+                if (value !== undefined) {
+                    let filter = this.constructor.filters[key](value);
+                    this.__scalePrefix.push(filter[0]);
+                    this.__scaleSuffix.push(filter[1]);
+                }
+            }
+            this.__scalePrefix = this.__scalePrefix.join("");
+            this.__scaleSuffix = this.__scaleSuffix.reverse().join("");
+        }
+
+        /**
+         * Apply global filters on value
+         * @param {string} value GLSL code string, value to filter
+         * @return {string} filtered value (GLSL oneliner without ';')
+         */
+        filter(value) {
+            return `${this.__scalePrefix}${value}${this.__scaleSuffix}`;
+        }
+
+        /**
+         * Set filter value
+         * @param filter filter name
+         * @param value value of the filter
+         */
+        setFilterValue(filter, value) {
+            if (!this.constructor.filterNames[filter]) {
+                console.error("Invalid filter name.", filter);
+                return;
+            }
+            this.storeProperty(filter, value);
+        }
+
+        /**
+         * Get the filter value (alias for loadProperty(...)
+         * @param {string} filter filter to read the value of
+         * @param {string} defaultValue
+         * @return {string} stored filter value or defaultValue if no value available
+         */
+        getFilterValue(filter, defaultValue) {
+            return this.loadProperty(filter, defaultValue);
+        }
+        /************************** END OF FILTERING ****************************/
+
 
         /**
          *
@@ -822,11 +903,38 @@
      */
     $.WebGLModule.ShaderLayer.modes = {
         show: "show",
-        mask: "blend"
+        mask: "blend",
+        // mask_clip: "blend_clip"
     };
-    $.WebGLModule.ShaderLayer.modes["mask_clip"] = "blend_clip"; //todo parser error not camel case
+    $.WebGLModule.ShaderLayer.modes["mask_clip"] = "blend_clip";
     $.WebGLModule.ShaderLayer.__globalIncludes = {};
     $.WebGLModule.ShaderLayer.__channelPattern = new RegExp('[rgba]{1,4}');
+
+    //not really modular
+    //add your filters here if you want... function that takes parameter (number)
+    //and returns prefix and suffix to compute oneliner filter
+    //should start as 'use_[name]' for namespace collision avoidance (params object)
+    //expression should be wrapped in parenthesses for safety: ["(....(", ")....)"] in the middle the
+    // filtered variable will be inserted, notice pow does not need inner brackets since its an argument...
+    //note: pow avoided in gamma, not usable on vectors, we use pow(x, y) === exp(y*log(x))
+    // TODO: implement filters as shader nodes instead!
+    $.WebGLModule.ShaderLayer.filters = {};
+    $.WebGLModule.ShaderLayer.filters["use_gamma"] = (x) => ["exp(log(", `) / ${$.WebGLModule.ShaderLayer.toShaderFloatString(x, 1)})`];
+    $.WebGLModule.ShaderLayer.filters["use_exposure"] = (x) => ["(1.0 - exp(-(", `)* ${$.WebGLModule.ShaderLayer.toShaderFloatString(x, 1)}))`];
+    $.WebGLModule.ShaderLayer.filters["use_logscale"] = (x) => {
+        x = $.WebGLModule.ShaderLayer.toShaderFloatString(x, 1);
+        return [`((log(${x} + (`, `)) - log(${x})) / (log(${x}+1.0)-log(${x})))`];
+    };
+
+    /**
+     * Available filters (use_[name])
+     * @type {{use_exposure: string, use_gamma: string, use_logscale: string}}
+     */
+    $.WebGLModule.ShaderLayer.filterNames = {};
+    $.WebGLModule.ShaderLayer.filterNames["use_gamma"] = "Gamma";
+    $.WebGLModule.ShaderLayer.filterNames["use_exposure"] = "Exposure";
+    $.WebGLModule.ShaderLayer.filterNames["use_logscale"] = "Logarithmic scale";
+
     /* END OF SHADER LAYER */
 
 
@@ -888,10 +996,10 @@
          * @param {string} controlName name used for the control (eg.: opacity)
          * @param {object} controlObject object from shaderLayer.defaultControls, defines control
          * @param {string} controlId
-         * @param {object|*} params parameters passed to the control (defined by the control) or set as default value if not object ({})
+         * @param {object|*} customParams parameters passed to the control (defined by the control) or set as default value if not object ({})
          * @return {OpenSeadragon.WebGLModule.UIControls.IControl}
          */
-        static build(owner, controlName, controlObject, controlId, params) {
+        static build(owner, controlName, controlObject, controlId, customParams) {
             let defaultParams = controlObject.default,
                 accepts = controlObject.accepts,
                 requiredParams = controlObject.required === undefined ? {} : controlObject.required;
@@ -899,23 +1007,23 @@
             let interactivityEnabled = owner._hasInteractiveControls;
 
             // if not an object, but a value, make it the default one
-            if (!(typeof params === 'object')) {
-                params = {default: params};
+            if (!(typeof customParams === 'object')) {
+                customParams = {default: customParams};
             }
             //must be false if HTML nodes are not managed
             if (!interactivityEnabled) {
-                params.interactive = false;
+                customParams.interactive = false;
             }
 
             let originalType = defaultParams.type;
 
-            // merge dP, p, rP recursively, without modifying p and rP
-            defaultParams = $.extend(true, {}, defaultParams, params, requiredParams);
+            // merge dP < cP < rP recursively with rP having the biggest overwriting priority, without modifying the original objects
+            const params = $.extend(true, {}, defaultParams, customParams, requiredParams);
 
             // if control's type (eg.: opacity -> range) not present in this._items
             /* VOBEC SOM NEPRESIEL TUTO CAST */
-            if (!this._items[defaultParams.type]) {
-                const controlType = defaultParams.type;
+            if (!this._items[params.type]) {
+                const controlType = params.type;
                 console.debug('UIControls:build - if vetva, typ =', controlType, 'neni v UIControls._items');
                 console.debug('UIControls:build - if vetva, this._impls =', this._impls);
 
@@ -928,8 +1036,9 @@
                 Ale myslel som ze to ma vytvorit jeden control a ked si vypisujem iba ze prechod konstruktormi SIMPLE a ICONTROL
                 tak to vyzera ako by sa tym riadkom cls =... robil jeden control viac raz co neviem preco. */
                 console.debug('Vytvaram custom control implementaciu');
-                let cls = new this._impls[controlType](owner, controlName, controlId, defaultParams);
+                let cls = new this._impls[controlType](owner, controlName, controlId, params);
                 console.debug('Vytvoril som custom control implementaciu');
+
                 if (accepts(cls.type, cls)) {
                     console.debug('Idem pouzit custom control implementaciu');
                     return cls;
@@ -941,11 +1050,12 @@
 
             } else { // control's type (eg.: range/number/...) is defined in this._items
                 console.debug('UIControls:build - typ controlu je definovany v UIControls._items.');
-                let intristicComponent = this.getUiElement(defaultParams.type);
+                let intristicComponent = this.getUiElement(params.type);
                 let comp = new $.WebGLModule.UIControls.SimpleUIControl(
-                    owner, controlName, controlId, defaultParams, intristicComponent
+                    owner, controlName, controlId, params, intristicComponent
                 );
                 /* comp.type === float, tuto naozaj pri range v _items je definovany type: float */
+
                 if (accepts(comp.type, comp)) {
                     return comp;
                 }
@@ -954,17 +1064,17 @@
             }
         }
 
-        static _buildFallback(newType, originalType, owner, controlName, controlObject, params) {
+        static _buildFallback(newType, originalType, owner, controlName, controlObject, customParams) {
             //repeated check when building object from type
 
-            params.interactive = false;
+            customParams.interactive = false;
             if (originalType === newType) { //if default and new equal, fail - recursion will not help
-                console.error(`Invalid parameter in shader '${params.type}': the parameter could not be built.`);
+                console.error(`Invalid parameter in shader '${customParams.type}': the parameter could not be built.`);
                 return undefined;
             } else { //otherwise try to build with originalType (default)
-                params.type = originalType;
+                customParams.type = originalType;
                 console.warn("Incompatible UI control type '" + newType + "': making the input non-interactive.");
-                return this.build(owner, controlName, controlObject, params);
+                return this.build(owner, controlName, controlObject, customParams);
             }
         }
 

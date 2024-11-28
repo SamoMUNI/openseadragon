@@ -87,7 +87,7 @@
                 return;
             }
             console.log('Drawer ID =', this._id);
-            this.webGLVersion = "1.0";
+            this.webGLVersion = "2.0";
             this.debug = this.webGLOptions.debug || true;
             console.log('Debug =', this.debug);
 
