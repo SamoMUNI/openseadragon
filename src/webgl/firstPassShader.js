@@ -35,7 +35,7 @@
 
         getFragmentShaderExecution() {
             return `
-        return ${this.sampleChannel("v_texture_coords")};`;
+        return ${this.sampleChannel("v_texture_coords", 0, true)};`;
         }
 
         // redefine these functions to ignore their calls from webGLContext's loadProgram and useProgram functions
