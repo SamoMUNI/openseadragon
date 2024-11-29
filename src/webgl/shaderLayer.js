@@ -999,7 +999,7 @@
          * @param {object|*} customParams parameters passed to the control (defined by the control) or set as default value if not object ({})
          * @return {OpenSeadragon.WebGLModule.UIControls.IControl}
          */
-        static build(owner, controlName, controlObject, controlId, customParams) {
+        static build(owner, controlName, controlObject, controlId, customParams = {}) {
             let defaultParams = controlObject.default,
                 accepts = controlObject.accepts,
                 requiredParams = controlObject.required === undefined ? {} : controlObject.required;
@@ -1019,6 +1019,7 @@
 
             // merge dP < cP < rP recursively with rP having the biggest overwriting priority, without modifying the original objects
             const params = $.extend(true, {}, defaultParams, customParams, requiredParams);
+            console.warn('params =', params);
 
             // if control's type (eg.: opacity -> range) not present in this._items
             /* VOBEC SOM NEPRESIEL TUTO CAST */
