@@ -168,8 +168,6 @@
             this._rebuild = privateOptions.rebuild;
             this._refetch = privateOptions.refetch;
 
-            this.__scalePrefix = "";
-            this.__scaleSuffix = "";
         }
 
         /**
@@ -217,12 +215,13 @@
         newAddControl(shaderObject, shaderID, controlsParentHTMLElement = null, controlsChangeHandler = null) {
             const defaultControls = this.constructor.defaultControls;
 
-            // if (defaultControls.opacity === undefined || (typeof defaultControls.opacity === "object" && !defaultControls.opacity.accepts("float"))) {
-            //     defaultControls.opacity = {
-            //         default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
-            //         accepts: (type, instance) => type === "float"
-            //     };
-            // }
+            // add opacity control manually to every shader if not already defined
+            if (defaultControls.opacity === undefined || (typeof defaultControls.opacity === "object" && !defaultControls.opacity.accepts("float"))) {
+                defaultControls.opacity = {
+                    default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
+                    accepts: (type, instance) => type === "float"
+                };
+            }
 
             // console.debug(`defaultControls of ${this.constructor.name()} shader =`, defaultControls);
             for (let controlName in defaultControls) {
@@ -232,10 +231,10 @@
 
                 // console.debug('newAddControl, prechadzam defaultControls, controlName =', controlName);
                 const controlObject = defaultControls[controlName];
-                // if (!controlObject) { // pridane iba kvoli codingVisualizationLayer, ktory ma ze opacity: false -.- -> vykomentoval som to tam
-                //     console.warn(`Control ${controlName} not defined in ${this.constructor.name()} shader's defaultControls!`);
-                //     continue;
-                // }
+                if (!controlObject) { // pridane iba kvoli codingVisualizationLayer, ktory ma ze opacity: false -.- -> vykomentoval som to tam
+                    console.warn(`Control ${controlName} not defined in ${this.constructor.name()} shader's defaultControls!`);
+                    continue;
+                }
                 const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, shaderID + '_' + controlName, this._customControls[controlName]);
 
                 // console.debug('newAddControl, vytvoril som control', controlName, control);
@@ -597,6 +596,8 @@
          * @param {string} options.use_channel[X] "r", "g" or "b" channel to sample index X, default "r"
          */
         resetChannel(options) {
+            // regex to compare with value used with use_channel, to check its correctness
+            const channelPattern = new RegExp('[rgba]{1,4}');
             const parseChannel = (controlName, def, sourceDef) => {
                 const predefined = this.constructor.defaultControls[controlName];
 
@@ -612,7 +613,7 @@
                     }
 
                     // (if channel is not defined) or (is defined and not string) or (is string and contains nowhere __channelPattern)
-                    if (!channel || typeof channel !== "string" || this.constructor.__channelPattern.exec(channel) === null) {
+                    if (!channel || typeof channel !== "string" || channelPattern.exec(channel) === null) {
                         console.warn(`Invalid channel '${controlName}'. Will use channel '${def}'.`, channel, options);
                         // sets this.__visalisationLayer.cache[controlName] = "r";
                         this.storeProperty(controlName, def);
