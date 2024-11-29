@@ -861,7 +861,7 @@ void main() {
 
                 // TODO: if (true) {
                     html += this.renderer.htmlShaderPartHeader(shaderLayer.newHtmlControls(),
-                        shaderObject.shaderID,
+                        shaderID,
                         shaderObject.visible,
                         shaderObject,
                         true,
