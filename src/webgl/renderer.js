@@ -63,8 +63,7 @@
          * @param {function} incomingOptions.onError (error) => {}, function called when error occurs -> continue rendering
          * @param {function} incomingOptions.onFatalError (error) => {}, function called when fatal error occurs -> stops the rendering
          * @param {function} incomingOptions.ready () => {}, function called when ready
-         * @param {function} incomingOptions.resetCallback () => {}, function called when user input changed, e.g. changed output of the current rendering
-
+         * @param {function} incomingOptions.resetCallback () => {}, function called when user input changed, trigger rerendering of the viewport
          * @param {function} incomingOptions.refetchCallback () => {}, function called when underlying data changed
 
          * @param {string} incomingOptions.uniqueId
@@ -960,8 +959,12 @@
                 controls: shaderObject._controls,
                 interactive: this.supportsHtmlControls(),
                 cache: shaderObject._cache,
+                // rerender the viewport
                 invalidate: this.resetCallback,
-                rebuild: () => {}, // need to rebuild the whole shaderLayer
+                // need to rebuild the WebGL program, because shaderLayer has changed (eg. use different channel for texture sampling)
+                rebuild: () => {
+                    this.recreateProgram();
+                },
                 refetch: this.refetchCallback // need to reinitialize whole drawer? probably not needed
             });
             shader.newConstruct();

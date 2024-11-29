@@ -251,7 +251,7 @@
             // Attaching shaders to WebGLProgram failed
             if (!useShader(gl, program, opts.vs, 'VERTEX_SHADER') ||
                 !useShader(gl, program, opts.fs, 'FRAGMENT_SHADER')) {
-                onError("Unable to use this specification.",
+                onError("Unable to correctly build WebGL shaders.",
                     "Attaching of shaders to WebGLProgram failed. For more information, see logs in the $.console.");
                 $.console.warn("VERTEX SHADER\n", numberLines( opts.vs ));
                 $.console.warn("FRAGMENT SHADER\n", numberLines( opts.fs ));
@@ -259,7 +259,7 @@
             } else { // Shaders attached
                 gl.linkProgram(program);
                 if (!ok('Program', 'LINK', program)) {
-                    onError("Unable to use this specification.",
+                    onError("Unable to correctly build WebGL program.",
                         "Linking of WebGLProgram failed. For more information, see logs in the $.console.");
                     return false;
                 } else { //if (this.renderer.debug) { //todo uncomment in production
@@ -774,6 +774,7 @@ void main() {
     void main() {
         // EXECUTIONS OF SHADERLAYERS:
         switch (u_shaderLayerIndex) {${execution}
+
             default:
                 if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
                     final_color = vec4(.0);

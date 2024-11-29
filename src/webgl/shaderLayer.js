@@ -633,7 +633,6 @@
                 return def;
             };
 
-
             /* source = { acceptsChannelCount: (x) => x === 4, description: "4d texture to render AS-IS" } */
             this.__channels = this.constructor.sources().map((source, i) => parseChannel(`use_channel${i}`, "r", source));
             /* nastavuje __channels = ["rgba"] */
@@ -719,7 +718,7 @@
          */
         setFilterValue(filter, value) {
             if (!this.constructor.filterNames[filter]) {
-                console.error("Invalid filter name.", filter);
+                console.error("Invalid filter name", filter);
                 return;
             }
             this.storeProperty(filter, value);
@@ -833,15 +832,15 @@
     };
 
     /**
-     * Declare supported controls by a particular shader
-     * each controls is automatically created for the shader
-     * and this[controlId] instance set
-     * structure:
-     * {
-     *     controlId: {
-                   default: {type: <>, title: <>, interactive: true|false...},
+     * Declare supported controls by a particular shader,
+     * each control defined this way is automatically created for the shader.
+     *
+     * Structure:
+     * shaderLayer.defaultControls = {
+     *     controlName: {
+                   default: {type: <>, title: <>, default: <>, interactive: true|false, ...},
                    accepts: (type, instance) => <>,
-                   required: {type: <> ...} [OPTIONAL]
+                   required: {type: <>, ...} [OPTIONAL]
      *     }, ...
      * }
      *
@@ -850,7 +849,7 @@
      *
      *
      * Additionally, use_[...] value can be specified, such controls enable shader
-     * to specify default or required values for built-in use_[...] params. example:
+     * to specify default or required values for built-in use_[...] params. Example:
      * {
      *     use_channel0: {
      *         default: "bg"
@@ -866,6 +865,7 @@
      * textures apply gamma filter with 0.5 by default if not overridden
      * todo: allow also custom object without structure being specified (use in custom manner,
      *  but limited in automated docs --> require field that summarises its usage)
+     *
      * @member {object}
      */
     $.WebGLModule.ShaderLayer.defaultControls = {
@@ -894,8 +894,6 @@
      */
     $.WebGLModule.ShaderLayer.customParams = {};
 
-    $.WebGLModule.ShaderLayer.numOfInstantions = 0;
-
     /**
      * todo make blending more 'nice'
      * Available use_mode modes
@@ -904,11 +902,15 @@
     $.WebGLModule.ShaderLayer.modes = {
         show: "show",
         mask: "blend",
-        // mask_clip: "blend_clip"
     };
+    $.WebGLModule.ShaderLayer.modes["show"] = "show";
+    $.WebGLModule.ShaderLayer.modes["mask"] = "blend";
     $.WebGLModule.ShaderLayer.modes["mask_clip"] = "blend_clip";
+
+    /**
+     * Parameter to save shaderLayer's functionality that can be shared and reused between shaderLayer instantions.
+     */
     $.WebGLModule.ShaderLayer.__globalIncludes = {};
-    $.WebGLModule.ShaderLayer.__channelPattern = new RegExp('[rgba]{1,4}');
 
     //not really modular
     //add your filters here if you want... function that takes parameter (number)

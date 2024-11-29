@@ -92,6 +92,8 @@
             console.log('Debug =', this.debug);
 
 
+            // this.test();
+
             this._destroyed = false;
             this._tileIdCounter = 0;
             this._tileIds = {};
@@ -284,6 +286,31 @@
             };
             this.viewer.addHandler("resize", this._resizeHandler);
         }//end of constructor
+
+        test() {
+            const defaultControls = {
+                opacity: {
+                default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
+                accepts: (type, instance) => type === "float"
+                }
+            };
+            const customControls = {
+                opacity: {
+                    title: "Range",
+                    interactive: true,
+                    default: 100,
+                    min: 0,
+                    max: 100,
+                    step: 1,
+                    type: "number"
+                },
+                useGamma: 0.5
+            };
+            const merge = $.extend(true, {}, defaultControls, customControls);
+            console.log(merge);
+
+            throw new Error('Test');
+        }
 
         /**
          * @returns {string}
