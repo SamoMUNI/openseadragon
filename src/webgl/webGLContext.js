@@ -755,8 +755,7 @@ void main() {
             if (_last_mode == 0) {
                 final_color = pre_fg + (1.0-fg.a)*final_color;
             } else if (_last_mode == 1) {
-                // final_color = vec4(pre_fg.rgb * final_color.rgb, pre_fg.a + final_color.a);
-                final_color = vec4(.0, 1.0, 1.0, 1.0);
+                final_color = vec4(pre_fg.rgb * final_color.rgb, pre_fg.a + final_color.a);
             } else {
                 final_color = vec4(.0, .0, 1.0, 1.0);
             }
@@ -842,8 +841,6 @@ void main() {
 
                 execution += `
             case ${shaderLayerIndex}:`;
-                // ak ma opacity shaderLayer tak zavolaj jeho execution a prenasob alpha channel opacitou a to posli do blend funkcie, inak tam posli rovno jeho execution
-                //TODO ZMENA PRI CONTROLS
                 if (shaderLayer.opacity) {
                     execution += `
                 vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
@@ -853,10 +850,12 @@ void main() {
                     execution += `
                 blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
                 }
-                // execution += `
-                // final_color = ${shaderLayer.uid}_execution();`; pokial nechcem pouzit blend funkciu ale rovno ceknut vystup shaderu
                 execution += `
                 break;`;
+                // execution += `
+                // final_color = ${shaderLayer.uid}_execution();
+                // final_color *= u_global_alpha;
+                // return;`; // pokial nechcem pouzit blend funkciu ale rovno ceknut vystup shaderu
 
 
 

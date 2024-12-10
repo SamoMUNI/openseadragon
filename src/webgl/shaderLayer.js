@@ -197,9 +197,7 @@
          * @param {[number]} dataReferences indexes of data being requested for this shader (this.__shaderObject.dataReferences)
          */
         newConstruct(options = {}) {
-            // nastavi this.__channels na ["rgba"] plus do shaderObject.cache da use_channel0: "rgba" (opacity tam este neni!)
             this.resetChannel(options);
-            // nastavi this._mode a this.__mode na "show", inak by mohla aj do cache nastavovat...
             this.resetMode(options);
 
             this.resetFilters(this._customControls);
@@ -641,30 +639,38 @@
         }
 
         /**
-         * Set blending mode
+         * Set blending mode.
          * @param {object} options
          * @param {string} options.use_mode blending mode to use: "show" or "mask" or "mask_clip"
          */
         /* options dojdu ako {} */
         resetMode(options) {
-            const predefined = this.constructor.defaultControls.use_mode;
-            // console.log('predefined in resetMode ->', predefined);
-
-            if (options["use_mode"]) {
-                this._mode = predefined && predefined.required;
-                // if not predefined.required try to load from cache, if not in cache use options.use_mode
-                if (!this._mode) {
-                    this._mode = this.loadProperty("use_mode", options.use_mode);
-                }
-                /* nerozumiem moc tomuto ifu */
-                if (this._mode !== options.use_mode) {
-                    this.storeProperty("use_mode", this._mode);
-                }
-            } else {
-                this._mode = predefined ? (predefined.default || "show") : "show";
+            if (!options) {
+                options = this._customControls;
             }
-            /* ani nerozumiem preco sa pouziva _mode a __mode, naco? */
-            this.__mode = this.constructor.modes[this._mode] || "show";
+
+            const predefined = this.constructor.defaultControls.use_mode;
+            // if required, set mode to required
+            this._mode = predefined && predefined.required;
+
+            if (!this._mode) {
+                if (options.use_mode) {
+                    // firstly try to load from cache, if not in cache, use options.use_mode
+                    if (!this._mode) {
+                        this._mode = this.loadProperty("use_mode", options.use_mode);
+                    }
+
+                    // if mode was not in the cache and we got default value = options.use_mode, store it in the cache
+                    if (this._mode === options.use_mode) {
+                        this.storeProperty("use_mode", this._mode);
+                    }
+                } else {
+                    this._mode = (predefined && predefined.default) || "show";
+                }
+            }
+
+            // this.__mode is this._mode translated into its GLSL equivalent
+            this.__mode = this.constructor.modes[this._mode];
         }
 
 
@@ -900,10 +906,7 @@
      * Available use_mode modes
      * @type {{show: string, mask: string}}
      */
-    $.WebGLModule.ShaderLayer.modes = {
-        show: "show",
-        mask: "blend",
-    };
+    $.WebGLModule.ShaderLayer.modes = {};
     $.WebGLModule.ShaderLayer.modes["show"] = "show";
     $.WebGLModule.ShaderLayer.modes["mask"] = "blend";
     $.WebGLModule.ShaderLayer.modes["mask_clip"] = "blend_clip";
