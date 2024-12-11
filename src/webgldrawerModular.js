@@ -83,9 +83,6 @@
             // private members
             // this._id = Date.now();
             this._id = this.constructor.numOfDrawers;
-            if (this._id !== 0) {
-                return;
-            }
             console.log('Drawer ID =', this._id);
             this.webGLVersion = "2.0";
             this.debug = this.webGLOptions.debug || true;
@@ -435,9 +432,6 @@
         }
 
         tiledImageCreated(tiledImage) {
-            if (this._id !== 0) {
-                return;
-            }
 
             const tiledImageInfo = this.configureTiledImage(tiledImage);
 
@@ -710,9 +704,6 @@
         draw(tiledImages) {
             const gl = this._gl;
 
-            if (this._id !== 0) {
-                return;
-            }
             // console.log('Draw called with tiledImages lenght=', tiledImages.length);
 
             // clear the output canvas
@@ -1383,9 +1374,6 @@
         * @param {Boolean} enabled If true, uses gl.LINEAR as the TEXTURE_MIN_FILTER and TEXTURE_MAX_FILTER, otherwise gl.NEAREST.
         */
         setImageSmoothingEnabled(enabled){
-            if (this._id !== 0) {
-                return;
-            }
             if( this._imageSmoothingEnabled !== enabled ){
                 this._imageSmoothingEnabled = enabled;
                 this._unloadTextures();
