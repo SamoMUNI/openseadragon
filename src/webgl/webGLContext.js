@@ -15,29 +15,6 @@
         return result;
     }
 
-    function createShader(gl, type, source) {
-        const shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-          console.error("webGLContext::createShader(): Shader compilation error:", gl.getShaderInfoLog(shader));
-          return null;
-        }
-        return shader;
-    }
-
-    function createProgram(gl, vertexShader, fragmentShader) {
-        const program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-          console.error("webGLContext::createProgram(): Program linking error:", gl.getProgramInfoLog(program));
-          return null;
-        }
-        return program;
-    }
-
     /**
      * @interface OpenSeadragon.WebGLModule.WebGLImplementation
      * Interface for the visualisation rendering implementation which can run
@@ -49,63 +26,45 @@
          * Create a WebGL Renderer Context Implementation (version-dependent)
          * @param {WebGLModule} renderer
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl
-         * @param {string} webglVersion "1.0" or "2.0"
-         * @param {object} options
+         * @param {String} webGLVersion "1.0" or "2.0"
+         * @param {Object} options
          * @param {GLuint} options.wrap  texture wrap parameteri
          * @param {GLuint} options.magFilter  texture filter parameteri
          * @param {GLuint} options.minFilter  texture filter parameteri
          */
-        constructor(renderer, gl, webglVersion, options) {
+        constructor(renderer, gl, webGLVersion, options) {
             //Set default blending to be MASK
             this.renderer = renderer;
             this.gl = gl;
-            this.webglVersion = webglVersion;
+            this.webGLVersion = webGLVersion;
             this.options = options;
         }
 
         /**
-         * Static context creation (to avoid class instantiation in case of missing support)
-         * @param canvas
-         * @param options desired options used in the canvas webgl context creation
+         * Static context creation (to avoid class instantiation in case of missing support).
+         * @param {HTMLCanvasElement} canvas
+         * @param {Object} contextAttributes desired options used for the canvas webgl context creation
          * @return {WebGLRenderingContext|WebGL2RenderingContext}
          */
-        static create(canvas, options) {
-            throw("$.WebGLModule.WebGLImplementation::create() must be implemented!");
+        static create(canvas, webGLVersion, contextAttributes) {
+            // indicates that the canvas contains an alpha buffer
+            contextAttributes.alpha = true;
+            // indicates that the page compositor will assume the drawing buffer contains colors with pre-multiplied alpha
+            contextAttributes.premultipliedAlpha = true;
+
+            if (webGLVersion === "1.0") {
+                return canvas.getContext('webgl', contextAttributes);
+            } else {
+                return canvas.getContext('webgl2', contextAttributes);
+            }
         }
 
         /**
-         * @return {string} WebGL version used
+         * Get WebGL version used.
+         * @return {String} WebGL version used
          */
         getVersion() {
             throw("$.WebGLModule.WebGLImplementation::getVersion() must be implemented!");
-        }
-
-        /**
-         * Get GLSL texture sampling code
-         * @return {string} GLSL code that is correct in texture sampling wrt. WebGL version used
-         */
-        get texture() {
-            return this._texture;
-        }
-
-        getCompiled(program, name) {
-            throw("$.WebGLModule.WebGLImplementation::getCompiled() must be implemented!");
-        }
-
-        /**
-         * Create a visualisation from the given JSON params
-         * @param program
-         * @param {string[]} order keys of visualisation.shader in which order to build the visualization
-         *   the order: painter's algorithm: the last drawn is the most visible
-         * @param {object} visualisation
-         * @param {object} options
-         * @param {boolean} options.withHtml whether html should be also created (false if no UI controls are desired)
-         * @param {string} options.textureType id of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
-         * @param {string} options.instanceCount number of instances to draw at once
-         * @return {number} amount of usable shaders
-         */
-        compileSpecification(program, order, visualisation, options) {
-            throw("$.WebGLModule.WebGLImplementation::compileSpecification() must be implemented!");
         }
 
         /**
@@ -300,288 +259,16 @@
             this._locationTextureLayer = null; // u_textureLayer which layer from TEXTURE_2D_ARRAY to use
 
             this._locationShaderLayerIndex = null; // u_shaderLayerIndex which shaderLayer to use for rendering
-
-
-            // FIRST PASS PROGRAM, used to render data from tiledImages to their corresponding layers in TEXTURE_2D_ARRAY
-            this._firstPassProgram = null;
-            this._firstPassProgramTexcoordLocation = null;
-            this._firstPassProgramTransformMatrixLocation = null;
-            this._firstPassProgramTextureArrayLocation = null;
-            this._firstPassProgramTextureLayerLocation = null;
-            this._firstPassProgramTexcoordBuffer = null;
-            this._createFirstPassProgram(); // sets this._firstPassProgram to WebGL program
         }
 
-        /** Get WebGL2RenderingContext (static used to avoid instantiation of this class in case of missing support)
-         * @param canvas
-         * @param options desired options used in the canvas webgl2 context creation
-         * @return {WebGL2RenderingContext}
-         */
-        static create(canvas, options) {
-            /* a boolean value that indicates if the canvas contains an alpha buffer */
-            options.alpha = true;
-            /* a boolean value that indicates that the page compositor will assume the drawing buffer contains colors with pre-multiplied alpha */
-            options.premultipliedAlpha = true;
-            return canvas.getContext('webgl2', options);
-        }
 
         getVersion() {
             return "2.0";
         }
 
-        // tomuto nerozumiem celkom naco tu je, je volana z rendereru myslim
-        getCompiled(program, name) {
-            return program._osdOptions[name];
-        }
-
         /* ??? */
         sampleTexture(index, vec2coords) {
             return `osd_texture(${index}, ${vec2coords})`;
-        }
-
-        /** Sets this._firstPassProgram to WebGL program.
-         * Creates WebGL program that will be used as first pass program during two pass rendering (render into texture).
-         */
-        _createFirstPassProgram() {
-            const vsource = `#version 300 es
-    precision mediump float;
-
-    const vec3 viewport[4] = vec3[4] (
-        vec3(0.0, 1.0, 1.0),
-        vec3(0.0, 0.0, 1.0),
-        vec3(1.0, 1.0, 1.0),
-        vec3(1.0, 0.0, 1.0)
-    );
-
-    uniform mat3 u_transform_matrix;
-
-    in vec2 a_texCoord;
-    out vec2 v_texCoord;
-
-    void main() {
-        v_texCoord = a_texCoord;
-        gl_Position = vec4(u_transform_matrix * viewport[gl_VertexID], 1);
-    }
-`;
-            const fsource = `#version 300 es
-    precision mediump float;
-    precision mediump sampler2D;
-    precision mediump sampler2DArray;
-
-    in vec2 v_texCoord;
-
-    uniform sampler2DArray u_textureArray;
-    uniform int u_textureLayer;
-
-    out vec4 outColor;
-
-    void main() {
-        outColor = texture(u_textureArray, vec3(v_texCoord, float(u_textureLayer)));
-    }
-`;
-            const gl = this.gl;
-            const vfp = createShader(gl, gl.VERTEX_SHADER, vsource);
-            if (!vfp) {
-                alert("Creation of first pass vertex shader failed upsi");
-                throw new Error("Down");
-            }
-            const ffp = createShader(gl, gl.FRAGMENT_SHADER, fsource);
-            if (!ffp) {
-                alert("Creation of first pass fragment shader failed dupsi");
-                throw new Error("Down");
-            }
-            const pfp = createProgram(gl, vfp, ffp);
-            if (!pfp) {
-                alert("Creation of first pass program failed och juj");
-                throw new Error("Down");
-            }
-
-            this._firstPassProgram = pfp;
-        }
-
-        /** gl.useProgram(firstPassProgram) + initialize firstPassProgram's attributes.
-         * Load the first pass program.
-         */
-        loadFirstPassProgram() {
-            const gl = this.gl;
-            const program = this._firstPassProgram;
-            gl.useProgram(program);
-
-            // Locations
-            this._firstPassProgramTexcoordLocation = gl.getAttribLocation(program, "a_texCoord");
-            this._firstPassProgramTransformMatrixLocation = gl.getUniformLocation(program, "u_transform_matrix");
-            this._firstPassProgramTextureArrayLocation = gl.getUniformLocation(program, "u_textureArray");
-            this._firstPassProgramTextureLayerLocation = gl.getUniformLocation(program, "u_textureLayer");
-
-            // Initialize texture coords attribute
-            this._firstPassProgramTexcoordBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramTexcoordBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
-            gl.enableVertexAttribArray(this._firstPassProgramTexcoordLocation);
-            gl.vertexAttribPointer(this._firstPassProgramTexcoordLocation, 2, gl.FLOAT, false, 0, 0);
-
-            // Initialize texture
-            gl.uniform1i(this._firstPassProgramTextureArrayLocation, 0);
-            gl.activeTexture(gl.TEXTURE0);
-        }
-
-        /** Draw using firstPassProgram.
-         * @param {WebGLTexture} textureArray gl.TEXTURE_2D_ARRAY used as source of data for rendering
-         * @param {number} textureLayer index to layer in textureArray to use
-         * @param {Float32Array} textureCoords
-         * @param {[Float]} transformMatrix
-         */
-        drawFirstPassProgram(textureArray, textureLayer, textureCoords, transformMatrix) {
-            const gl = this.gl;
-
-            // Texture coords
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramTexcoordBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, textureCoords, gl.STATIC_DRAW);
-
-            // Transform matrix
-            gl.uniformMatrix3fv(this._firstPassProgramTransformMatrixLocation, false, transformMatrix);
-
-            // Texture
-            gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
-            gl.uniform1i(this._firstPassProgramTextureLayerLocation, textureLayer);
-
-            // Draw triangle strip (two triangles) from a static array defined in the vertex shader
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        }
-
-
-        /** Dolezita flow funkcia, je volana pri buildeni specifikacie v rendereri.
-         * Prechadza cez shaders danej spec, komunikuje s ich instanciami
-         * a robi podla nich glsl kod pre fragment shader (vola ich funkcie getFragmentShaderDefinition/Execution).
-         * Natvrdo spravi glsl kod pre definition a execution pre vertex shader.
-         * Vola funkcie compileVertex/FragmentShader, ktorym predava odpovedajuce definition, execution a
-         * dostava full glsl kod pre vertex shader a fragment shader.
-         *
-         * Nastavuje program.osdOptions na options + .vs/.fs na glsl kod shaderov.
-         * Vola _compileProgram ktory pripravi cely WebGLProgram k pouzitiu.
-         *
-         * Nedoriesene:
-         * Generating HTML: html = getNewHtmlString() + html (reverse order append to show first the last drawn element (top))
-         *
-         * @param {WebGLProgram} program program corresponding to a specification
-         * @param {object} specification concrete specification from this.renderer._programSpecifications
-         * @param {object} specification.shaders object containing shaderObjects (here layers)
-         * @param {[string]} specification.order array containing keys from specification.shaders
-         * @param {object} options
-         * @param {boolean} options.withHtml whether html should be also created (false if no UI controls are desired)
-         * @param {string} options.textureType id of texture to be used, supported are TEXTURE_2D, TEXTURE_2D_ARRAY, TEXTURE_3D
-         * @param {string} options.instanceCount number of instances to draw at once
-         * @param {boolean} options.debug draw debugging info
-         * @returns {number} number of usable shaders
-         */
-        //todo try to implement on the global scope version-independntly
-        compileSpecification(program, specification, options) {
-            console.log('CompileSpecification, specs=', this.renderer.getSpecifications());
-            // fragment shader's code placed outside of the main function
-            var definition = "\n",
-            // fragment shader's code placed inside the main function
-                execution = "",
-                html = "",
-                _this = this,
-                usableShaders = 0,
-                dataCount = 0,
-                globalScopeCode = {};
-
-            specification.order.forEach(shaderName => {
-                // layer = shaderObject
-                let layer = specification.shaders[shaderName];
-                layer.rendering = false;
-
-                if (layer.type === "none") { // skip the layer
-                    //prevents the layer from being accounted for
-                    layer.error = "Not an error - layer type none.";
-                } else if (layer.error) { // layer with error
-                    if (options.withHtml) {
-                        html = _this.renderer.htmlShaderPartHeader(layer.error, shaderName, false, layer, false) + html;
-                    }
-                    $.console.warn(`specification.shaders.${shaderName} has en error:`, layer.error, "\nError description:", layer.desc);
-
-                } else if (layer._renderContext && layer._index !== undefined) { // properly built layer
-                    //todo consider html generating in the renderer
-                    usableShaders++;
-
-                    //make visible textures if 'visible' flag set
-                    //todo either allways visible or ensure textures do not get loaded
-                    if (layer.visible) {
-                        layer.rendering = true;
-
-                        let shader = layer._renderContext;
-
-                        // returns string which corresponds to glsl code
-                        const fsd = shader.getFragmentShaderDefinition();
-                        definition += fsd;
-
-                        // getFSE `return ${this.sampleChannel("osd_texture_coords")};` (from plainShader)
-                        // getFSE = osd_texture(0, osd_texture_coords).rgba
-                        definition += `
-    vec4 lid_${layer._index}_xo() {
-        ${shader.getFragmentShaderExecution()}
-    }`;
-                        console.log('order.foreach, definition po pridani:\n', definition);
-
-                        if (shader.opacity) { // multiply alpha channel by opacity and than call blend function
-                            execution += `
-        vec4 l${layer._index}_out = lid_${layer._index}_xo();
-        l${layer._index}_out.a *= ${shader.opacity.sample()};
-        blend(l${layer._index}_out, ${shader._blendUniform}, ${shader._clipUniform});`;
-                        } else { // immediately call blend function
-                            execution += `
-        blend(lid_${layer._index}_xo(), ${shader._blendUniform}, ${shader._clipUniform});`;
-                        }
-
-                        // prida do globalScopeCode shader.__globalIncludes [globalScopeCode je v fragment shader's definition (code outside main)]
-                        $.extend(globalScopeCode, _this.globalCodeRequiredByShaderType(layer.type));
-                        dataCount += layer.dataReferences.length;
-                    }
-
-                    if (options.withHtml) {
-                        html = _this.renderer.htmlShaderPartHeader(layer._renderContext.htmlControls(),
-                            shaderName, layer.visible, layer, true) + html;
-                    }
-
-                } else { // layer not skipped, not with error, but still not correctly built
-                    if (options.withHtml) {
-                        html = _this.renderer.htmlShaderPartHeader(`The requested specification type does not work properly.`,
-                            shaderName, false, layer, false) + html;
-                    }
-                    $.console.warn(`specification.shaders.${shaderName} was not correctly built, shaderObject:`, layer);
-                }
-            }); // end of order.forEach
-
-            if (!options.textureType) {
-                if (dataCount === 1) {
-                    options.textureType = "TEXTURE_2D";
-                }
-                if (dataCount > 1) {
-                    options.textureType = "TEXTURE_2D_ARRAY";
-                }
-            }
-
-            options.html = html;
-            options.dataUrls = this.renderer._dataSources;
-            options.onError = function(message, description) {
-                specification.error = message;
-                specification.desc = description;
-            };
-
-
-            const vertexShaderCode = this.compileVertexShader(options);
-
-            //hack -> use 'invalid' key to attach item
-            globalScopeCode[null] = definition;
-            const fragmentShaderCode = this.compileFragmentShader(Object.values(globalScopeCode).join("\n"), execution, options);
-
-            program._osdOptions = options;
-            program._osdOptions.vs = vertexShaderCode;
-            program._osdOptions.fs = fragmentShaderCode;
-            this._compileProgram(program, options.onError || $.console.error);
-
-            return usableShaders;
         }
 
         /** Get glsl code for texture sampling. Used in compileFragmentShader.
@@ -1093,12 +780,6 @@
                 1.0, 1.0, 1.0,
                 1.0, 0.0, 1.0
             ]);
-            this._secondPassViewport = new Float32Array([
-                0.0, 0.0, 1.0,
-                0.0, 1.0, 1.0,
-                1.0, 0.0, 1.0,
-                1.0, 1.0, 1.0
-            ]);
 
             // SECOND PASS PROGRAM
             this._secondPassProgram = null;
@@ -1113,159 +794,16 @@
             this._locationGlobalAlpha = null; // u_global_alpha
 
             this._locationShaderLayerIndex = null; // u_shaderLayerIndex which shaderLayer to use for rendering
-
-
-            // FIRST PASS PROGRAM, used to render data from tiledImages to their corresponding offScreenTextures
-            this._firstPassProgram = null;
-            this._firstPassProgramTransformMatrixLocation = null;
-            this._firstPassProgramTextureLocation = null;
-            this._firstPassProgramTexcoordLocation = null;
-            this._firstPassProgramTexcoordBuffer = null;
-            this._firstPassProgramPositionLocation = null;
-            this._firstPassProgramPositionBuffer = null;
-            this._createFirstPassProgram(); // sets this._firstPassProgram to WebGL program
-        }
-
-        /** Get WebGL1RenderingContext (static used to avoid instantiation of this class in case of missing support)
-         * @param canvas
-         * @param options desired options used in the canvas webgl2 context creation
-         * @return {WebGLRenderingContext}
-         */
-        static create(canvas, options) {
-            /* a boolean value that indicates if the canvas contains an alpha buffer */
-            options.alpha = true;
-            /* a boolean value that indicates that the page compositor will assume the drawing buffer contains colors with pre-multiplied alpha */
-            options.premultipliedAlpha = true;
-            return canvas.getContext('webgl', options);
         }
 
         getVersion() {
             return "1.0";
         }
 
-        // tomuto nerozumiem celkom naco tu je, je volana z rendereru myslim
-        getCompiled(program, name) {
-            return program._osdOptions[name];
-        }
-
         /* ??? */
         sampleTexture(index, vec2coords) {
             return `osd_texture(${index}, ${vec2coords})`;
         }
-
-        /** Sets this._firstPassProgram to WebGL program.
-         * Creates WebGL program that will be used as first pass program during two pass rendering (render into texture).
-         */
-        _createFirstPassProgram() {
-            const vsource = `
-    precision mediump float;
-
-    attribute vec2 a_texCoord;
-    varying vec2 v_texCoord;
-
-    attribute vec3 a_position;
-    uniform mat3 u_transform_matrix;
-
-    void main() {
-        v_texCoord = a_texCoord;
-        gl_Position = vec4(u_transform_matrix * a_position, 1);
-    }
-`;
-            const fsource = `
-    precision mediump float;
-    precision mediump sampler2D;
-
-    varying vec2 v_texCoord;
-    uniform sampler2D u_texture;
-
-    void main() {
-        gl_FragColor = texture2D(u_texture, v_texCoord);
-    }
-`;
-            const gl = this.gl;
-            const vfp = createShader(gl, gl.VERTEX_SHADER, vsource);
-            if (!vfp) {
-                alert("Creation of first pass vertex shader failed upsi");
-                throw new Error("Down");
-            }
-            const ffp = createShader(gl, gl.FRAGMENT_SHADER, fsource);
-            if (!ffp) {
-                alert("Creation of first pass fragment shader failed dupsi");
-                throw new Error("Down");
-            }
-            const pfp = createProgram(gl, vfp, ffp);
-            if (!pfp) {
-                alert("Creation of first pass program failed och juj");
-                throw new Error("Down");
-            }
-
-            this._firstPassProgram = pfp;
-        }
-
-        /** gl.useProgram(firstPassProgram) + initialize firstPassProgram's attributes.
-         * Load the first pass program.
-         */
-        loadFirstPassProgram() {
-            const gl = this.gl;
-            const program = this._firstPassProgram;
-            gl.useProgram(program);
-
-            // Locations
-            this._firstPassProgramTransformMatrixLocation = gl.getUniformLocation(program, "u_transform_matrix");
-            this._firstPassProgramTextureLocation = gl.getUniformLocation(program, "u_texture");
-
-            // Initialize viewport attribute
-            this._firstPassProgramPositionLocation = gl.getAttribLocation(program, "a_position");
-            this._firstPassProgramPositionBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramPositionBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0, 0.0]), gl.STATIC_DRAW);
-            gl.enableVertexAttribArray(this._firstPassProgramPositionLocation);
-            gl.vertexAttribPointer(this._firstPassProgramPositionLocation, 3, gl.FLOAT, false, 0, 0);
-
-
-            // Initialize texture coords attribute
-            this._firstPassProgramTexcoordLocation = gl.getAttribLocation(program, "a_texCoord");
-            this._firstPassProgramTexcoordBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramTexcoordBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0.0, 0.0]), gl.STATIC_DRAW);
-            gl.enableVertexAttribArray(this._firstPassProgramTexcoordLocation);
-            gl.vertexAttribPointer(this._firstPassProgramTexcoordLocation, 2, gl.FLOAT, false, 0, 0);
-
-            // Initialize texture
-            gl.uniform1i(this._firstPassProgramTextureLocation, 0);
-            gl.activeTexture(gl.TEXTURE0);
-        }
-
-        /** Draw using firstPassProgram.
-         * @param {WebGLTexture} texture gl.TEXTURE_2D used as a source of data for rendering
-         * @param {Float32Array} textureCoords
-         * @param {Float32Array} transformMatrix
-         */
-        drawFirstPassProgram(texture, textureCoords, transformMatrix) {
-            // console.debug('Drawujem first pass programom! texcoords:', textureCoords, 'transformMatrix:', transformMatrix);
-            const gl = this.gl;
-
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramPositionBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, this._firstPassViewport, gl.STATIC_DRAW);
-            // const positionLocation = gl.getAttribLocation(this._firstPassProgram, "a_position");
-            // gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
-            // gl.enableVertexAttribArray(positionLocation);
-
-            // Texture coords
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._firstPassProgramTexcoordBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, textureCoords, gl.STATIC_DRAW);
-
-            // Transform matrix
-            gl.uniformMatrix3fv(this._firstPassProgramTransformMatrixLocation, false, transformMatrix);
-
-            // Texture
-            gl.bindTexture(gl.TEXTURE_2D, texture);
-
-            // Draw triangle strip (two triangles) from a static array defined in the vertex shader
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        }
-
-
 
 
         /** ONLY FOR COMPILE FRAGMENT SHADER
