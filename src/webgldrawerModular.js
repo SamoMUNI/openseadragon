@@ -1274,7 +1274,6 @@
                 tileInfo.textures = textureArray;
 
             } else {
-                const options = this.renderer.webglContext.options;
                 const texture2DArray = gl.createTexture();
                 gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture2DArray);
 
@@ -1283,8 +1282,8 @@
 
                 // initialization
                 gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, x, y, numOfDataSources);
-                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, options.wrap);
-                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, options.wrap);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
                 gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, this._imageSmoothingEnabled ? this._gl.LINEAR : this._gl.NEAREST);
                 gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, this._imageSmoothingEnabled ? this._gl.LINEAR : this._gl.NEAREST);
 
@@ -1540,8 +1539,6 @@
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
-
-            this.renderer.useDefaultProgram(1);
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 // console.log('Vo for cykli cez tiledImages, TiledImage cislo', tiledImageIndex);
 
@@ -1648,8 +1645,6 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             // FIRST PASS (render tiledImages as they are into the corresponding textures)
-            // this.renderer.useFirstPassProgram();
-            this.renderer.useDefaultProgram(1);
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 if (tiledImage.isTainted()) {
                     throw new Error("TiledImage.isTainted during two pass! -> not implemented!");
@@ -1748,8 +1743,7 @@
                 });
             }
 
-            // USE SECOND-PASS PROGRAM => parameter 2
-            this.renderer.useDefaultProgram(2);
+            // SECOND-PASS
             // useContext2DPipeline or else use instanced rendering ???
             if (useContext2DPipeline) {
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {

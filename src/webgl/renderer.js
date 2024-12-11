@@ -87,7 +87,7 @@
             this.webGLPreferredVersion = incomingOptions.webGLPreferredVersion;
             this.webGLOptions = incomingOptions.webGLOptions;
 
-            this.canvasOptions = incomingOptions.canvasOptions;
+            this.canvasContextOptions = incomingOptions.canvasOptions;
 
             this.htmlControlsId = incomingOptions.htmlControlsId;
             if (this.supportsHtmlControls()) {
@@ -116,58 +116,16 @@
 
             this.shadersCounter = {}; // {identity: <num of tiledImages using identity>, edge: <num of tiledImages using edges>}
 
-            this._dataSources = [];
-            this._origDataSources = [];
-
-            this.defaultRenderingSpecification = null; // object, set in createSingePassShader
-            this.buildOptions = null; // object, set in createSingePassShader
-
-            // set the webgl attributes
-            this.gl = null; // WebGLRenderingContext|WebGL2RenderingContext
-            this.webglContext = null; // $.WebGLModule.WebGLImplementation
-            try {
-                const canvas = document.createElement("canvas");
-
-                const WebGLImplementation = this.constructor.determineContext(this.webGLPreferredVersion);
-
-                const WebGLRenderingContext = $.WebGLModule.WebGLImplementation.create(canvas, this.webGLPreferredVersion, this.canvasOptions);
-
-                if (WebGLRenderingContext) {
-                    const readGlProp = (prop, defaultValue) => {
-                        if (this.webGLOptions[prop] !== undefined) {
-                            return WebGLRenderingContext[this.webglContext[prop]] || WebGLRenderingContext[defaultValue];
-                        }
-                        return WebGLRenderingContext[defaultValue];
-                    };
-                    /**
-                     * @param {object} options
-                     * @param {string} options.wrap  texture wrap parameteri
-                     * @param {string} options.magFilter  texture filter parameteri
-                     * @param {string} options.minFilter  texture filter parameteri
-                     */
-                    const options = {
-                        wrap: readGlProp("wrap", "MIRRORED_REPEAT"),
-                        minFilter: readGlProp("minFilter", "LINEAR"),
-                        magFilter: readGlProp("magFilter", "LINEAR"),
-                    };
-
-                    // set the attributes
-                    this.gl = WebGLRenderingContext;
-                    this.webglContext = new WebGLImplementation(this, WebGLRenderingContext, options);
-                    this.canvas = canvas;
-
-                } else {
-                    throw new Error("$.WebGLModule::constructor: Could not create WebGLRenderingContext!");
-                }
-            } catch (e) {
-                /**
-                 * @event fatal-error
-                 */
-                this.raiseEvent('fatal-error', {message: "Unable to initialize the WebGL renderer.",
-                    details: e});
-                $.console.error(e);
+            const canvas = document.createElement("canvas");
+            const WebGLImplementation = this.constructor.determineContext(this.webGLPreferredVersion);
+            const webGLRenderingContext = $.WebGLModule.WebGLImplementation.create(canvas, this.webGLPreferredVersion, this.canvasContextOptions);
+            if (webGLRenderingContext) {
+                this.gl = webGLRenderingContext;                                            // WebGLRenderingContext|WebGL2RenderingContext
+                this.webglContext = new WebGLImplementation(this, webGLRenderingContext);   // $.WebGLModule.WebGLImplementation
+                this.canvas = canvas;
+            } else {
+                throw new Error("$.WebGLModule::constructor: Could not create WebGLRenderingContext!");
             }
-            //$.console.log(`WebGL ${this.webglContext.getVersion()} Rendering module (ID ${this.uniqueId || '<main>'})`); TODO put return to catch (e) when uncommenting
         }
 
         /**
@@ -293,6 +251,8 @@
             }
 
             this._program = program;
+            // firstly has to initialize the controls, then I can load everything
+            this.webglContext.programLoaded(program, this.shadersCounter);
 
             if (!this.running) {
                 //TODO: might not be the best place to call, timeout necessary to allow finish initialization of OSD before called
@@ -379,17 +339,6 @@
             $.console.info("FRAGMENT SHADER\n", opts.fs);
         }
 
-        setRenderingType(n) {
-            this.webglContext.setRenderingType(n);
-        }
-
-        useDefaultProgram(numOfRenderPasses) {
-            const program = this._program;
-            this.gl.useProgram(program);
-
-            this.webglContext.programLoaded(program, this.shadersCounter);
-            this.webglContext.setRenderingType(numOfRenderPasses);
-        }
 
         setDataBlendingEnabled(enabled) {
             if (enabled) {
