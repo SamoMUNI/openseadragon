@@ -254,6 +254,8 @@
         */
         draw(tiledImages){
             let gl = this._gl;
+            // console.log('original: DRAW CALL, this.textureMap', this._TextureMap);
+
             const bounds = this.viewport.getBoundsNoRotateWithMargins(true);
             let view = {
                 bounds: bounds,
@@ -273,7 +275,7 @@
 
             // clear the output canvas
             this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
-
+            // console.log('original: DRAW: po clearnuti canvasu');
 
             let renderingBufferHasImageData = false;
 
@@ -297,6 +299,7 @@
 
                 } else {
                     let tilesToDraw = tiledImage.getTilesToDraw();
+                    // console.log('original: DRAW: tilesToDraw', tilesToDraw);
 
                     if ( tiledImage.placeholderFillStyle && tiledImage._hasOpaqueTile === false ) {
                         this._drawPlaceholder(tiledImage);
@@ -382,6 +385,7 @@
                         let tileContext = tile.getCanvasContext();
 
                         let textureInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
+                        // console.log('original: DRAW: iteration over tiles, textureInfo =', textureInfo);
                         if(!textureInfo){
                             // tile was not processed in the tile-ready event (this can happen
                             // if this drawer was created after the tile was downloaded)
@@ -389,6 +393,7 @@
 
                             // retry getting textureInfo
                             textureInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
+                            // console.log('original: DRAW: iteration over tiles. textureInfo notFound, after regetting =', textureInfo);
                         }
 
                         if(textureInfo){
@@ -489,6 +494,7 @@
         * @param {Boolean} enabled If true, uses gl.LINEAR as the TEXTURE_MIN_FILTER and TEXTURE_MAX_FILTER, otherwise gl.NEAREST.
         */
         setImageSmoothingEnabled(enabled){
+            // console.log('original: Calling setImageSmoothingEnabled with', enabled);
             if( this._imageSmoothingEnabled !== enabled ){
                 this._imageSmoothingEnabled = enabled;
                 this._unloadTextures();

@@ -193,7 +193,7 @@
      * @returns 'webgl'
      */
     getType() {
-      return 'webgl';
+      return 'webglOld';
     }
 
     /**

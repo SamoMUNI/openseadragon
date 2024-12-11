@@ -1299,10 +1299,10 @@
                     gl.bindTexture(gl.TEXTURE_2D, texture);
 
                     // options.wrap -> gl.MIRRORED_REPEAT
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, this._imageSmoothingEnabled ? this._gl.LINEAR : this._gl.NEAREST);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, this._imageSmoothingEnabled ? this._gl.LINEAR : this._gl.NEAREST);
 
                     // upload the image into the texture
                     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
@@ -1328,8 +1328,8 @@
                 gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, x, y, numOfDataSources);
                 gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, options.wrap);
                 gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, options.wrap);
-                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, options.minFilter);
-                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, options.magFilter);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, this._imageSmoothingEnabled ? this._gl.LINEAR : this._gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, this._imageSmoothingEnabled ? this._gl.LINEAR : this._gl.NEAREST);
 
                 // fill the data
                 for (let i = 0; i < numOfDataSources; ++i) {
@@ -1720,14 +1720,15 @@
 
                         const tileContext = tile.getCanvasContext();
                         let tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
-                        if (tileInfo === null) {
+                        if (!tileInfo) {
+                            console.warn('Divna vec sa deje, tile neni nahraty cez event, nahravam ho z draw funkcie');
                             // tile was not processed in the tile-ready event (this can happen
                             // if this drawer was created after the tile was downloaded)
                             this._tileReadyHandler({tile: tile, tiledImage: tiledImage});
                             // retry getting textureInfo
                             tileInfo = tileContext ? this._TextureMap.get(tileContext.canvas) : null;
                         }
-                        if (tileInfo === null) {
+                        if (!tileInfo) {
                             throw Error("webgldrawerModular.js::drawSinglePass: tile has no context!");
                         }
 
