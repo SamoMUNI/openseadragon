@@ -280,6 +280,39 @@
             }
         }
 
+        getBlendFunction() {
+            return `vec4 ${this.uid}_blend_func(vec4 fg, vec4 bg) {
+        return fg;
+    }`;
+        }
+        getModeFunction() {
+            let modeDefinition = `void ${this.uid}_blend_mode(vec4 color) {`;
+            if (this._mode === "show") {
+                modeDefinition += `
+        // blend last_color with overall_color using blend_func of the last shader using deffered blending
+        deffered_blend();
+        last_color = color;
+        // switch case -2 = predefined "premultiplied alpha blending"
+        last_blend_func_id = -2;
+    }`;
+            }
+            else if (this._mode === "mask") {
+                modeDefinition += `
+        // blend last_color with overall_color using blend_func of the last shader using deffered blending
+        deffered_blend();
+        last_color = color;
+        // switch case pointing to this.getBlendFunction() code
+        last_blend_func_id = ${this.glslIndex};
+    }`;
+            } else if (this._mode === "mask_clip") {
+                modeDefinition += `
+        last_color = ${this.uid}_blend_func(color, last_color);
+    }`;
+            }
+
+            return modeDefinition;
+        }
+
         /**
          * Code placed outside fragment shader's main(...).
          * By default, it includes all definitions of
@@ -298,7 +331,7 @@
         getFragmentShaderDefinition() {
             this._blendUniform = `${this.uid}_blend`;
             this._clipUniform = `${this.uid}_clip`;
-            let glsl = [`uniform int ${this._blendUniform};`, `uniform bool ${this._clipUniform};`];
+            let glsl = [this.getModeFunction(), this._mode !== "show" ? this.getBlendFunction() : '', `uniform int ${this._blendUniform};`, `uniform bool ${this._clipUniform};`];
             //console.log('shader controls', this._ownedControls);
             /* only opacity in _ownedControls, dont know where is use_channel0 from plain shader ??? */
             for (const controlName in this._controls) {
@@ -319,6 +352,7 @@
 
         setBlendMode(name) {
             const modes = $.WebGLModule.BLEND_MODE;
+            // cislo, bud 0 alebo 1 udavajuce global blend mode
             this.blendMode = modes[name];
             if (this.blendMode === undefined) {
                 this.blendMode = modes["source-over"];

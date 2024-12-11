@@ -659,46 +659,47 @@
          */
         compileVertexShader(options) {
         const vertexShaderCode = `#version 300 es
-precision mediump float;
-/* This program is used for single-pass rendering and for second pass during two-pass rendering. */
+    precision mediump int;
+    precision mediump float;
+    /* This program is used for single-pass rendering and for second pass during two-pass rendering. */
 
-// 1 = single-pass, 2 = two-pass
-uniform int u_nPassRendering;
-flat out int nPassRendering;
+    // 1 = single-pass, 2 = two-pass
+    uniform int u_nPassRendering;
+    flat out int nPassRendering;
 
-in vec2 a_texture_coords;
-out vec2 v_texture_coords;
+    in vec2 a_texture_coords;
+    out vec2 v_texture_coords;
 
-uniform mat3 u_transform_matrix;
+    uniform mat3 u_transform_matrix;
 
-const vec3 single_pass_viewport[4] = vec3[4] (
-    vec3(0.0, 1.0, 1.0),
-    vec3(0.0, 0.0, 1.0),
-    vec3(1.0, 1.0, 1.0),
-    vec3(1.0, 0.0, 1.0)
-);
+    const vec3 single_pass_viewport[4] = vec3[4] (
+        vec3(0.0, 1.0, 1.0),
+        vec3(0.0, 0.0, 1.0),
+        vec3(1.0, 1.0, 1.0),
+        vec3(1.0, 0.0, 1.0)
+    );
 
-const vec3 second_pass_viewport[4] = vec3[4] (
-    vec3(0.0, 0.0, 1.0),
-    vec3(0.0, 1.0, 1.0),
-    vec3(1.0, 0.0, 1.0),
-    vec3(1.0, 1.0, 1.0)
-);
+    const vec3 second_pass_viewport[4] = vec3[4] (
+        vec3(0.0, 0.0, 1.0),
+        vec3(0.0, 1.0, 1.0),
+        vec3(1.0, 0.0, 1.0),
+        vec3(1.0, 1.0, 1.0)
+    );
 
-void main() {
-    v_texture_coords = a_texture_coords;
-    nPassRendering = u_nPassRendering;
-
-    // if (nPassRendering == 1 || nPassRendering == 2) {
-    //     gl_Position = vec4(u_transform_matrix * single_pass_viewport[gl_VertexID], 1);
-    // } else {
-    //     gl_Position = vec4(u_transform_matrix * second_pass_viewport[gl_VertexID], 1);
-    // }
-
-        gl_Position = vec4(u_transform_matrix * single_pass_viewport[gl_VertexID], 1.0);
-        // v_texture_coords = single_pass_viewport[gl_VertexID].xy;
+    void main() {
         v_texture_coords = a_texture_coords;
-}`;
+        nPassRendering = u_nPassRendering;
+
+        // if (nPassRendering == 1 || nPassRendering == 2) {
+        //     gl_Position = vec4(u_transform_matrix * single_pass_viewport[gl_VertexID], 1);
+        // } else {
+        //     gl_Position = vec4(u_transform_matrix * second_pass_viewport[gl_VertexID], 1);
+        // }
+
+            gl_Position = vec4(u_transform_matrix * single_pass_viewport[gl_VertexID], 1.0);
+            // v_texture_coords = single_pass_viewport[gl_VertexID].xy;
+            v_texture_coords = a_texture_coords;
+    }`;
 
         return vertexShaderCode;
         }
@@ -710,8 +711,9 @@ void main() {
          * @param {object} options
          * @returns {string} fragment shader's glsl code
          */
-        compileFragmentShader(definition, execution, options, globalScopeCode) {
+        compileFragmentShader(definition, execution, defferedBlending, globalScopeCode) {
             const fragmentShaderCode = `#version 300 es
+    precision mediump int;
     precision mediump float;
     precision mediump sampler2DArray;
 
@@ -738,6 +740,12 @@ void main() {
     bool close(float value, float target) {
         return abs(target - value) < 0.001;
     }
+
+    vec4 overall_color = vec4(.0);
+    vec4 last_color = vec4(.0);
+    vec4 current_color = vec4(.0);
+    int last_blend_func_id = -1000;
+    void deffered_blend();
 
     // blending function, zabezpecuje ze to co je uz vyrenderovane sa zblenduje s tym co renderujem teraz ASI? NECHAPEM JAK TO MOZE FUNGOVAT A AKO TO FUNGUJE
     out vec4 final_color;
@@ -770,6 +778,26 @@ void main() {
 
     // DEFINITIONS OF SHADERLAYERS:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
 
+    // DEFFERED BLENDING:
+    void deffered_blend() {
+        switch (last_blend_func_id) {
+        // predefined "additive blending":
+        case -1:
+            overall_color = last_color + overall_color;
+            break;
+
+        // predefined "premultiplied alpha blending":
+        case -2:
+            vec4 pre_fg = vec4(last_color.rgb * last_color.a, last_color.a);
+            overall_color = pre_fg + overall_color * (1.0 - pre_fg.a);
+            break;
+
+
+        // non-predefined, custom blending functions:${defferedBlending === '' ? '\n            // No custom blending function here...' : defferedBlending}
+        }
+    }
+
+
     void main() {
         // EXECUTIONS OF SHADERLAYERS:
         switch (u_shaderLayerIndex) {${execution}
@@ -784,7 +812,9 @@ void main() {
         }
 
         //blend last level
-        blend(vec4(.0), 0, false);
+        // blend(vec4(.0), 0, false);
+        deffered_blend();
+        final_color = overall_color;
 
         final_color *= u_global_alpha;
     }`;
@@ -804,6 +834,7 @@ void main() {
 
             let definition = '',
                 execution = '',
+                defferedBlending = '',
                 html = '';
 
             // first pass identity shader is a special case, no blend nor clip, no controls, just pure identity, generate glsl manually here
@@ -829,6 +860,7 @@ void main() {
 
                 // tell which shaderLayer is used with which shaderLayerIndex
                 this._shadersMapping[shaderID] = shaderLayerIndex;
+                shaderLayer.glslIndex = shaderLayerIndex;
 
                 definition += `\n    // Definition of ${shaderLayer.constructor.type()} shader:\n`;
                 // returns string which corresponds to glsl code
@@ -839,25 +871,33 @@ void main() {
     }`;
                 definition += '\n\n';
 
+
                 execution += `
-            case ${shaderLayerIndex}:`;
+            case ${shaderLayerIndex}:
+                vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();`;
+
                 if (shaderLayer.opacity) {
                     execution += `
-                vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
-                ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
-                blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
-                } else {
-                    execution += `
-                blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
+                ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};`;
                 }
+
+                // execution += `
+                // blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
                 execution += `
+                ${shaderLayer.uid}_blend_mode(${shaderLayer.uid}_out);
                 break;`;
+
                 // execution += `
                 // final_color = ${shaderLayer.uid}_execution();
                 // final_color *= u_global_alpha;
                 // return;`; // pokial nechcem pouzit blend funkciu ale rovno ceknut vystup shaderu
 
-
+                if (shaderLayer._mode === "mask") {
+                    defferedBlending += `
+        case ${shaderLayerIndex}:
+            overall_color = ${shaderLayer.uid}_blend_func(last_color, overall_color);
+            break;`;
+                }
 
                 // TODO: if (true) {
                     html += this.renderer.htmlShaderPartHeader(shaderLayer.newHtmlControls(),
@@ -872,7 +912,7 @@ void main() {
 
             const vertexShaderCode = this.compileVertexShader({});
             const globalScopeCode = $.WebGLModule.ShaderLayer.__globalIncludes;
-            const fragmentShaderCode = this.compileFragmentShader(definition, execution, {}, globalScopeCode);
+            const fragmentShaderCode = this.compileFragmentShader(definition, execution, defferedBlending, globalScopeCode);
 
             // toto by som spravil inak, ale kedze uz je naimplementovana funkcia _compileProgram tak ju pouzijem
             program._osdOptions = {};
@@ -1266,6 +1306,7 @@ void main() {
         compileVertexShader(options) {
 
         const vertexShaderCode = `
+    precision mediump int;
     precision mediump float;
     /* This program is used for single-pass rendering and for second pass during two-pass rendering. */
 
@@ -1297,8 +1338,9 @@ void main() {
          * @param {object} options
          * @returns {string} fragment shader's glsl code
          */
-        compileFragmentShader(definition, execution, options, globalScopeCode) {
+        compileFragmentShader(definition, execution, defferedBlending, globalScopeCode) {
             const fragmentShaderCode = `
+    precision mediump int;
     precision mediump float;
     precision mediump sampler2D;
 
@@ -1320,6 +1362,12 @@ void main() {
     bool close(float value, float target) {
         return abs(target - value) < 0.001;
     }
+
+    vec4 overall_color = vec4(.0);
+    vec4 last_color = vec4(.0);
+    vec4 current_color = vec4(.0);
+    int last_blend_func_id = -1000;
+    void deffered_blend();
 
     // blending function, zabezpecuje ze to co je uz vyrenderovane sa zblenduje s tym co renderujem teraz ASI? NECHAPEM JAK TO MOZE FUNGOVAT A AKO TO FUNGUJE
     vec4 final_color;
@@ -1354,6 +1402,23 @@ void main() {
 
     // DEFINITIONS OF SHADERLAYERS:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
 
+    // DEFFERED BLENDING:
+    void deffered_blend() {
+        // predefined "additive blending":
+        if (last_blend_func_id == -1) {
+            overall_color = last_color + overall_color;
+
+        // predefined "premultiplied alpha blending":
+        } else if (last_blend_func_id == -2) {
+            vec4 pre_fg = vec4(last_color.rgb * last_color.a, last_color.a);
+            overall_color = pre_fg + overall_color * (1.0 - pre_fg.a);
+
+
+        // non-predefined, custom blending functions:
+        }${defferedBlending === '' ? '\n            // No custom blending function here...' : defferedBlending}
+    }
+
+
     void main() {
         // EXECUTIONS OF SHADERLAYERS:
         // default case -> should not happen
@@ -1368,7 +1433,9 @@ void main() {
         }${execution}
 
         //blend last level
-        blend(vec4(.0), 0, false);
+        //blend(vec4(.0), 0, false);
+        deffered_blend();
+        final_color = overall_color;
 
         final_color *= u_global_alpha;
         gl_FragColor = final_color;
@@ -1389,6 +1456,7 @@ void main() {
 
             let definition = '',
                 execution = '',
+                defferedBlending = '',
                 html = '';
 
 
@@ -1425,24 +1493,26 @@ void main() {
     }`;
                 definition += '\n\n';
 
-                execution += ` else if (u_shaderLayerIndex == ${shaderLayerIndex}) {`;
-                // ak ma opacity shaderLayer tak zavolaj jeho execution a prenasob alpha channel opacitou a to posli do blend funkcie, inak tam posli rovno jeho execution
-                //TODO ZMENA PRI CONTROLS
+
+                execution += ` else if (u_shaderLayerIndex == ${shaderLayerIndex}) {
+            vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();`;
+
                 if (shaderLayer.opacity) {
                     execution += `
-            vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();
-            ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};
-            blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
-                } else {
-                    execution += `
-            blend(${shaderLayer.uid}_execution(), ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
+            ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};`;
                 }
-                // execution += `
-                // final_color = ${shaderLayer.uid}_execution();`; pokial nechcem pouzit blend funkciu ale rovno ceknut vystup shaderu
+
                 execution += `
+            ${shaderLayer.uid}_blend_mode(${shaderLayer.uid}_out);
         }`;
 
 
+                if (shaderLayer._mode === "mask") {
+                    defferedBlending += `
+        else if (last_blend_func_id == ${shaderLayerIndex}) {
+            overall_color = ${shaderLayer.uid}_blend_func(last_color, overall_color);
+        }`;
+                }
 
                 // TODO: if (true) {
                     html += this.renderer.htmlShaderPartHeader(shaderLayer.newHtmlControls(),
@@ -1456,7 +1526,7 @@ void main() {
 
             const vertexShaderCode = this.compileVertexShader({});
             const globalScopeCode = $.WebGLModule.ShaderLayer.__globalIncludes;
-            const fragmentShaderCode = this.compileFragmentShader(definition, execution, {}, globalScopeCode);
+            const fragmentShaderCode = this.compileFragmentShader(definition, execution, defferedBlending, globalScopeCode);
 
             // toto by som spravil inak, ale kedze uz je naimplementovana funkcia _compileProgram tak ju pouzijem
             program._osdOptions = {};
