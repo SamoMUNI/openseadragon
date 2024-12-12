@@ -106,16 +106,20 @@
             throw("$.WebGLModule.WebGLImplementation::getVersion() must be implemented!");
         }
 
-        programLoaded() {
-            throw("$.WebGLModule.WebGLImplementation::programLoaded() must be implemented!");
-        }
-
-        programUsed() {
-            throw("$.WebGLModule.WebGLImplementation::programUsed() must be implemented!");
-        }
-
-        sampleTexture(index, vec2coords) {
+        sampleTexture() {
             throw("$.WebGLModule.WebGLImplementation::sampleTexture() must be implemented!");
+        }
+
+        createProgram() {
+            throw("$.WebGLModule.WebGLImplementation::createProgram() must be implemented!");
+        }
+
+        loadProgram() {
+            throw("$.WebGLModule.WebGLImplementation::loadProgram() must be implemented!");
+        }
+
+        useProgram() {
+            throw("$.WebGLModule.WebGLImplementation::useProgram() must be implemented!");
         }
     };
 
@@ -128,153 +132,47 @@
         constructor(renderer, gl) {
             super(renderer, gl, "2.0"); // sets this.renderer, this.gl, this.webGLVersion
 
-            this._shadersMapping = {}; // {identity_for_first_pass: <always -1>, identity: 0, edge: 1, ...} maps shaderType to u_shaderLayerIndex
+            this._shadersMapping = {}; // {shaderID1: 1, shaderID2: 2, ...<more shaders>...} maps ShaderLayer instantions to their index in GLSL (u_shaderLayerIndex)
 
-            this._bufferTextureCoords = null; // :glBuffer, pre kazdu tile-u sa sem nahraju data jej textureCoords
-            this._locationTextureCoords = null; // :glAttribLocation, atribut na previazanie s buffrom hore, nahra sa skrze neho do glsl
-            this._locationTransformMatrix = null; // u_transform_matrix
+            this._bufferTextureCoords = null;
+            this._locationTextureCoords = null;     // a_texture_coords
 
-            this._locationPixelSize = null; // u_pixel_size UNUSED
-            this._locationZoomLevel = null; // u_zoom_level UNUSED
-            this._locationGlobalAlpha = null; // u_global_alpha
-
-            this._locationTextureArray = null; // u_textureArray TEXTURE_2D_ARRAY to use as a source of data
-            this._locationTextureLayer = null; // u_textureLayer which layer from TEXTURE_2D_ARRAY to use
-
-            this._locationShaderLayerIndex = null; // u_shaderLayerIndex which shaderLayer to use for rendering
+            this._locationPixelSize = null;         // u_pixel_size UNUSED
+            this._locationZoomLevel = null;         // u_zoom_level UNUSED
+            this._locationGlobalAlpha = null;       // u_global_alpha
+            this._locationTransformMatrix = null;   // u_transform_matrix; matrix to apply to viewport coords to get the correct rendering coords
+            this._locationTextureArray = null;      // u_textureArray; TEXTURE_2D_ARRAY to use as a source of data
+            this._locationTextureLayer = null;      // u_textureLayer; which layer from TEXTURE_2D_ARRAY to use
+            this._locationShaderLayerIndex = null;  // u_shaderLayerIndex; which ShaderLayer to use for rendering
         }
 
         getVersion() {
             return "2.0";
         }
 
-        /* ??? */
+        /**
+         * Expose GLSL code for texture sampling.
+         * @returns {string} glsl code for texture sampling
+         */
         sampleTexture(index, vec2coords) {
             return `osd_texture(${index}, ${vec2coords})`;
         }
 
         /**
-         * Get vertex shader's glsl code.
-         * @returns {string} vertex shader's glsl code
+         * Get glsl index of the ShaderLayer.
+         * @param {string} id ShaderLayer's uid
+         * @returns {Number} index of ShaderLayer in glsl
          */
-        getVertexShaderSource() {
-        const vertexShaderSource = `#version 300 es
-    precision mediump int;
-    precision mediump float;
-    /* This program is used for single-pass rendering and for second-pass during two-pass rendering. */
-
-    in vec2 a_texture_coords;
-    out vec2 v_texture_coords;
-    uniform mat3 u_transform_matrix;
-
-    const vec3 viewport[4] = vec3[4] (
-        vec3(0.0, 1.0, 1.0),
-        vec3(0.0, 0.0, 1.0),
-        vec3(1.0, 1.0, 1.0),
-        vec3(1.0, 0.0, 1.0)
-    );
-
-    void main() {
-        v_texture_coords = a_texture_coords;
-        gl_Position = vec4(u_transform_matrix * viewport[gl_VertexID], 1.0);
-    }`;
-
-        return vertexShaderSource;
+        getShaderLayerGLSLIndex(id) {
+            return this._shadersMapping[id];
         }
 
         /**
-         * Get fragment shader's glsl code.
-         * @param {string} definition ShaderLayers glsl code placed outside the main function
-         * @param {string} execution ShaderLayers glsl code placed inside the main function
-         * @param {string} customBlendFunctions ShaderLayers glsl code for their custom blend functions
-         * @param {string} globalScopeCode glsl code shared between the individual ShaderLayer instantions
-         * @returns {string} fragment shader's glsl code
-         */
-        getFragmentShaderSource(definition, execution, customBlendFunctions, globalScopeCode) {
-            const fragmentShaderSource = `#version 300 es
-    precision mediump int;
-    precision mediump float;
-    precision mediump sampler2DArray;
-
-    uniform float u_pixel_size;
-    uniform float u_zoom_level;
-    uniform float u_global_alpha;
-
-    uniform int u_shaderLayerIndex;
-
-    // TEXTURES
-    in vec2 v_texture_coords;
-    uniform sampler2DArray u_textureArray;
-    uniform int u_textureLayer;
-    vec4 osd_texture(int index, vec2 coords) {
-        return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
-    }
-
-    // UTILITY function
-    bool close(float value, float target) {
-        return abs(target - value) < 0.001;
-    }
-
-    // BLEND attributes
-    out vec4 overall_color;
-    vec4 last_color = vec4(.0);
-    vec4 current_color = vec4(.0);
-    int last_blend_func_id = -1000;
-    void deffered_blend();
-
-    // GLOBAL SCOPE CODE:${Object.keys(globalScopeCode).length !== 0 ?
-        Object.values(globalScopeCode).join("\n") : '\n    // No global scope code here...'}
-
-    // DEFINITIONS OF SHADERLAYERS:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
-
-    // DEFFERED BLENDING:
-    void deffered_blend() {
-        switch (last_blend_func_id) {
-        // predefined "additive blending":
-        case -1:
-            overall_color = last_color + overall_color;
-            break;
-
-        // predefined "premultiplied alpha blending":
-        case -2:
-            vec4 pre_fg = vec4(last_color.rgb * last_color.a, last_color.a);
-            overall_color = pre_fg + overall_color * (1.0 - pre_fg.a);
-            break;
-
-
-        // non-predefined, custom blending functions:${customBlendFunctions === '' ? '\n            // No custom blending function here...' : customBlendFunctions}
-        }
-    }
-
-
-    void main() {
-        // EXECUTIONS OF SHADERLAYERS:
-        switch (u_shaderLayerIndex) {${execution}
-
-            default:
-                if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
-                    overall_color = vec4(.0);
-                } else { // render only where there's data in the texture
-                    overall_color = vec4(1, 0, 0, 0.5);
-                }
-                return;
-        }
-
-        // blend last level
-        deffered_blend();
-        overall_color *= u_global_alpha;
-    }`;
-
-            return fragmentShaderSource;
-        }
-
-
-        /**
-         * Create WebGLProgram that uses shaderLayers defined in an input parameter.
-         * @param {Object} shaderLayers map of shaderLayers to use {shaderID: ShaderLayer}
+         * Create WebGLProgram based on ShaderLayers supplied in an input parameter.
+         * @param {Object} shaderLayers map of ShaderLayers to use {shaderID: ShaderLayer}, where shaderID is a unique identifier
          * @returns {WebGLProgram}
          */
-        programCreated(shaderLayers) {
+        createProgram(shaderLayers) {
             const gl = this.gl;
             const program = gl.createProgram();
 
@@ -283,33 +181,31 @@
                 customBlendFunctions = '',
                 html = '';
 
-            // first pass identity shader is a special case, no blend nor clip, no controls, just pure identity, generate glsl manually here
-            definition += `\n    // Definition of identity shader used for the first-pass:`;
+            // first-pass identity shader is a special case, no blend mode nor blend function, no controls, just pure identity => generate glsl manually now
+            definition += `\n    // Definition of special identity shader used for the first-pass:`;
             definition += `
     vec4 first_pass_identity_execution() {${this.renderer._firstPassShader.getFragmentShaderExecution()}
     }`;
             definition += '\n\n';
 
             execution += `
-            case -1:`;
+            case 0:`;
             execution += `
                 overall_color = first_pass_identity_execution();
                 return;\n`;
 
 
-            // generate glsl code for each shaderLayer
-            let i = 0;
+            // generate glsl code for each ShaderLayer
+            let i = 1;
             for (const shaderID in shaderLayers) {
                 const shaderLayer = shaderLayers[shaderID];
                 const shaderLayerIndex = i++;
                 const shaderObject = shaderLayer.__shaderObject;
 
-                // tell which shaderLayer is used with which shaderLayerIndex
+                // tell that shaderLayer with id = shaderID is bind to glsl index u_shaderLayerIndex = shaderLayerIndex
                 this._shadersMapping[shaderID] = shaderLayerIndex;
-                shaderLayer.glslIndex = shaderLayerIndex;
 
                 definition += `\n    // Definition of ${shaderLayer.constructor.type()} shader:\n`;
-                // returns string which corresponds to glsl code
                 definition += shaderLayer.getFragmentShaderDefinition();
                 definition += '\n';
                 definition += `
@@ -322,21 +218,16 @@
             case ${shaderLayerIndex}:
                 vec4 ${shaderLayer.uid}_out = ${shaderLayer.uid}_execution();`;
 
+                // if ShaderLayer has opacity control, multiply the alpha channel with its value
                 if (shaderLayer.opacity) {
                     execution += `
                 ${shaderLayer.uid}_out.a *= ${shaderLayer.opacity.sample()};`;
                 }
 
-                // execution += `
-                // blend(${shaderLayer.uid}_out, ${shaderLayer._blendUniform}, ${shaderLayer._clipUniform});`;
                 execution += `
                 ${shaderLayer.uid}_blend_mode(${shaderLayer.uid}_out);
                 break;`;
 
-                // execution += `
-                // final_color = ${shaderLayer.uid}_execution();
-                // final_color *= u_global_alpha;
-                // return;`; // pokial nechcem pouzit blend funkciu ale rovno ceknut vystup shaderu
 
                 if (shaderLayer._mode === "mask") {
                     customBlendFunctions += `
@@ -356,9 +247,9 @@
             } // end of for cycle
 
 
-            const vertexShaderSource = this.getVertexShaderSource();
+            const vertexShaderSource = this._getVertexShaderSource();
             const globalScopeCode = $.WebGLModule.ShaderLayer.__globalIncludes;
-            const fragmentShaderSource = this.getFragmentShaderSource(definition, execution, customBlendFunctions, globalScopeCode);
+            const fragmentShaderSource = this._getFragmentShaderSource(definition, execution, customBlendFunctions, globalScopeCode);
 
             // toto by som spravil inak, ale kedze uz je naimplementovana funkcia _compileProgram tak ju pouzijem
             program._osdOptions = {};
@@ -368,7 +259,7 @@
 
             const build = this.constructor._compileProgram(program, gl, $.console.error);
             if (!build) {
-                throw new Error("$.WebGLModule.WebGL20::programCreated: Program could not be built!");
+                throw new Error("$.WebGLModule.WebGL20::createProgram: Program could not be built!");
             }
 
             return program;
@@ -380,7 +271,7 @@
          * @param {WebGLProgram} program WebGLProgram in use
          * @param {Object} shaderLayers map of shaderLayers to load {shaderID: ShaderLayer}
          */
-        programLoaded(program, shaderLayers) {
+        loadProgram(program, shaderLayers) {
             const gl = this.gl;
 
             // load clip and blend shaderLayer's glsl locations, load shaderLayer's control's glsl locations
@@ -440,7 +331,7 @@
          * @param {WebGLTexture} textureArray gl.TEXTURE_2D_ARRAY used as source of data for rendering
          * @param {number} textureLayer index to layer in textureArray to use
          */
-        programUsed(program, tileInfo, shaderLayer, shaderID, textureArray, textureLayer) {
+        useProgram(program, tileInfo, shaderLayer, shaderID, textureArray, textureLayer) {
             // console.debug('Drawujem programom webgl2! textureCoords:', tileInfo.textureCoords, 'transform=', tileInfo.transform, 'zoom=');
             const gl = this.gl;
 
@@ -483,11 +374,11 @@
          * @param {WebGLTexture} textureArray gl.TEXTURE_2D_ARRAY used as a source of data for rendering
          * @param {Number} textureLayer index to layer in textureArray to use
          */
-        firstPassProgramUsed(textureCoords, transformMatrix, textureArray, textureLayer) {
+        useProgramForFirstPass(textureCoords, transformMatrix, textureArray, textureLayer) {
             const gl = this.gl;
 
             // Use shaderLayer for the first pass
-            gl.uniform1i(this._locationShaderLayerIndex, -1);
+            gl.uniform1i(this._locationShaderLayerIndex, 0);
 
             // Texture coords
             gl.bindBuffer(gl.ARRAY_BUFFER, this._bufferTextureCoords);
@@ -501,6 +392,122 @@
             gl.uniform1i(this._locationTextureLayer, textureLayer);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+
+        // PRIVATE FUNCTIONS
+        /**
+         * Get vertex shader's glsl code.
+         * @returns {string} vertex shader's glsl code
+         */
+        _getVertexShaderSource() {
+            const vertexShaderSource = `#version 300 es
+        precision mediump int;
+        precision mediump float;
+        /* This program is used for single-pass rendering and for second-pass during two-pass rendering. */
+
+        in vec2 a_texture_coords;
+        out vec2 v_texture_coords;
+        uniform mat3 u_transform_matrix;
+
+        const vec3 viewport[4] = vec3[4] (
+            vec3(0.0, 1.0, 1.0),
+            vec3(0.0, 0.0, 1.0),
+            vec3(1.0, 1.0, 1.0),
+            vec3(1.0, 0.0, 1.0)
+        );
+
+        void main() {
+            v_texture_coords = a_texture_coords;
+            gl_Position = vec4(u_transform_matrix * viewport[gl_VertexID], 1.0);
+        }`;
+
+            return vertexShaderSource;
+        }
+
+        /**
+         * Get fragment shader's glsl code.
+         * @param {string} definition ShaderLayers glsl code placed outside the main function
+         * @param {string} execution ShaderLayers glsl code placed inside the main function
+         * @param {string} customBlendFunctions ShaderLayers glsl code for their custom blend functions
+         * @param {string} globalScopeCode glsl code shared between the individual ShaderLayer instantions
+         * @returns {string} fragment shader's glsl code
+         */
+        _getFragmentShaderSource(definition, execution, customBlendFunctions, globalScopeCode) {
+            const fragmentShaderSource = `#version 300 es
+        precision mediump int;
+        precision mediump float;
+        precision mediump sampler2DArray;
+
+        uniform float u_pixel_size;
+        uniform float u_zoom_level;
+        uniform float u_global_alpha;
+
+        uniform int u_shaderLayerIndex;
+
+        // TEXTURES
+        in vec2 v_texture_coords;
+        uniform sampler2DArray u_textureArray;
+        uniform int u_textureLayer;
+        vec4 osd_texture(int index, vec2 coords) {
+            return texture(u_textureArray, vec3(coords, float(u_textureLayer)));
+        }
+
+        // UTILITY function
+        bool close(float value, float target) {
+            return abs(target - value) < 0.001;
+        }
+
+        // BLEND attributes
+        out vec4 overall_color;
+        vec4 last_color = vec4(.0);
+        vec4 current_color = vec4(.0);
+        int last_blend_func_id = -1000;
+        void deffered_blend();
+
+        // GLOBAL SCOPE CODE:${Object.keys(globalScopeCode).length !== 0 ?
+            Object.values(globalScopeCode).join("\n") : '\n    // No global scope code here...'}
+
+        // DEFINITIONS OF SHADERLAYERS:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
+
+        // DEFFERED BLENDING:
+        void deffered_blend() {
+            switch (last_blend_func_id) {
+            // predefined "additive blending":
+            case -1:
+                overall_color = last_color + overall_color;
+                break;
+
+            // predefined "premultiplied alpha blending":
+            case -2:
+                vec4 pre_fg = vec4(last_color.rgb * last_color.a, last_color.a);
+                overall_color = pre_fg + overall_color * (1.0 - pre_fg.a);
+                break;
+
+
+            // non-predefined, custom blending functions:${customBlendFunctions === '' ? '\n            // No custom blending function here...' : customBlendFunctions}
+            }
+        }
+
+
+        void main() {
+            // EXECUTIONS OF SHADERLAYERS:
+            switch (u_shaderLayerIndex) {${execution}
+
+                default:
+                    if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
+                        overall_color = vec4(.0);
+                    } else { // render only where there's data in the texture
+                        overall_color = vec4(1, 0, 0, 0.5);
+                    }
+                    return;
+            }
+
+            // blend last level
+            deffered_blend();
+            overall_color *= u_global_alpha;
+        }`;
+        return fragmentShaderSource;
         }
     };
 
@@ -520,8 +527,7 @@
                 1.0, 0.0, 1.0
             ]);
 
-            this._shadersMapping = {}; // {identity_for_first_pass: <always -1>, identity: 0, edge: 1, ...} maps shaderType to u_shaderLayerIndex
-
+            this._shadersMapping = {}; // {shaderID1: 1, shaderID2: 2, ...<more shaders>...} maps ShaderLayer instantions to their index in GLSL (u_shaderLayerIndex)
             this._bufferTextureCoords = null; // :glBuffer, pre kazdu tile-u sa sem nahraju data jej textureCoords
             this._locationTextureCoords = null; // :glAttribLocation, atribut na previazanie s buffrom hore, nahra sa skrze neho do glsl
             this._locationTransformMatrix = null; // u_transform_matrix
@@ -537,154 +543,24 @@
             return "1.0";
         }
 
-        /* ??? */
+        /**
+         * Expose GLSL code for texture sampling.
+         * @returns {string} glsl code for texture sampling
+         */
         sampleTexture(index, vec2coords) {
             return `osd_texture(${index}, ${vec2coords})`;
         }
 
-
-        /** ONLY FOR COMPILE FRAGMENT SHADER
-         * @returns {string} glsl code for texture sampling
-         */
-        getTextureSampling() {
-            const numOfTextures = this.instanceCount || 1;
-
-            function sampleTextures() {
-                let retval = `if (index == 0) {
-            return texture2D(u_textures[0], coords);
-        }`;
-
-                if (numOfTextures === 1) {
-                    return retval;
-                }
-
-                for (let i = 1; i < numOfTextures; i++) {
-                    retval += ` else if (index == ${i}) {
-            return texture2D(u_textures[${i}], coords);
-        }`;
-                }
-
-                return retval;
-            } // end of sampleTextures
-            //todo consider sampling with vec3 for universality
-            return `
-    uniform sampler2D u_textures[${numOfTextures}];
-    vec4 osd_texture(int index, vec2 coords) {
-        ${sampleTextures()}
-    }`;
+        getShaderLayerGLSLIndex(id) {
+            return this._shadersMapping[id];
         }
-
-        /**
-         * Get vertex shader's glsl code.
-         * @returns {string} vertex shader's glsl code
-         */
-        getVertexShaderSource() {
-        const vertexShaderSource = `
-    precision mediump int;
-    precision mediump float;
-    /* This program is used for single-pass rendering and for second-pass during two-pass rendering. */
-
-    attribute vec2 a_texture_coords;
-    varying vec2 v_texture_coords;
-
-    attribute vec3 a_position;
-    uniform mat3 u_transform_matrix;
-
-    void main() {
-        v_texture_coords = a_texture_coords;
-        gl_Position = vec4(u_transform_matrix * a_position, 1);
-}`;
-
-        return vertexShaderSource;
-        }
-
-
-        /** Get fragment shader's glsl code.
-         * @param {string} definition glsl code outta main function
-         * @param {string} execution glsl code inside the main function
-         * @param {object} options
-         * @returns {string} fragment shader's glsl code
-         */
-        getFragmentShaderSource(definition, execution, customBlendFunctions, globalScopeCode) {
-            const fragmentShaderSource = `
-    precision mediump int;
-    precision mediump float;
-    precision mediump sampler2D;
-
-    uniform float u_pixel_size;
-    uniform float u_zoom_level;
-    uniform float u_global_alpha;
-
-    uniform int u_shaderLayerIndex;
-
-    // TEXTURES
-    varying vec2 v_texture_coords;
-    ${this.getTextureSampling()}
-
-
-    // utility function
-    bool close(float value, float target) {
-        return abs(target - value) < 0.001;
-    }
-
-    vec4 overall_color = vec4(.0);
-    vec4 last_color = vec4(.0);
-    vec4 current_color = vec4(.0);
-    int last_blend_func_id = -1000;
-    void deffered_blend();
-
-    // GLOBAL SCOPE CODE:${Object.keys(globalScopeCode).length !== 0 ?
-        Object.values(globalScopeCode).join("\n") :
-        '\n    // No global scope code here...'}
-
-    // DEFINITIONS OF SHADERLAYERS:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
-
-    // DEFFERED BLENDING:
-    void deffered_blend() {
-        // predefined "additive blending":
-        if (last_blend_func_id == -1) {
-            overall_color = last_color + overall_color;
-
-        // predefined "premultiplied alpha blending":
-        } else if (last_blend_func_id == -2) {
-            vec4 pre_fg = vec4(last_color.rgb * last_color.a, last_color.a);
-            overall_color = pre_fg + overall_color * (1.0 - pre_fg.a);
-
-
-        // non-predefined, custom blending functions:
-        }${customBlendFunctions === '' ? '\n            // No custom blending function here...' : customBlendFunctions}
-    }
-
-
-    void main() {
-        // EXECUTIONS OF SHADERLAYERS:
-        // default case -> should not happen
-        if (u_shaderLayerIndex == -1000) {
-            if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
-                overall_color = vec4(.0);
-            } else { // render only where there's data in the texture
-                overall_color = vec4(1, 0, 0, 0.5);
-            }
-            gl_FragColor = overall_color;
-            return;
-        }${execution}
-
-        // blend last level
-        deffered_blend();
-        overall_color *= u_global_alpha;
-        gl_FragColor = overall_color;
-    }`;
-
-            return fragmentShaderSource;
-        }
-
 
         /**
          * Create WebGLProgram that uses shaderLayers defined in an input parameter.
-         * @param {Object} shaderLayers map of shaderLayers to use {shaderID: ShaderLayer}
+         * @param {Object} shaderLayers map of ShaderLayers to use {shaderID: ShaderLayer}
          * @returns {WebGLProgram}
          */
-        programCreated(shaderLayers) {
+        createProgram(shaderLayers) {
             const gl = this.gl;
             const program = gl.createProgram();
 
@@ -715,7 +591,7 @@
                 const shaderLayerIndex = i++;
                 const shaderObject = shaderLayer.__shaderObject;
 
-                // tell which shaderLayer is used with which shaderLayerIndex
+                // tell that shaderLayer with id = shaderID is bind to glsl index u_shaderLayerIndex = shaderLayerIndex
                 this._shadersMapping[shaderID] = shaderLayerIndex;
 
                 definition += `\n    // Definition of ${shaderLayer.constructor.type()} shader:\n`;
@@ -758,9 +634,9 @@
                 // }
             } // end of for cycle
 
-            const vertexShaderSource = this.getVertexShaderSource();
+            const vertexShaderSource = this._getVertexShaderSource();
             const globalScopeCode = $.WebGLModule.ShaderLayer.__globalIncludes;
-            const fragmentShaderSource = this.getFragmentShaderSource(definition, execution, customBlendFunctions, globalScopeCode);
+            const fragmentShaderSource = this._getFragmentShaderSource(definition, execution, customBlendFunctions, globalScopeCode);
 
             // toto by som spravil inak, ale kedze uz je naimplementovana funkcia _compileProgram tak ju pouzijem
             program._osdOptions = {};
@@ -770,7 +646,7 @@
 
             const build = this.constructor._compileProgram(program, gl, $.console.error);
             if (!build) {
-                throw new Error("$.WebGLModule.WebGL10::programCreated: Program could not be built!");
+                throw new Error("$.WebGLModule.WebGL10::createProgram: Program could not be built!");
             }
 
             return program;
@@ -783,8 +659,8 @@
          * @param {WebGLProgram} program WebGLProgram in use
          * @param {Object} shaderLayers map of shaderLayers to load {shaderID: ShaderLayer}
          */
-        programLoaded(program, shaderLayers) {
-            // console.log('ProgramLoaded called!');
+        loadProgram(program, shaderLayers) {
+            // console.log('loadProgram called!');
             const gl = this.gl;
 
             // load clip and blend shaderLayer's glsl locations, load shaderLayer's control's glsl locations
@@ -847,8 +723,8 @@
          * @param {string} controlId shaderLayer's control's id
          * @param {WebGLTexture} texture gl.TEXTURE_2D used as a source of data for rendering
          */
-        programUsed(program, tileInfo, shaderLayer, shaderID, texture) {
-            // console.debug('programUsed! texcoords:', tileInfo.textureCoords, 'transformMatrix:', tileInfo.transform);
+        useProgram(program, tileInfo, shaderLayer, shaderID, texture) {
+            // console.debug('useProgram! texcoords:', tileInfo.textureCoords, 'transformMatrix:', tileInfo.transform);
             const gl = this.gl;
 
             // tell the controls to fill its uniforms
@@ -899,7 +775,7 @@
          * @param {Float32Array} textureCoords
          * @param {Float32Array} transformMatrix
          */
-        firstPassProgramUsed(textureCoords, transformMatrix, texture) {
+        useProgramForFirstPass(textureCoords, transformMatrix, texture) {
             // console.debug('Drawujem first pass programom! texcoords:', textureCoords, 'transformMatrix:', transformMatrix);
             const gl = this.gl;
 
@@ -922,6 +798,145 @@
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
+
+
+        // PRIVATE FUNCTIONS
+        /**
+         * Create function to enable texture sampling.
+         * @returns {string} glsl code
+         */
+        _getTextureDefinition() {
+            const numOfTextures = this.instanceCount || 1;
+
+            function sampleTextures() {
+                let retval = `if (index == 0) {
+            return texture2D(u_textures[0], coords);
+        }`;
+
+                if (numOfTextures === 1) {
+                    return retval;
+                }
+
+                for (let i = 1; i < numOfTextures; i++) {
+                    retval += ` else if (index == ${i}) {
+            return texture2D(u_textures[${i}], coords);
+        }`;
+                }
+
+                return retval;
+            } // end of sampleTextures
+            //todo consider sampling with vec3 for universality
+            return `
+    uniform sampler2D u_textures[${numOfTextures}];
+    vec4 osd_texture(int index, vec2 coords) {
+        ${sampleTextures()}
+    }`;
+        }
+
+        /**
+         * Get vertex shader's glsl code.
+         * @returns {string} vertex shader's glsl code
+         */
+        _getVertexShaderSource() {
+        const vertexShaderSource = `
+    precision mediump int;
+    precision mediump float;
+    /* This program is used for single-pass rendering and for second-pass during two-pass rendering. */
+
+    attribute vec2 a_texture_coords;
+    varying vec2 v_texture_coords;
+
+    attribute vec3 a_position;
+    uniform mat3 u_transform_matrix;
+
+    void main() {
+        v_texture_coords = a_texture_coords;
+        gl_Position = vec4(u_transform_matrix * a_position, 1);
+}`;
+
+        return vertexShaderSource;
+        }
+
+
+        /** Get fragment shader's glsl code.
+         * @param {string} definition glsl code outta main function
+         * @param {string} execution glsl code inside the main function
+         * @param {object} options
+         * @returns {string} fragment shader's glsl code
+         */
+        _getFragmentShaderSource(definition, execution, customBlendFunctions, globalScopeCode) {
+            const fragmentShaderSource = `
+    precision mediump int;
+    precision mediump float;
+    precision mediump sampler2D;
+
+    uniform float u_pixel_size;
+    uniform float u_zoom_level;
+    uniform float u_global_alpha;
+
+    uniform int u_shaderLayerIndex;
+
+    // TEXTURES
+    varying vec2 v_texture_coords;
+    ${this._getTextureDefinition()}
+
+
+    // utility function
+    bool close(float value, float target) {
+        return abs(target - value) < 0.001;
+    }
+
+    vec4 overall_color = vec4(.0);
+    vec4 last_color = vec4(.0);
+    vec4 current_color = vec4(.0);
+    int last_blend_func_id = -1000;
+    void deffered_blend();
+
+    // GLOBAL SCOPE CODE:${Object.keys(globalScopeCode).length !== 0 ?
+        Object.values(globalScopeCode).join("\n") :
+        '\n    // No global scope code here...'}
+
+    // DEFINITIONS OF SHADERLAYERS:${definition !== '' ? definition : '\n    // Any non-default shaderLayer here to define...'}
+
+    // DEFFERED BLENDING:
+    void deffered_blend() {
+        // predefined "additive blending":
+        if (last_blend_func_id == -1) {
+            overall_color = last_color + overall_color;
+
+        // predefined "premultiplied alpha blending":
+        } else if (last_blend_func_id == -2) {
+            vec4 pre_fg = vec4(last_color.rgb * last_color.a, last_color.a);
+            overall_color = pre_fg + overall_color * (1.0 - pre_fg.a);
+
+
+        // non-predefined, custom blending functions:
+        }${customBlendFunctions === '' ? '\n            // No custom blending function here...' : customBlendFunctions}
+    }
+
+
+    void main() {
+        // EXECUTIONS OF SHADERLAYERS:
+        // default case -> should not happen
+        if (u_shaderLayerIndex == -1000) {
+            if (osd_texture(0, v_texture_coords).rgba == vec4(.0)) {
+                overall_color = vec4(.0);
+            } else { // render only where there's data in the texture
+                overall_color = vec4(1, 0, 0, 0.5);
+            }
+            gl_FragColor = overall_color;
+            return;
+        }${execution}
+
+        // blend last level
+        deffered_blend();
+        overall_color *= u_global_alpha;
+        gl_FragColor = overall_color;
+    }`;
+
+            return fragmentShaderSource;
+        }
+
     };
 
 })(OpenSeadragon);

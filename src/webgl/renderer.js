@@ -185,9 +185,9 @@
         processData(renderInfo, shaderLayer, shaderID, source) {
             if (this.webGLPreferredVersion === "2.0") {
                 // console.log('V processe, renderInfo.textureCoords =', renderInfo.textureCoords);
-                this.webglContext.programUsed(this._program, renderInfo, shaderLayer, shaderID, source.texture2DArray, source.index);
+                this.webglContext.useProgram(this._program, renderInfo, shaderLayer, shaderID, source.texture2DArray, source.index);
             } else {
-                this.webglContext.programUsed(this._program, renderInfo, shaderLayer, shaderID, source.textures[source.index]);
+                this.webglContext.useProgram(this._program, renderInfo, shaderLayer, shaderID, source.textures[source.index]);
                 // this.webglContext.loadFirstPassProgram();
                 // this.webglContext.drawFirstPassProgram(source.textures[source.index], renderInfo.textureCoords, renderInfo.transform);
             }
@@ -195,9 +195,9 @@
 
         firstPassProcessData(textureCoords, transformMatrix, source) {
             if (this.webGLPreferredVersion === "2.0") {
-                this.webglContext.firstPassProgramUsed(textureCoords, transformMatrix, source.texture2DArray, source.index);
+                this.webglContext.useProgramForFirstPass(textureCoords, transformMatrix, source.texture2DArray, source.index);
             } else {
-                this.webglContext.firstPassProgramUsed(textureCoords, transformMatrix, source.textures[source.index]);
+                this.webglContext.useProgramForFirstPass(textureCoords, transformMatrix, source.textures[source.index]);
             }
         }
 
@@ -236,7 +236,7 @@
         }
 
         recreateProgram() {
-            const program = this.webglContext.programCreated(this.shadersCounter);
+            const program = this.webglContext.createProgram(this.shadersCounter);
             this.gl.useProgram(program);
 
             if (this.supportsHtmlControls()) {
@@ -252,7 +252,7 @@
 
             this._program = program;
             // firstly has to initialize the controls, then I can load everything
-            this.webglContext.programLoaded(program, this.shadersCounter);
+            this.webglContext.loadProgram(program, this.shadersCounter);
 
             if (!this.running) {
                 //TODO: might not be the best place to call, timeout necessary to allow finish initialization of OSD before called

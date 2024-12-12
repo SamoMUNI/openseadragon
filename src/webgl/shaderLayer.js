@@ -302,7 +302,7 @@
         deffered_blend();
         last_color = color;
         // switch case pointing to this.getBlendFunction() code
-        last_blend_func_id = ${this.glslIndex};
+        last_blend_func_id = ${this.webglContext.getShaderLayerGLSLIndex(this.uid)};
     }`;
             } else if (this._mode === "mask_clip") {
                 modeDefinition += `
