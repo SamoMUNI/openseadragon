@@ -172,7 +172,6 @@
          * @param {Float32Array} renderInfo.textureCoords 8 numbers representing triangle strip
          *
          * @param {ShaderLayer} shaderLayer instantion of shaderLayer to use
-         * @param {string} shaderID unique identifier of shaderLayer
 
          * @param {object} source
          * @param {[WebGLTexture]} source.textures     // [TEXTURE_2D]
@@ -182,12 +181,12 @@
          * @instance
          * @memberOf WebGLModule
          */
-        processData(renderInfo, shaderLayer, shaderID, source) {
+        processData(renderInfo, shaderLayer, source) {
             if (this.webGLPreferredVersion === "2.0") {
                 // console.log('V processe, renderInfo.textureCoords =', renderInfo.textureCoords);
-                this.webglContext.useProgram(this._program, renderInfo, shaderLayer, shaderID, source.texture2DArray, source.index);
+                this.webglContext.useProgram(this._program, renderInfo, shaderLayer, source.texture2DArray, source.index);
             } else {
-                this.webglContext.useProgram(this._program, renderInfo, shaderLayer, shaderID, source.textures[source.index]);
+                this.webglContext.useProgram(this._program, renderInfo, shaderLayer, source.textures[source.index]);
                 // this.webglContext.loadFirstPassProgram();
                 // this.webglContext.drawFirstPassProgram(source.textures[source.index], renderInfo.textureCoords, renderInfo.transform);
             }
@@ -195,9 +194,9 @@
 
         firstPassProcessData(textureCoords, transformMatrix, source) {
             if (this.webGLPreferredVersion === "2.0") {
-                this.webglContext.useProgramForFirstPass(textureCoords, transformMatrix, source.texture2DArray, source.index);
+                this.webglContext.useProgramForFirstPass(transformMatrix, textureCoords, source.texture2DArray, source.index);
             } else {
-                this.webglContext.useProgramForFirstPass(textureCoords, transformMatrix, source.textures[source.index]);
+                this.webglContext.useProgramForFirstPass(transformMatrix, textureCoords, source.textures[source.index]);
             }
         }
 

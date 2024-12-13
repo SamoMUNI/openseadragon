@@ -84,7 +84,7 @@
             // this._id = Date.now();
             this._id = this.constructor.numOfDrawers;
             console.log('Drawer ID =', this._id);
-            this.webGLVersion = "2.0";
+            this.webGLVersion = "1.0";
             this.debug = this.webGLOptions.debug || true;
             console.log('Debug =', this.debug);
 
@@ -1607,14 +1607,14 @@
                             transform: this._getTileMatrix(tile, tiledImage, overallMatrix),
                             zoom: viewport.zoom,
                             pixelSize: pixelSize,
+                            globalOpacity: 1,
                             textureCoords: tileInfo.position
                         };
 
                         // need to render in correct order
                         for (const shaderKey of tiledImage.source.__renderInfo.sources) {
                             const shaderObject = shaders[shaderKey];
-                            const shaderInstantion = shaderObject._renderContext;
-                            const shaderID = shaderObject.id;
+                            const shader = shaderObject._renderContext;
 
                             const source = {
                                 textures: tileInfo.textures,
@@ -1622,7 +1622,7 @@
                                 index: shaderKey
                             };
 
-                            this.renderer.processData(renderInfo, shaderInstantion, shaderID, source);
+                            this.renderer.processData(renderInfo, shader, source);
                         }
 
                     } //end of for tiles of tilesToDraw
@@ -1764,7 +1764,6 @@
                     for (const shaderKey of tiledImage.source.__renderInfo.sources) {
                         const shaderObject = shaders[shaderKey];
                         const shader = shaderObject._renderContext;
-                        const shaderID = shaderObject.id;
                         const offScreenTextureIndex = shaderObject._textureLayerIndex;
 
                         const source = {
@@ -1773,7 +1772,7 @@
                             index: offScreenTextureIndex
                         };
 
-                        this.renderer.processData(renderInfo, shader, shaderID, source);
+                        this.renderer.processData(renderInfo, shader, source);
                     }
 
                     // TODO: <MORE SOURCES FEATURE> apply context2dpipeline for every source? Probably not because only tiledImage has _clip, _crop, debugmode...
@@ -1809,7 +1808,6 @@
                         // console.debug(`Kreslim do layeru ${textureLayer} pomocou ${shaderType}`);
                         const shaderObject = shaders[shaderKey];
                         const shader = shaderObject._renderContext;
-                        const shaderID = shaderObject.id;
                         const offScreenTextureIndex = shaderObject._textureLayerIndex;
 
                         const source = {
@@ -1818,7 +1816,7 @@
                             index: offScreenTextureIndex
                         };
 
-                        this.renderer.processData(renderInfo, shader, shaderID, source);
+                        this.renderer.processData(renderInfo, shader, source);
                     }
                 }); // end of tiledImages for cycle
 

@@ -280,7 +280,10 @@
             }
         }
 
-        getBlendFunction() {
+        usesCustomBlendFunction() {
+            return this._mode !== "show";
+        }
+        getCustomBlendFunction() {
             return `vec4 ${this.uid}_blend_func(vec4 fg, vec4 bg) {
         return fg;
     }`;
@@ -301,7 +304,7 @@
         // blend last_color with overall_color using blend_func of the last shader using deffered blending
         deffered_blend();
         last_color = color;
-        // switch case pointing to this.getBlendFunction() code
+        // switch case pointing to this.getCustomBlendFunction() code
         last_blend_func_id = ${this.webglContext.getShaderLayerGLSLIndex(this.uid)};
     }`;
             } else if (this._mode === "mask_clip") {
@@ -329,9 +332,7 @@
          * @return {string}
          */
         getFragmentShaderDefinition() {
-            this._blendUniform = `${this.uid}_blend`;
-            this._clipUniform = `${this.uid}_clip`;
-            let glsl = [this.getModeFunction(), this._mode !== "show" ? this.getBlendFunction() : '', `uniform int ${this._blendUniform};`, `uniform bool ${this._clipUniform};`];
+            let glsl = [this.getModeFunction(), this.usesCustomBlendFunction() ? this.getCustomBlendFunction() : ''];
             //console.log('shader controls', this._ownedControls);
             /* only opacity in _ownedControls, dont know where is use_channel0 from plain shader ??? */
             for (const controlName in this._controls) {
@@ -379,13 +380,7 @@
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
         glDrawing(program, gl) {
-            if (this._blendUniform) {
-                // console.log(`shaderLayer ${this.constructor.name()} filling it's variables blend and clip!`);
-                // console.error(`shaderLayer ${this.constructor.name()} nastavuje blend_mode na ${this.blendMode}`); -> bolo undefined tak som zakomentoval dalsi riadok a dal ten pod nim
-                // gl.uniform1i(this._blendLoc, this.blendMode);
-                gl.uniform1i(this._blendLoc, 0);
-                gl.uniform1i(this._clipLoc, 0); //todo
-            }
+
 
             // for (let control of this._ownedControls) {
             //     // console.log(`shaderLayer ${this.constructor.name()} filling ${control}`);
@@ -416,16 +411,6 @@
          * @param {WebGLRenderingContext|WebGL2RenderingContext} gl WebGL Context
          */
         glLoaded(program, gl) {
-            // console.log(`shaderLayer ${this.constructor.name()} loading it's blend and clip variables! Glsl names = ${this._clipUniform}, ${this._blendUniform}`);
-            if (!this._blendUniform) {
-                $.console.warn("Shader layer has autoblending disabled: are you sure you called super.getFragmentShaderDefinition()?");
-            } else {
-                this._clipLoc = gl.getUniformLocation(program, this._clipUniform);
-                this._blendLoc = gl.getUniformLocation(program, this._blendUniform);
-                // if (this._blendLoc === null) {
-                //     throw new Error(`shaderLayer ${this.constructor.name()} could not load blend uniform location! this._blendUniform = ${this._blendLoc}, this._clipLoc = ${this._clipLoc}`);
-                // }
-            }
 
             for (const controlName in this._controls) {
                 // console.log(`shaderLayer ${this.constructor.name()} loading ${control}`);
