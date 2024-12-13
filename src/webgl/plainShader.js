@@ -1,5 +1,3 @@
-// 40 riadkov
-
 (function($) {
     /**
      * Identity shader

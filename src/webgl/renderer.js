@@ -1,5 +1,3 @@
-// 900 riadkov
-
 (function($) {
 
 

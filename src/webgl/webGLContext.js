@@ -1,5 +1,3 @@
-// 700 riadkov
-
 (function($) {
     /**
      * @interface OpenSeadragon.WebGLModule.WebGLImplementation

@@ -1,6 +1,6 @@
 
 /*
- * OpenSeadragon - WebGLDrawer
+ * OpenSeadragon - WebGLDrawerModular
  *
  * Copyright (C) 2009 CodePlex Foundation
  * Copyright (C) 2010-2024 OpenSeadragon contributors
