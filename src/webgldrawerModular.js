@@ -36,18 +36,18 @@
             this._backupCanvasDrawer = null;
             this._imageSmoothingEnabled = true; // will be updated by setImageSmoothingEnabled
 
-            /***** SETUP RENDERER *****/
+
+            // SETUP WEBGLMODULE
             const rendererOptions = $.extend({
                 // Allow override:
-                webGLOptions: {},
-                htmlControlsId: this._id === 0 ? "drawer-controls" : undefined,
+                htmlControlsId: this._id === 0 ? "drawer-controls" : undefined, // to enable showing controls in an OSD demo
                 htmlShaderPartHeader: (html, shaderName, isVisible, layer, isControllable = true, shaderLayer = {}) => {
                     return `<div class="configurable-border"><div class="shader-part-name">${shaderName}</div>${html}</div>`;
-                },
-                ready: () => { },
+                }, // function to wrap html code of individual ShaderLayers
+                ready: () => {},
                 resetCallback: () => { this.viewer.world.draw(); },
                 refetchCallback: () => {},
-                debug: false,
+                debug: this.debug,
             },
             this.webGLOptions,
             {
@@ -58,20 +58,19 @@
                     stencil: true
                 }
             });
-            // console.log('Renderer options =', rendererOptions);
             this.renderer = new $.WebGLModule(rendererOptions);
             this.renderer.setDimensions(0, 0, this.canvas.width, this.canvas.height);
             this.renderer.init();
-            this.renderer.setDataBlendingEnabled(true); // enable blending
+            this.renderer.setDataBlendingEnabled(true); // enable alpha blending
 
 
-            /***** SETUP CANVASES *****/
+            // SETUP CANVASES
             this._size = new $.Point(this.canvas.width, this.canvas.height); // current viewport size, changed during resize event
             this._setupCanvases();
             this.context = this._outputContext; // API required by tests
 
 
-            // TWO-PASS RENDERING attributes
+            // SETUP TWO-PASS RENDERING attributes
             this._offScreenBuffer = this._gl.createFramebuffer();
             this._offScreenTexturesCount = 0;
             this._offScreenTexturesUnusedIndices = [];
@@ -82,24 +81,22 @@
             }
 
 
-            // DEBUGGING attributes
+            // SETUP DEBUGGING attributes
             // map to save offScreenTextures as canvases for exporting {layerId: canvas}
             this.offScreenTexturesAsCanvases = {};
             // map to save tiles as canvases for exporting {tileId: canvas}
             this.tilesAsCanvases = {};
-            this.debugTargetTileId = 0;
 
             // create a link for exporting offScreenTextures and tiles, only for the main drawer, not the minimap
             if (this._id === 0) {
                 const downloadLink = document.createElement('a');
-                downloadLink.id = 'downloadLink';
+                downloadLink.id = 'download-off-screen-textures';
                 downloadLink.href = '#';  // make it a clickable link
-                downloadLink.textContent = 'Download offScreenTextures';
+                downloadLink.textContent = 'Download off-screen textures';
 
-                // for now just random element from xOpat's DOM I chose
                 const element = document.getElementById('panel-shaders');
                 if (!element) {
-                    console.warn('Element with id "panel-shaders" not found, appending download link to body.');
+                    console.warn('Element with id "panel-shaders" not found, appending download link for off-screen textures to body.');
                     document.body.appendChild(downloadLink);
                 } else {
                     element.appendChild(downloadLink);
@@ -113,9 +110,9 @@
 
 
                 const downloadLink2 = document.createElement('a');
-                downloadLink2.id = 'downloadLink2';
+                downloadLink2.id = 'download-tiles';
                 downloadLink2.href = '#';  // make it a clickable link
-                downloadLink2.textContent = 'Download tile';
+                downloadLink2.textContent = 'Download tiles';
 
                 if (!element) {
                     document.body.appendChild(downloadLink2);
@@ -126,27 +123,14 @@
                 // add an event listener to trigger the download when clicked
                 downloadLink2.addEventListener('click', (event) => {
                     event.preventDefault();  // prevent the default anchor behavior
-                    this.downloadTile(this.debugTargetTileId);
+                    this.downloadTiles();
                 });
             }
 
-            // disable cull face, this solved flipping error
-            // this._gl.disable(this._gl.CULL_FACE);
-            // const maxArrayLayers = this._gl.getParameter(this._gl.MAX_ARRAY_TEXTURE_LAYERS);
-            // console.log('Max textureArray layers', maxArrayLayers);
-            // const maxTextureUnits = this._gl.getParameter(this._gl.MAX_TEXTURE_IMAGE_UNITS);
-            // console.log('Max texture units', maxTextureUnits);
 
-            /***** SETUP WEBGL PROGRAMS *****/ // used no more
-            // this._createTwoPassEasy();
-            // this._createTwoPassEZ();
-
-
-            /***** EVENT HANDLERS *****/
-            // Add listeners for events that require modifying the scene or camera
+            // SETUP EVENT HANDLERS
             this._boundToTileReady = ev => this._tileReadyHandler(ev);
             this._boundToImageUnloaded = ev => {
-                // console.log('event =', ev);
                 this._cleanupImageData(ev.context2D.canvas);
             };
             this.viewer.addHandler("tile-ready", this._boundToTileReady);
@@ -157,17 +141,12 @@
             this.viewer.rejectEventHandler("tile-drawing", "The WebGLDrawer does not raise the tile-drawing event");
 
             this._export = {};
-
             this.viewer.world.addHandler("remove-item", (e) => {
-                console.log('REMOVE-ITEM EVENT !!!');
-
                 // delete export info about this tiledImage
                 delete this._export[e.item.source.__renderInfo.externalID];
                 this.export();
 
                 for (const sourceID of Object.keys(e.item.source.__renderInfo.drawers[this._id].shaders)) {
-                    // console.log('Mazem shaderType =', shaderType);
-
                     // TODO: pozriet ci funguje dobre este
                     const sourceJSON = e.item.source.__renderInfo.drawers[this._id].shaders[sourceID];
                     this.renderer.removeShader(sourceJSON, e.item.source.__renderInfo.id.toString() + '_' + sourceID.toString());
@@ -175,16 +154,20 @@
                 }
 
 
-                // these lines are unnecessary because somehow when tiledImage is added again he does not have this .source.__renderInfo.drawers parameter anyways (I do not know why tho)
+                // these lines are unnecessary because somehow when the same tiledImage is added again it does not have .source.__renderInfo.drawers parameter (I do not know why tho)
                 delete e.item.source.__renderInfo.drawers[this._id];
+                // no more WebGLDrawerModular instances are using this tiledImage
                 if (Object.keys(e.item.source.__renderInfo.drawers).length === 0) {
                     delete e.item.source.__renderInfo.id;
+                    delete e.item.source.__renderInfo.externalID;
                     delete e.item.source.__renderInfo.drawers;
+                    delete e.item.source.__renderInfo.sources;
+                    delete e.item.source.__renderInfo.shaders;
+                    delete e.item.source.__renderInfo;
                 }
             });
 
-            // added with merge master
-            this._resizeHandler = (e) => {
+            this._resizeHandler = () => {
                 if(this._outputCanvas !== this.viewer.drawer.canvas) {
                     this._outputCanvas.style.width = this.viewer.drawer.canvas.clientWidth + 'px';
                     this._outputCanvas.style.height = this.viewer.drawer.canvas.clientHeight + 'px';
@@ -202,7 +185,9 @@
                 this._renderingCanvas.width = this._clippingCanvas.width = this._outputCanvas.width;
                 this._renderingCanvas.height = this._clippingCanvas.height = this._outputCanvas.height;
 
-                console.info('Resize event, new.width:new.height', viewportSize.x, viewportSize.y);
+                if (this.debug) {
+                    console.info('Resize event, newWidth, newHeight:', viewportSize.x, viewportSize.y);
+                }
                 this.renderer.setDimensions(0, 0, viewportSize.x, viewportSize.y);
                 this._size = viewportSize;
 
@@ -210,32 +195,7 @@
                 this._initializeOffScreenTextures();
             };
             this.viewer.addHandler("resize", this._resizeHandler);
-        }//end of constructor
-
-        test() {
-            const defaultControls = {
-                opacity: {
-                default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
-                accepts: (type, instance) => type === "float"
-                }
-            };
-            const customControls = {
-                opacity: {
-                    title: "Range",
-                    interactive: true,
-                    default: 100,
-                    min: 0,
-                    max: 100,
-                    step: 1,
-                    type: "number"
-                },
-                useGamma: 0.5
-            };
-            const merge = $.extend(true, {}, defaultControls, customControls);
-            console.log(merge);
-
-            throw new Error('Test');
-        }
+        } //end of constructor
 
         /**
          * @returns {string}
@@ -431,7 +391,7 @@
                     const link = document.createElement('a');
                     // eslint-disable-next-line compat/compat
                     link.href = URL.createObjectURL(blob);
-                    link.download = `offScreenTexture_order=${order}_layerIndex=${layerIndex}.png`;
+                    link.download = `offScreenTexture_renderedOrder=${order}_layerIndex=${layerIndex}.png`;
                     link.click();
                 }, 'image/png');
             }
@@ -441,21 +401,19 @@
          * @param {Number} tileId
          * @param {Object} data {tileId: canvas}
          */
-        downloadTile(tileId, data) {
-            console.info('Downloading tiles');
+        downloadTiles(data) {
             if (!data) {
                 data = this.tilesAsCanvases;
             }
 
-            console.debug('Data =', data);
-            for (const tileId of Object.keys(data)) {
+            for (const tileId in data) {
                 const canvas = data[tileId];
                 canvas.toBlob((blob) => {
                     const link = document.createElement('a');
                     // eslint-disable-next-line compat/compat
                     link.href = URL.createObjectURL(blob);
                     link.download = `tile${tileId}.png`;
-                    link.click();  // programmatically trigger the download
+                    link.click();
                 }, 'image/png');
             }
         }
@@ -463,14 +421,11 @@
         getDebugData() {
             const data = {
                 offScreenTextures: this.offScreenTexturesAsCanvases,
-                tile: this.tilesAsCanvases[this.debugTargetTileId]
+                tile: this.tilesAsCanvases
             };
             return data;
         }
 
-        setDebugTargetTile(tileId) {
-            this.debugTargetTileId = tileId;
-        }
 
         // Public API required by all Drawer implementations
         /**

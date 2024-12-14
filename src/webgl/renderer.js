@@ -27,7 +27,6 @@
          *
          * @param {String} incomingOptions.uniqueId
          *
-         * @param {Object} incomingOptions.webGLOptions
          * @param {String} incomingOptions.webGLPreferredVersion    prefered WebGL version, "1.0" or "2.0"
          *
          * @param {String} incomingOptions.htmlControlsId                               id of the DOM element where the ShaderLayers' controls' HTML elements will be put
@@ -54,7 +53,6 @@
             }
             this.uniqueId = incomingOptions.uniqueId;
 
-            this.webGLOptions = incomingOptions.webGLOptions;
             this.webGLPreferredVersion = incomingOptions.webGLPreferredVersion;
 
 
