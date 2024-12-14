@@ -1,55 +1,9 @@
-
-/*
- * OpenSeadragon - WebGLDrawerModular
- *
- * Copyright (C) 2009 CodePlex Foundation
- * Copyright (C) 2010-2024 OpenSeadragon contributors
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *
- * - Redistributions of source code must retain the above copyright notice,
- *   this list of conditions and the following disclaimer.
- *
- * - Redistributions in binary form must reproduce the above copyright
- *   notice, this list of conditions and the following disclaimer in the
- *   documentation and/or other materials provided with the distribution.
- *
- * - Neither the name of CodePlex Foundation nor the names of its
- *   contributors may be used to endorse or promote products derived from
- *   this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
- * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
- * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
 (function( $ ){
-
     const OpenSeadragon = $; // alias for JSDoc
 
    /**
-    * @class OpenSeadragon.WebGLDrawer
-    * @classdesc Default implementation of WebGLDrawer for an {@link OpenSeadragon.Viewer}. The WebGLDrawer
-    * loads tile data as textures to the graphics card as soon as it is available (via the tile-ready event),
-    * and unloads the data (via the image-unloaded event). The drawer utilizes a context-dependent two pass drawing pipeline.
-    * For the first pass, tile composition for a given TiledImage is always done using a canvas with a WebGL context.
-    * This allows tiles to be stitched together without seams or artifacts, without requiring a tile source with overlap. If overlap is present,
-    * overlapping pixels are discarded. The second pass copies all pixel data from the WebGL context onto an output canvas
-    * with a Context2d context. This allows applications to have access to pixel data and other functionality provided by
-    * Context2d, regardless of whether the CanvasDrawer or the WebGLDrawer is used. Certain options, including compositeOperation,
-    * clip, croppingPolygons, and debugMode are implemented using Context2d operations; in these scenarios, each TiledImage is
-    * drawn onto the output canvas immediately after the tile composition step (pass 1). Otherwise, for efficiency, all TiledImages
-    * are copied over to the output canvas at once, after all tiles have been composited for all images.
+    * @class OpenSeadragon.WebGLDrawerModular
+    * @classdesc Implementation of WebGL renderer for an {@link OpenSeadragon.Viewer}.
     * @param {Object} options - Options for this Drawer.
     * @param {OpenSeadragon.Viewer} options.viewer - The Viewer that owns this Drawer.
     * @param {OpenSeadragon.Viewport} options.viewport - Reference to Viewer viewport.
@@ -60,42 +14,16 @@
 
     OpenSeadragon.WebGLDrawerModular = class WebGLDrawer extends OpenSeadragon.DrawerBase{
         constructor(options){
-            // console.log('Robim moju implementaciu, options =', options);
-            // sets this.viewer, this.viewport, this.container <- options.element, this.debugGridColor, this.options <- options.options
             super(options);
             this.webGLOptions = this.options;
-            // console.info('WebGLDrawerModular options =', this.webGLOptions);
-
-
-            /**
-             * The HTML element (canvas) that this drawer uses for drawing
-             * @member {Element} canvas
-             * @memberof OpenSeadragon.WebGLDrawer#
-             */
-
-            /**
-             * The parent element of this Drawer instance, passed in when the Drawer was created.
-             * The parent of {@link OpenSeadragon.WebGLDrawer#canvas}.
-             * @member {Element} container
-             * @memberof OpenSeadragon.WebGLDrawer#
-             */
-
-            // private members
-            // this._id = Date.now();
-            this._id = this.constructor.numOfDrawers;
-            console.log('Drawer ID =', this._id);
-            this.webGLVersion = "1.0";
             this.debug = this.webGLOptions.debug || true;
-            console.log('Debug =', this.debug);
 
-
-            // this.test();
+            this._id = this.constructor.numOfDrawers++;
+            this.webGLVersion = "2.0";
 
             this._destroyed = false;
             this._tileIdCounter = 0;
-            this._tileIds = {};
             this._TextureMap = new Map();
-            this._TileMap = new Map(); //unused
 
             this._outputCanvas = null;
             this._outputContext = null;
@@ -111,21 +39,21 @@
             /***** SETUP RENDERER *****/
             const rendererOptions = $.extend({
                 // Allow override:
-                webGLPreferredVersion: this.webGLVersion,
                 webGLOptions: {},
-                htmlControlsId: ++this.constructor.numOfDrawers === 1 ? "drawer-controls" : undefined,
+                htmlControlsId: this._id === 0 ? "drawer-controls" : undefined,
                 htmlShaderPartHeader: (html, shaderName, isVisible, layer, isControllable = true, shaderLayer = {}) => {
                     return `<div class="configurable-border"><div class="shader-part-name">${shaderName}</div>${html}</div>`;
                 },
-                ready: () => {
-                },
-                resetCallback: () => { this.draw(this.lastDrawArray); },
+                ready: () => { },
+                resetCallback: () => { this.viewer.world.draw(); },
                 refetchCallback: () => {},
-                // resetCallback: () => {},
                 debug: false,
-            }, this.webGLOptions, {
+            },
+            this.webGLOptions,
+            {
                 // Do not allow override:
                 uniqueId: "osd_" + this._id,
+                webGLPreferredVersion: this.webGLVersion,
                 canvasOptions: {
                     stencil: true
                 }
@@ -782,7 +710,6 @@
             }
 
             // TODO: ukazat Jirkovi
-            this.lastDrawArray = tiledImages;
             if (this.debug && this._id === 0) {
                 const event = new CustomEvent('debug-data-after-draw', this.getDebugData());
                 document.dispatchEvent(event);

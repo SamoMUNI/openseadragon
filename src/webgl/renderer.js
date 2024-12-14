@@ -303,7 +303,6 @@
                 // callback to reinitialize the drawer; NOT USED
                 refetch: this.refetchCallback
             });
-            shader.construct();
 
             this._shaders[shaderID] = shader;
             this.createProgram();
