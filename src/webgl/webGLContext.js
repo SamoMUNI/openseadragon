@@ -189,7 +189,7 @@
             // first-pass identity shader is a special case, no blend mode nor blend function, no controls, just pure identity => generate glsl manually now
             definition += `\n    // Definition of special identity shader used for the first-pass:`;
             definition += `
-    vec4 first_pass_identity_execution() {${this.renderer._firstPassShader.getFragmentShaderExecution()}
+    vec4 first_pass_identity_execution() {${this.renderer.firstPassShader.getFragmentShaderExecution()}
     }`;
             definition += '\n\n';
 
@@ -205,7 +205,7 @@
             for (const shaderID in shaderLayers) {
                 const shaderLayer = shaderLayers[shaderID];
                 const shaderLayerIndex = i++;
-                const shaderObject = shaderLayer.__shaderObject;
+                const shaderConfig = shaderLayer.__shaderConfig;
 
                 // assign ShaderLayer its glsl index, later obtained by getShaderLayerGLSLIndex(shaderLayerUID)
                 this._shadersMapping[shaderLayer.uid] = shaderLayerIndex;
@@ -242,12 +242,14 @@
                 }
 
                 // TODO: if (true) {
-                    html += this.renderer.htmlShaderPartHeader(shaderLayer.newHtmlControls(),
+                    html += this.renderer.htmlShaderPartHeader(
+                        shaderLayer.getHTML(),
                         shaderID,
-                        shaderObject.visible,
-                        shaderObject,
+                        shaderConfig.visible,
+                        shaderConfig,
                         true,
-                        shaderLayer);
+                        shaderLayer
+                    );
                 // }
             } // end of for cycle
 
@@ -576,7 +578,7 @@
             // first pass identity shader is a special case, no blend nor clip, no controls, just pure identity, generate glsl manually now
             definition += `\n    // Definition of special identity shader used for the first-pass:`;
             definition += `
-    vec4 first_pass_identity_execution() {${this.renderer._firstPassShader.getFragmentShaderExecution()}
+    vec4 first_pass_identity_execution() {${this.renderer.firstPassShader.getFragmentShaderExecution()}
     }`;
             definition += '\n\n';
 
@@ -592,7 +594,7 @@
             for (const shaderID in shaderLayers) {
                 const shaderLayer = shaderLayers[shaderID];
                 const shaderLayerIndex = i++;
-                const shaderObject = shaderLayer.__shaderObject;
+                const shaderConfig = shaderLayer.__shaderConfig;
 
                 // assign ShaderLayer its glsl index, later obtained by getShaderLayerGLSLIndex(shaderLayerUID)
                 this._shadersMapping[shaderLayer.uid] = shaderLayerIndex;
@@ -629,12 +631,14 @@
                 }
 
                 // TODO: if (true) {
-                    html += this.renderer.htmlShaderPartHeader(shaderLayer.newHtmlControls(),
-                        shaderObject.shaderID,
-                        shaderObject.visible,
-                        shaderObject,
+                    html += this.renderer.htmlShaderPartHeader(
+                        shaderLayer.getHTML(),
+                        shaderID,
+                        shaderConfig.visible,
+                        shaderConfig,
                         true,
-                        shaderLayer);
+                        shaderLayer
+                    );
                 // }
             } // end of for cycle
 

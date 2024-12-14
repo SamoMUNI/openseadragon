@@ -139,76 +139,51 @@
 
         /**
          * Global supported options
-         * @param {string} id unique ID among all webgl instances and shaders
-         * @param {object} privateOptions options that should not be touched, necessary for linking the layer to the core
-         * @param {object} privateOptions.shaderObject concrete shader object definition from spec.shaders
+         * @param {String} id unique identifier
+         * @param {Object} privateOptions options that should not be touched, necessary for linking the layer to the core
+         * @param {Object} privateOptions.shaderConfig concrete shader object definition from spec.shaders
          * @param {WebGLImplementation} privateOptions.webglContext
-         * @param {boolean} privateOptions.interactive
-         * @param {function} privateOptions.invalidate
-         * @param {function} privateOptions.rebuild
-         * @param {function} privateOptions.refetch
+         * @param {Object} privateOptions.controls
+         * @param {Boolean} privateOptions.interactive
+         * @param {Object} privateOptions.cache
+         *
+         * @param {Function} privateOptions.invalidate  // callback to re-render the viewport
+         * @param {Function} privateOptions.rebuild     // callback to rebuild the WebGL program
+         * @param {Function} privateOptions.refetch     // callback to reinitialize the drawer; NOT USED
          */
         constructor(id, privateOptions) {
             // "rendererId" + <index of shader in spec.shaders>
-            this.uid = id;
+            this.id = id;
+            this.uid = this.constructor.type().replaceAll('-', '_') + '_' + id;
             if (!$.WebGLModule.idPattern.test(this.uid)) {
                 console.error(`Invalid ID for the shader: ${id} does not match to the pattern`, $.WebGLModule.idPattern);
             }
 
+            this.__shaderConfig = privateOptions.shaderConfig; // shaderConfig from spec.shaders
             this.webglContext = privateOptions.webglContext;
-            this.__shaderObject = privateOptions.shaderObject; // shaderObject from spec.shaders
-            this._controls = privateOptions.controls; // shaderObject._controls
+            this._controls = privateOptions.controls; // shaderConfig._controls
             this._hasInteractiveControls = privateOptions.interactive;
-            this._cache = privateOptions.cache; // shaderObject._cache
-            this._customControls = privateOptions.shaderObject.params;
+            this._cache = privateOptions.cache; // shaderConfig._cache
+            this._customControls = privateOptions.params;
 
             this.invalidate = privateOptions.invalidate;
             this._rebuild = privateOptions.rebuild;
             this._refetch = privateOptions.refetch;
-
         }
 
         /**
-         * Manual constructor, must call super.construct(...) if overridden, but unlike
-         * constructor the call can be adjusted (e.g. adjust option values)
-         * @param {object} options this.__shaderObject.params
-         * @param {string} options.use_channel[X]: "r", "g" or "b" channel to sample index X, default "r"
-         * @param {string} options.use_mode: blending mode - default alpha ("show"), custom blending ("mask") and clipping mask blend ("mask_clip")
-         * @param {[number]} dataReferences indexes of data being requested for this shader (this.__shaderObject.dataReferences)
+         * Initialize the ShaderLayer.
+         * Set up the color channel(s) for texture sampling, blending mode and filters applied to sampled data from the texture.
+         * Create controls.
          */
-        /* options = {}, dataReferences = [0] */
-        construct(options = {}, dataReferences = [0]) {
-            this._ownedControls = [];
-            // prechadza controls v defaultControls a nastavi pre kazdy this[control] = <SimpleUIControl>, plus mena da do _ownedControls
-            this._buildControls(options);
-            // nastavi this.__channels na ["rgba"] plus do shaderObject.cache da use_channel0: "rgba" (opacity tam este neni!)
-            this.resetChannel(options);
-            // nastavi this._mode a this.__mode na "show", inak by mohla aj do cache nastavovat...
-            this.resetMode(options);
-        }
-
-        /**
-         *
-         * @param {object} options this.__shaderObject.params
-         * @param {string} options.use_channel[X]: "r", "g" or "b" channel to sample index X, default "r"
-         * @param {string} options.use_mode: blending mode - default alpha ("show"), custom blending ("mask") and clipping mask blend ("mask_clip")
-         * @param {[number]} dataReferences indexes of data being requested for this shader (this.__shaderObject.dataReferences)
-         */
-        newConstruct(options = {}) {
-            this.resetChannel(options);
-            this.resetMode(options);
-
+        construct() {
+            this.resetChannel(this._customControls);
+            this.resetMode(this._customControls);
             this.resetFilters(this._customControls);
+            this._buildControls();
         }
 
-        /**
-         *
-         * @param {object} shaderObject unique object bind to this shader
-         * @param {string} shaderID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
-         * @param {HTMLElement} controlsParentHTMLElement
-         * @param {function} controlsChangeHandler
-         */
-        newAddControl(shaderObject, shaderID, controlsParentHTMLElement = null, controlsChangeHandler = null) {
+        _buildControls() {
             const defaultControls = this.constructor.defaultControls;
 
             // add opacity control manually to every shader if not already defined
@@ -231,7 +206,7 @@
                     console.warn(`Control ${controlName} not defined in ${this.constructor.name()} shader's defaultControls!`);
                     continue;
                 }
-                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, shaderID + '_' + controlName, this._customControls[controlName]);
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, this.id + '_' + controlName, this._customControls[controlName]);
 
                 // console.debug('newAddControl, vytvoril som control', controlName, control);
                 this._controls[controlName] = control;
@@ -239,43 +214,27 @@
             }
         }
 
-        /**
-         * @param {object} shaderObject unique object bind to the dataSource
-         * @param {string} shaderID unique identification of the data source bind to this shader's controls = "<tiledImageIndex>_<dataSourceIndex>"
-         *
-         */
-        newRemoveControl(shaderObject, shaderID) {
+        removeControls() {
             for (const controlName in this._controls) {
                 const control = this[controlName];
                 control.destroy();
                 delete this[controlName];
-
-                delete shaderObject._controls[controlName];
-                // delete shaderObject._cache[controlName]; // kedze cache je naprogramovana neviem ako ale kluce su tam dake mena tak neviem ju zrusit
+                delete this._controls[controlName];
+                // delete config._cache[controlName]; // kedze cache je naprogramovana neviem ako ale kluce su tam dake mena tak neviem ju zrusit TODO:
             }
         }
 
-        newHtmlControls() {
+        /**
+         * Get HTML code of the ShaderLayer's controls.
+         * @returns {string} HTML code
+         */
+        getHTML() {
             const controlsHtmls = [];
             for (const controlName in this._controls) {
                 const control = this[controlName];
                 controlsHtmls.push(control.toHtml(true));
             }
             return controlsHtmls.join("");
-        }
-
-        registerControlsHandlers(callback) {
-            for (const controlName in this._controls) {
-                const control = this[controlName];
-                control.registerDOMElementEventHandler(callback);
-            }
-        }
-
-        initControls() {
-            for (const controlName in this._controls) {
-                const control = this[controlName];
-                control.init();
-            }
         }
 
         usesCustomBlendFunction() {
@@ -519,7 +478,7 @@
          */
         sampleChannel(textureCoords, otherDataIndex = 0, raw = false) {
             // manualne zmenene pri pridavani podpory pre viac zdrojov
-            // let refs = this.__shaderObject.dataReferences;
+            // let refs = this.__shaderConfig.dataReferences;
             let refs = [0];
 
             /* Array [ "rgba" ] */
@@ -549,7 +508,7 @@
          * @return {number} number of textures available
          */
         dataSourcesCount() {
-            return this.__shaderObject.dataReferences.length;
+            return this.__shaderConfig.dataReferences.length;
         }
 
         /**
@@ -601,7 +560,7 @@
          * @return {number} number of textures available
          */
         get texturesCount() {
-            // return this.__shaderObject.dataReferences.length;
+            // return this.__shaderConfig.dataReferences.length;
             return 1; // uz jeden shader pre kazdy zdroj
         }
 
@@ -697,8 +656,8 @@
          * @param {object} options filters configuration, currently supported are
          *  'use_gamma', 'use_exposure', 'use_logscale'
          */
-        resetFilters(options) {
-            if (!options) {
+        resetFilters(options = {}) {
+            if (Object.keys(options) === 0) {
                 options = this._customControls;
             }
 
@@ -782,79 +741,7 @@
             this._ownedControls.push(name);
         }
 
-        ////////////////////////////////////
-        ////////// PRIVATE /////////////////
-        ////////////////////////////////////
-
-        // volane z konstruktora, vytvara controls podla defaultControls (this[controlname] = SimpleUIControl)
-        /* options = {} */
-        _buildControls(options) {
-            let controls = this.constructor.defaultControls,
-                customParams = this.constructor.customParams;
-
-            // console.log('this.constructor.defaultControls = ', controls);
-            for (let control in controls) {
-                // console.log('som vo fori cez controls, control =', control);
-                if (control.startsWith("use_")) {
-                    continue;
-                }
-
-                let buildContext = controls[control];
-                /* ak sa nachadza control v this.defaultControls */
-                if (buildContext) {
-                    // console.log('v prvom ife, control = ', control);
-                    // creates this[control] = <SimpleUIControl>
-                    this.addControl(control, options[control], buildContext);
-                    continue;
-                }
-
-                let customContext = customParams[control];
-                /* ak sa nachadza control v this.customParams, VOBEC SOM NEPRESIEL TUTO CAST */
-                if (customContext) {
-                    // console.log('v drugom ife');
-                    let targetType;
-                    const dType = typeof customContext.default,
-                        rType = typeof customContext.required;
-                    if (dType !== rType) {
-                        console.error("Custom parameters for shader do not match!",
-                            dType, rType, this.constructor.name());
-                    }
-
-                    if (rType !== 'undefined') {
-                        targetType = rType;
-                    } else if (dType !== 'undefined') {
-                        targetType = dType;
-                    } else {
-                        targetType = 'object';
-                    }
-
-                    if (targetType === 'object') {
-                        let knownOptions = options[control];
-                        if (!knownOptions) {
-                            knownOptions = options[control] = {};
-                        }
-                        if (customContext.default) {
-                            $.extend(knownOptions, customContext.default);
-                        }
-                        if (options[control]) {
-                            $.extend(knownOptions, options[control]);
-                        }
-                        if (customContext.required) {
-                            $.extend(knownOptions, customContext.required);
-                        }
-                    } else {
-                        if (customContext.required !== undefined) {
-                            options[control] = customContext.required;
-                        }
-                        else if (options[control] === undefined) {
-                            options[control] = customContext.default;
-                        }
-                    }
-                }
-            }
-        }
     };
-
     /**
      * Declare supported controls by a particular shader,
      * each control defined this way is automatically created for the shader.

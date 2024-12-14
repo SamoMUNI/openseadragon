@@ -132,13 +132,13 @@
             });
             // console.log('Renderer options =', rendererOptions);
             this.renderer = new $.WebGLModule(rendererOptions);
-            this.renderer.createProgram();
             this.renderer.setDimensions(0, 0, this.canvas.width, this.canvas.height);
-            this._size = new $.Point(this.canvas.width, this.canvas.height); // current viewport size, changed during resize event
+            this.renderer.init();
             this.renderer.setDataBlendingEnabled(true); // enable blending
 
 
             /***** SETUP CANVASES *****/
+            this._size = new $.Point(this.canvas.width, this.canvas.height); // current viewport size, changed during resize event
             this._setupCanvases();
             this.context = this._outputContext; // API required by tests
 
@@ -459,7 +459,7 @@
                 shaderObject._controls = {};
                 shaderObject._cache = {};
 
-                const shader = this.renderer.createShader(shaderObject, shaderType, shaderID);
+                const shader = this.renderer.createShaderLayer(shaderObject, shaderType, shaderID);
                 shaderObject._renderContext = shader;
                 shaderObject._textureLayerIndex = this._getOffScreenTextureIndex(); //this._offScreenTexturesCount++;
 

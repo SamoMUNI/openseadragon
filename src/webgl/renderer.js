@@ -112,7 +112,7 @@
             this._programs = {}; // {number: WebGLProgram}, WebGLPrograms indexed with numbers
             this._programSpecifications = []; // [object], array of specification objects, index of specification corresponds to index of WebGLProgram created from that specification in _programs
 
-            this.shadersCounter = {}; // {identity: <num of tiledImages using identity>, edge: <num of tiledImages using edges>}
+            this._shaders = {}; // {identity: <num of tiledImages using identity>, edge: <num of tiledImages using edges>}
 
             const canvas = document.createElement("canvas");
             const WebGLImplementation = this.constructor.determineContext(this.webGLPreferredVersion);
@@ -208,48 +208,45 @@
             return typeof this.htmlControlsId === "string" && this.htmlControlsId.length > 0;
         }
 
-        createProgram() {
+        init() {
             const Shader = $.WebGLModule.ShaderMediator.getClass("firstPass");
             if (!Shader) {
-                throw new Error("$.WebGLModule::createProgram: Could not create WebGL program!");
+                throw new Error("$.WebGLModule::Init: Could not create WebGL program!");
             }
 
             const shader = new Shader("first_pass_identity", {
-                shaderObject: {},
+                shaderConfig: {},
                 webglContext: this.webglContext,
                 controls: {},
                 interactive: false,
                 cache: {},
                 invalidate: () => {},
-                rebuild: () => {}, // need to rebuild the whole shaderLayer
-                refetch: () => {}  // need to reinitialize whole drawer? probably not needed
+                rebuild: () => {},
+                refetch: () => {}
             });
             shader.__channels = {};
             shader.__channels[0] = "rgba";
 
-            this._firstPassShader = shader;
+            this.firstPassShader = shader;
 
             this.recreateProgram();
         }
 
         recreateProgram() {
-            const program = this.webglContext.createProgram(this.shadersCounter);
+            const program = this.webglContext.createProgram(this._shaders);
             this.gl.useProgram(program);
 
             if (this.supportsHtmlControls()) {
                 this.htmlControlsElement.innerHTML = program._osdOptions.html;
-                // for (const shaderLayer of Object.values(this.shadersCounter)) {
-                //     shaderLayer.registerControlsHandlers(this.resetCallback);
-                // }
+                // FIXME: hodit sem z webglcontextu zajtra tu som skoncil, inak upravujem renderer a ShaderLayer naraz
             }
-            for (const shaderLayer of Object.values(this.shadersCounter)) {
-                // shaderLayer.initControls(this.resetCallback);
+            for (const shaderLayer of Object.values(this._shaders)) {
                 shaderLayer.init();
             }
 
             this._program = program;
             // firstly has to initialize the controls, then I can load everything
-            this.webglContext.loadProgram(program, this.shadersCounter);
+            this.webglContext.loadProgram(program, this._shaders);
 
             if (!this.running) {
                 //TODO: might not be the best place to call, timeout necessary to allow finish initialization of OSD before called
@@ -261,91 +258,67 @@
         }
 
         /**
-         * Description:
-         * @param {object} shaderObject object bind to concrete shaderLayer instantion
-         * @param {string} shaderType eg.: identity, edge, negative,...
-         * @param {string} shaderID "<tiledImageIndex>_<sourceIndex>"
-         * @returns {ShaderLayer} instantion of newly created shaderLayer
+         * Create and initialize new ShaderLayer instantion and its controls.
+         * @param {Object} shaderConfig object bind to a concrete ShaderLayer instantion
+         * @param {String} shaderType   equal to ShaderLayer.type(), e.g. "identity"
+         * @param {String} shaderID     unique identifier
+         * @returns {ShaderLayer}       instantion of the created shaderLayer
          */
-        addShader(shaderObject, shaderType, shaderID) {
-            console.log('renderer:: addShader call!');
-            // console.info('$.WebGLModule::addShader: Shaders available =', $.WebGLModule.ShaderMediator.availableTypes());
+        createShaderLayer(shaderConfig, shaderType, shaderID) {
+            console.warn('shaderConfig =', shaderConfig);
 
-            // shaderType = "identity" for example
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             if (!Shader) {
-                throw new Error(`$.WebGLModule::addShader: Unknown shader type '${shaderType}'!`);
-            } else {
-                console.debug('$.WebGLModule::addShader: Adding shader type:', shaderType, 'with id:', shaderID);
-                // console.debug('$.WebGLModule::addShader: Shader:', Shader);
+                throw new Error(`$.WebGLModule::createShaderLayer: Unknown shader type '${shaderType}'!`);
             }
 
-            const shader = new Shader(shaderType.replaceAll('-', '_') + '_' + shaderID, {
-                shaderObject: shaderObject,
+            const shader = new Shader(shaderID, {
+                shaderConfig: shaderConfig,
                 webglContext: this.webglContext,
-                controls: shaderObject._controls,
+                controls: shaderConfig._controls,
                 interactive: this.supportsHtmlControls(),
-                cache: shaderObject._cache,
-                // rerender the viewport
+                cache: shaderConfig._cache,
+                params: shaderConfig.params,
+
+                // callback to re-render the viewport
                 invalidate: this.resetCallback,
-                // need to rebuild the WebGL program, because shaderLayer has changed (eg. use different channel for texture sampling)
+                // callback to rebuild the WebGL program
                 rebuild: () => {
                     this.recreateProgram();
                 },
-                refetch: this.refetchCallback // need to reinitialize whole drawer? probably not needed
+                // callback to reinitialize the drawer; NOT USED
+                refetch: this.refetchCallback
             });
-            shader.newConstruct();
-            shader.newAddControl(shaderObject, shaderID, this.htmlControlsElement, this.resetCallback);
+            shader.construct();
 
-            this.shadersCounter[shaderID] = shader;
+            this._shaders[shaderID] = shader;
             this.recreateProgram();
 
-            // console.log('renderer.js::addShader(): PROGRAM UPDATED!');
+            // console.log('renderer.js::createShaderLayer(): PROGRAM UPDATED!');
             return shader;
         }
 
         /**
-         * Description:
-         * @param {object} shaderObject json object corresponding to a concrete data source
-         * @param {string} shaderType eg.: identity, edge, negative,...
-         * @param {string} shaderID "<tiledImageIndex>_<sourceIndex>"
-         * @returns {ShaderLayer} instantion of shaderLayer
+         * Remove ShaderLayer instantion and its controls.
+         * @param {object} shaderConfig object bind to a concrete ShaderLayer instantion
+         * @param {string} shaderID     unique identifier
          */
-        createShader(shaderObject, shaderType, shaderID) {
-            const newShader = this.addShader(shaderObject, shaderType, shaderID);
-            return newShader;
+        removeShader(shaderConfig, shaderID) {
+            const shader = this._shaders[shaderID];
+            shader.removeControls(shaderConfig, shaderID);
+
+            delete this._shaders[shaderID];
+            this.recreateProgram();
         }
 
         /**
-         * Remove shader's controls corresponding to dataSource. If needed, remove shader from this.shadersCounter and recreate program.
-         * @param {object} shaderObject json object corresponding to a concrete data source
-         * @param {string} shaderID "<tiledImageIndex>_<sourceIndex>"
+         * @param {Boolean} enabled if true enable alpha blending, otherwise disable blending
          */
-        removeShader(shaderObject, shaderID) {
-            const shader = this.shadersCounter[shaderID];
-            shader.newRemoveControl(shaderObject, shaderID);
-
-            delete this.shadersCounter[shaderID];
-            this.recreateProgram();
-            console.log('removeShader, this.shadersCounter po odobrati =', this.shadersCounter);
-        }
-
-        printWebglShadersOfCurrentProgram() {
-            const opts = this._programs[0]._osdOptions;
-            $.console.info("VERTEX SHADER\n", opts.vs);
-            $.console.info("FRAGMENT SHADER\n", opts.fs);
-        }
-
-
         setDataBlendingEnabled(enabled) {
             if (enabled) {
-                // this.gl.enable(this.gl.BLEND);
-                // this.gl.blendEquation(this.gl.FUNC_ADD);
-                // this.gl.blendFuncSeparate(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA, this.gl.ONE, this.gl.ONE);
-
-                // this blending setup is typically used for standard alpha blending, where the transparency of the source (source pixel = the one being drawn)
-                // determines how much of the destination color shows through
                 this.gl.enable(this.gl.BLEND);
+
+                // standard alpha blending
                 this.gl.blendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
             } else {
                 this.gl.disable(this.gl.BLEND);
@@ -353,8 +326,7 @@
         }
     };
     /**
-     * ID pattern allowed for module, ID's are used in GLSL
-     * to distinguish uniquely between static generated code parts
+     * ID pattern allowed for WebGLModule, ID's are used in GLSL to distinguish uniquely between individual ShaderLayer's generated code parts
      * @type {RegExp}
      */
     $.WebGLModule.idPattern = /^(?!_)(?:(?!__)[0-9a-zA-Z_])*$/;
