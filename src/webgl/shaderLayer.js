@@ -1,147 +1,97 @@
 (function($) {
-
     /**
-     * Organizer of shaders
+     * Organizer of ShaderLayers.
+     *
+     * @property {object} _layers           storage of ShaderLayers, {ShaderLayer.type(): ShaderLayer}
+     * @property {Boolean} _acceptsShaders  allow new ShaderLayer registrations
+
      * @class OpenSeadragon.WebGLModule.ShaderMediator
-     * @property {object} _layers storage of shaders, shader.type(): <shader>
-     * @property {boolean} _acceptsShaders allow new shaders
+     * @memberOf OpenSeadragon.WebGLModule
      */
     $.WebGLModule.ShaderMediator = class {
         /**
-         * Register shader (add shader to _layers object)
-         * @param {typeof OpenSeadragon.WebGLModule.ShaderLayer} LayerRendererClass static class definition
+         * Register ShaderLayer.
+         * @param {typeof OpenSeadragon.WebGLModule.ShaderLayer} shaderLayer
          */
-        static registerLayer(LayerRendererClass) {
-            //todo why not hasOwnProperty check allowed by syntax checker
-            // if (this._layers.hasOwnProperty(LayerRendererClass.type())) {
-            //     console.warn("Registering an already existing layer renderer:", LayerRendererClass.type());
-            // }
-            // if (!$.WebGLModule.SthishaderLayer.isPrototypeOf(LayerRendererClass)) {
-            //     throw `${LayerRendererClass} does not inherit from ShaderLayer!`;
-            // }static
+        static registerLayer(shaderLayer) {
             if (this._acceptsShaders) {
-                this._layers[LayerRendererClass.type()] = LayerRendererClass;
+                if (this._layers[shaderLayer.type()]) {
+                    console.warn(`OpenSeadragon.WebGLModule.ShaderMediator::registerLayer: ShaderLayer ${shaderLayer.type()} already registered, overwriting the content!`);
+                }
+                this._layers[shaderLayer.type()] = shaderLayer;
             } else {
-                console.warn("OpenSeadragon.WebGLModule.ShaderMediator::registerLayer(LayerRendererClass) ShaderMediator is set to not accept new shaders");
+                console.warn("OpenSeadragon.WebGLModule.ShaderMediator::registerLayer: ShaderMediator is set to not accept new ShaderLayers!");
             }
         }
 
         /**
-         * Enable or disable shader registrations
-         * @param {boolean} accepts
+         * Enable or disable ShaderLayer registrations.
+         * @param {Boolean} accepts
          */
         static setAcceptsRegistrations(accepts) {
             if (accepts === true || accepts === false) {
                 this._acceptsShaders = accepts;
             } else {
-                console.warn("OpenSeadragon.WebGLModule.ShaderMediator::setAcceptsRegistrations(accepts) Accepts parameter must be either true or false");
+                console.warn("OpenSeadragon.WebGLModule.ShaderMediator::setAcceptsRegistrations: Accepts parameter must be either true or false!");
             }
         }
 
         /**
-         * Get the shader implementation by type id
-         * @param {string} id
-         * @return {function} class extends OpenSeadragon.WebGLModule.ShaderLayer
+         * Get the ShaderLayer implementation.
+         * @param {String} shaderType equals to a wanted ShaderLayers.type()'s return value
+         * @return {typeof OpenSeadragon.WebGLModule.ShaderLayer}
          */
-        static getClass(id) {
-            return this._layers[id];
+        static getClass(shaderType) {
+            return this._layers[shaderType];
         }
 
         /**
-         * Get all available shaders
-         * @return {typeof OpenSeadragon.WebGLModule.ShaderLayer[]} classes that extend OpenSeadragon.WebGLModule.ShaderLayer
+         * Get all available ShaderLayers.
+         * @return {[typeof OpenSeadragon.WebGLModule.ShaderLayer]}
          */
         static availableShaders() {
             return Object.values(this._layers);
         }
 
         /**
-         * Get all available shaders
-         * @return {string[]} classes that extend OpenSeadragon.WebGLModule.ShaderLayer
+         * Get all available ShaderLayer types.
+         * @return {[String]}
          */
         static availableTypes() {
             return Object.keys(this._layers);
         }
     };
-    // attributes that should've been static but cannot be so because of the old version of javascript
+    // STATIC PROPERTIES
     $.WebGLModule.ShaderMediator._acceptsShaders = true;
     $.WebGLModule.ShaderMediator._layers = {};
 
-    $.WebGLModule.BLEND_MODE = {
-        'source-over': 0,
-        'source-in': 1,
-        'source-out': 1,
-        'source-atop': 1,
-        'destination-over': 1,
-        'destination-in': 1,
-        'destination-out': 1,
-        'destination-atop': 1,
-        lighten: 1,
-        darken: 1,
-        copy: 1,
-        xor: 1,
-        multiply: 1,
-        screen: 1,
-        overlay: 1,
-        'color-dodge': 1,
-        'color-burn': 1,
-        'hard-light': 1,
-        'soft-light': 1,
-        difference: 1,
-        exclusion: 1,
-        hue: 1,
-        saturation: 1,
-        color: 1,
-        luminosity: 1
-    };
-    $.WebGLModule.BLEND_MODE_MULTIPLY = 1;
+
 
     /**
-     * Abstract interface to any Shader.
-     * @abstract
+     * Interface for classes that implement any rendering logic and are part of the final WebGLProgram.
+     *
+     * @property {Object} defaultControls default controls for the ShaderLayer
+     * @property {Object} customParams
+     * @property {Object} modes
+     * @property {Object} filters
+     * @property {Object} filterNames
+     * @property {Object} __globalIncludes
+     *
+     * @interface OpenSeadragon.WebGLModule.ShaderLayer
+     * @memberOf OpenSeadragon.WebGLModule
      */
     $.WebGLModule.ShaderLayer = class {
-
         /**
-         * Override **static** type definition
-         * The class must be registered using the type
-         * @returns {string} unique id under which is the shader registered
+         * @typedef channelSettings
+         * @type {Object}
+         * @property {Function} acceptsChannelCount
+         * @property {String} description
          */
-        static type() {
-            throw "ShaderLayer::type() Type must be specified!";
-        }
 
         /**
-         * Override **static** name definition
-         * @returns {string} name of the shader (user-friendly)
-         */
-        static name() {
-            throw "ShaderLayer::name() Name must be specified!";
-        }
-
-        /**
-         * Provide description
-         * @returns {string} optional description
-         */
-        static description() {
-            return "ShaderLayer::description() WebGL shader should provide description.";
-        }
-
-        /**
-         * Declare the number of data sources it reads from (how many dataSources indexes should the shader contain)
-         * @return {Array.<Object>} array of source specifications:
-         *  acceptsChannelCount: predicate that evaluates whether given number of channels (argument) is acceptable
-         *  [optional] description: the description of the source - what it is being used for
-         */
-        static sources() {
-            throw "ShaderLayer::sources() Shader must specify channel acceptance predicates for each source it uses!";
-        }
-
-        /**
-         * Global supported options
          * @param {String} id unique identifier
-         * @param {Object} privateOptions options that should not be touched, necessary for linking the layer to the core
-         * @param {Object} privateOptions.shaderConfig concrete shader object definition from spec.shaders
+         * @param {Object} privateOptions
+         * @param {Object} privateOptions.shaderConfig              object bind with this ShaderLayer
          * @param {WebGLImplementation} privateOptions.webglContext
          * @param {Object} privateOptions.controls
          * @param {Boolean} privateOptions.interactive
@@ -149,21 +99,25 @@
          *
          * @param {Function} privateOptions.invalidate  // callback to re-render the viewport
          * @param {Function} privateOptions.rebuild     // callback to rebuild the WebGL program
-         * @param {Function} privateOptions.refetch     // callback to reinitialize the drawer; NOT USED
+         * @param {Function} privateOptions.refetch     // callback to reinitialize the whole WebGLDrawer; NOT USED
+         *
+         * @constructor
+         * @memberOf WebGLModule.ShaderLayer
          */
         constructor(id, privateOptions) {
-            // "rendererId" + <index of shader in spec.shaders>
+            // unique identifier of this ShaderLayer for WebGLModule
             this.id = id;
+            // unique identifier of this ShaderLayer for WebGLProgram
             this.uid = this.constructor.type().replaceAll('-', '_') + '_' + id;
             if (!$.WebGLModule.idPattern.test(this.uid)) {
                 console.error(`Invalid ID for the shader: ${id} does not match to the pattern`, $.WebGLModule.idPattern);
             }
 
-            this.__shaderConfig = privateOptions.shaderConfig; // shaderConfig from spec.shaders
+            this.__shaderConfig = privateOptions.shaderConfig;
             this.webglContext = privateOptions.webglContext;
-            this._controls = privateOptions.controls; // shaderConfig._controls
+            this._controls = privateOptions.controls;
             this._hasInteractiveControls = privateOptions.interactive;
-            this._cache = privateOptions.cache; // shaderConfig._cache
+            this._cache = privateOptions.cache;
             this._customControls = privateOptions.params;
 
             this.invalidate = privateOptions.invalidate;
@@ -172,9 +126,38 @@
         }
 
         /**
+         * @returns {String} key under which is the shader registered, should be unique!
+         */
+        static type() {
+            throw "ShaderLayer::type() must be implemented!";
+        }
+
+        /**
+         * @returns {String} name of the ShaderLayer (user-friendly)
+         */
+        static name() {
+            throw "ShaderLayer::name() must be implemented!";
+        }
+
+        /**
+         * @returns {String} optional description
+         */
+        static description() {
+            return "No description of the ShaderLayer.";
+        }
+
+        /**
+         * Declare the object for channel settings. One for each data source (NOT USED, ALWAYS RETURNS ARRAY OF ONE OBJECT; for backward compatibility the array is returned)
+         * @returns {[channelSettings]}
+         */
+        static sources() {
+            throw "ShaderLayer::sources() must be implemented!";
+        }
+
+        /**
          * Initialize the ShaderLayer.
          * Set up the color channel(s) for texture sampling, blending mode and filters applied to sampled data from the texture.
-         * Create controls.
+         * Build controls.
          */
         construct() {
             this.resetChannel(this._customControls);
@@ -183,10 +166,13 @@
             this._buildControls();
         }
 
+        /**
+         * Build the ShaderLayer's controls.
+         */
         _buildControls() {
             const defaultControls = this.constructor.defaultControls;
 
-            // add opacity control manually to every shader if not already defined
+            // add opacity control manually to every ShaderLayer; if not already defined
             if (defaultControls.opacity === undefined || (typeof defaultControls.opacity === "object" && !defaultControls.opacity.accepts("float"))) {
                 defaultControls.opacity = {
                     default: {type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: "},
@@ -194,41 +180,64 @@
                 };
             }
 
-            // console.debug(`defaultControls of ${this.constructor.name()} shader =`, defaultControls);
             for (let controlName in defaultControls) {
+                // with use_ prefix are defined not UI controls but filters, blend modes, etc.
                 if (controlName.startsWith("use_")) {
                     continue;
                 }
 
-                // console.debug('newAddControl, prechadzam defaultControls, controlName =', controlName);
-                const controlObject = defaultControls[controlName];
-                if (!controlObject) { // pridane iba kvoli codingVisualizationLayer, ktory ma ze opacity: false -.- -> vykomentoval som to tam
-                    console.warn(`Control ${controlName} not defined in ${this.constructor.name()} shader's defaultControls!`);
+                // control is manually disabled
+                const controlConfig = defaultControls[controlName];
+                if (controlConfig === false) {
                     continue;
                 }
-                const control = $.WebGLModule.UIControls.build(this, controlName, controlObject, this.id + '_' + controlName, this._customControls[controlName]);
 
-                // console.debug('newAddControl, vytvoril som control', controlName, control);
+                const control = $.WebGLModule.UIControls.build(this, controlName, controlConfig, this.id + '_' + controlName, this._customControls[controlName]);
+                // enables iterating over the owned controls
                 this._controls[controlName] = control;
+                // simplify usage of controls (e.g. this.opacity instead of this._controls.opacity)
                 this[controlName] = control;
             }
         }
 
+        /**
+         * Remove all ShaderLayer's controls.
+         */
         removeControls() {
             for (const controlName in this._controls) {
                 const control = this[controlName];
                 control.destroy();
-                delete this[controlName];
-                delete this._controls[controlName];
+                this.removeControl(controlName);
                 // delete config._cache[controlName]; // kedze cache je naprogramovana neviem ako ale kluce su tam dake mena tak neviem ju zrusit TODO:
             }
         }
 
         /**
-         * Get HTML code of the ShaderLayer's controls.
-         * @returns {string} HTML code
+         * @param {String} controlName name of the control to remove
          */
-        getHTML() {
+        removeControl(controlName) {
+            if (!this._controls[controlName]) {
+                return;
+            }
+            delete this._controls[controlName];
+            delete this[controlName];
+        }
+
+        /**
+         * Initialize the ShaderLayer's controls.
+         */
+        init() {
+            for (const controlName in this._controls) {
+                const control = this[controlName];
+                control.init();
+            }
+        }
+
+        /**
+         * Get HTML code of the ShaderLayer's controls.
+         * @returns {String} HTML code
+         */
+        htmlControls() {
             const controlsHtmls = [];
             for (const controlName in this._controls) {
                 const control = this[controlName];
@@ -237,14 +246,25 @@
             return controlsHtmls.join("");
         }
 
+        /**
+         * @returns {Boolean} true if the ShaderLayer has own blend function, false otherwise
+         */
         usesCustomBlendFunction() {
             return this._mode !== "show";
         }
+
+        /**
+         * @returns {String} GLSL code of the custom blend function
+         */
         getCustomBlendFunction() {
             return `vec4 ${this.uid}_blend_func(vec4 fg, vec4 bg) {
         return fg;
     }`;
         }
+
+        /**
+         * @returns {String} GLSL code of the ShaderLayer's blend mode's logic
+         */
         getModeFunction() {
             let modeDefinition = `void ${this.uid}_blend_mode(vec4 color) {`;
             if (this._mode === "show") {
@@ -308,14 +328,6 @@
             return retval;
         }
 
-        setBlendMode(name) {
-            const modes = $.WebGLModule.BLEND_MODE;
-            // cislo, bud 0 alebo 1 udavajuce global blend mode
-            this.blendMode = modes[name];
-            if (this.blendMode === undefined) {
-                this.blendMode = modes["source-over"];
-            }
-        }
 
         /**
          * Code executed to create the output color. The code
@@ -375,35 +387,9 @@
             }
         }
 
-        /**
-         * This function is called once at
-         * the beginning of the layer use
-         * (might be multiple times), after htmlControls()
-         */
-        init() {
-            // if (!this.initialized()) {
-            //     console.error("Shader not properly initialized! Call shader.construct()!");
-            // }
-            for (const controlName in this._controls) {
-                const control = this[controlName];
-                control.init();
-            }
-        }
 
-        /**
-         * Get the shader UI controls
-         * @return {string} HTML controls for the particular shader
-         */
-        htmlControls() {
-            let html = [];
-            for (let control of this._ownedControls) {
-                const target = this[control];
-                if (target) {
-                    html.push(target.toHtml(true));
-                }
-            }
-            return html.join("");
-        }
+
+
 
         /**
          * Include GLSL shader code on global scope
@@ -419,16 +405,6 @@
             }
         }
 
-        /**
-         * @param {string} controlName name of control to delete
-         */
-        removeControl(controlName) {
-            if (!this._ownedControls[controlName]) {
-                return;
-            }
-            delete this._ownedControls[controlName];
-            delete this[controlName];
-        }
 
         /**
          * Check if shader is initialized.

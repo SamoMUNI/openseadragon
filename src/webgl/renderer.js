@@ -1,6 +1,11 @@
 (function($) {
     /**
      * Class that manages ShaderLayers, their controls, and WebGLContext to allow rendering using WebGL.
+     *
+     * @property {RegExp} idPattern
+     * @property {Object} BLEND_MODE
+     * @property {Number} BLEND_MODE_MULTIPLY
+     *
      * @class OpenSeadragon.WebGLModule
      * @memberOf OpenSeadragon
      */
@@ -234,7 +239,7 @@
                     const shaderConfig = shaderLayer.__shaderConfig;
                     const visible = shaderConfig.visible;
                     html += this.htmlShaderPartHeader(
-                        shaderLayer.getHTML(),
+                        shaderLayer.htmlControls(),
                         shaderLayer.id,
                         visible,
                         shaderConfig,
@@ -341,6 +346,8 @@
         }
     };
 
+
+    // STATIC PROPERTIES
     /**
      * ID pattern allowed for WebGLModule. ID's are used in GLSL to distinguish uniquely between individual ShaderLayer's generated code parts
      * @property
@@ -349,4 +356,33 @@
      */
     $.WebGLModule.idPattern = /^(?!_)(?:(?!__)[0-9a-zA-Z_])*$/;
 
+    $.WebGLModule.BLEND_MODE = {
+        'source-over': 0,
+        'source-in': 1,
+        'source-out': 1,
+        'source-atop': 1,
+        'destination-over': 1,
+        'destination-in': 1,
+        'destination-out': 1,
+        'destination-atop': 1,
+        lighten: 1,
+        darken: 1,
+        copy: 1,
+        xor: 1,
+        multiply: 1,
+        screen: 1,
+        overlay: 1,
+        'color-dodge': 1,
+        'color-burn': 1,
+        'hard-light': 1,
+        'soft-light': 1,
+        difference: 1,
+        exclusion: 1,
+        hue: 1,
+        saturation: 1,
+        color: 1,
+        luminosity: 1
+    };
+
+    $.WebGLModule.BLEND_MODE_MULTIPLY = 1;
 })(OpenSeadragon);
