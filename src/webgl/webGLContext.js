@@ -183,8 +183,7 @@
 
             let definition = '',
                 execution = '',
-                customBlendFunctions = '',
-                html = '';
+                customBlendFunctions = '';
 
             // first-pass identity shader is a special case, no blend mode nor blend function, no controls, just pure identity => generate glsl manually now
             definition += `\n    // Definition of special identity shader used for the first-pass:`;
@@ -205,7 +204,6 @@
             for (const shaderID in shaderLayers) {
                 const shaderLayer = shaderLayers[shaderID];
                 const shaderLayerIndex = i++;
-                const shaderConfig = shaderLayer.__shaderConfig;
 
                 // assign ShaderLayer its glsl index, later obtained by getShaderLayerGLSLIndex(shaderLayerUID)
                 this._shadersMapping[shaderLayer.uid] = shaderLayerIndex;
@@ -240,17 +238,6 @@
             overall_color = ${shaderLayer.uid}_blend_func(last_color, overall_color);
             break;`;
                 }
-
-                // TODO: if (true) {
-                    html += this.renderer.htmlShaderPartHeader(
-                        shaderLayer.getHTML(),
-                        shaderID,
-                        shaderConfig.visible,
-                        shaderConfig,
-                        true,
-                        shaderLayer
-                    );
-                // }
             } // end of for cycle
 
 
@@ -258,7 +245,6 @@
             const fragmentShaderSource = this._getFragmentShaderSource(definition, execution, customBlendFunctions, $.WebGLModule.ShaderLayer.__globalIncludes);
 
             program._osdOptions = {};
-            program._osdOptions.html = html;
             program._osdOptions.vs = vertexShaderSource;
             program._osdOptions.fs = fragmentShaderSource;
 
@@ -571,8 +557,7 @@
 
             let definition = '',
                 execution = '',
-                customBlendFunctions = '',
-                html = '';
+                customBlendFunctions = '';
 
 
             // first pass identity shader is a special case, no blend nor clip, no controls, just pure identity, generate glsl manually now
@@ -594,7 +579,6 @@
             for (const shaderID in shaderLayers) {
                 const shaderLayer = shaderLayers[shaderID];
                 const shaderLayerIndex = i++;
-                const shaderConfig = shaderLayer.__shaderConfig;
 
                 // assign ShaderLayer its glsl index, later obtained by getShaderLayerGLSLIndex(shaderLayerUID)
                 this._shadersMapping[shaderLayer.uid] = shaderLayerIndex;
@@ -629,24 +613,12 @@
             overall_color = ${shaderLayer.uid}_blend_func(last_color, overall_color);
         }`;
                 }
-
-                // TODO: if (true) {
-                    html += this.renderer.htmlShaderPartHeader(
-                        shaderLayer.getHTML(),
-                        shaderID,
-                        shaderConfig.visible,
-                        shaderConfig,
-                        true,
-                        shaderLayer
-                    );
-                // }
             } // end of for cycle
 
             const vertexShaderSource = this._getVertexShaderSource();
             const fragmentShaderSource = this._getFragmentShaderSource(definition, execution, customBlendFunctions, $.WebGLModule.ShaderLayer.__globalIncludes);
 
             program._osdOptions = {};
-            program._osdOptions.html = html;
             program._osdOptions.vs = vertexShaderSource;
             program._osdOptions.fs = fragmentShaderSource;
 
