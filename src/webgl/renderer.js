@@ -269,15 +269,23 @@
         /**
          * Create and initialize new ShaderLayer instantion and its controls.
          * @param {Object} shaderConfig object bind to a concrete ShaderLayer instantion
-         * @param {String} shaderType   equal to ShaderLayer.type(), e.g. "identity"
-         * @param {String} shaderID     unique identifier
+         * @param {String} shaderConfig.id     unique identifier
+         * @param {String} shaderConfig.externalId   unique identifier, used to communicate with the xOpat's API
+         * @param {String} shaderConfig.name
+         * @param {String} shaderConfig.type         equal to ShaderLayer.type(), e.g. "identity"
+         * @param {Number} shaderConfig.visible      1 = use for rendering, 0 = do not use for rendering
+         * @param {Boolean} shaderConfig.fixed
+         * @param {Object} shaderConfig.params       settings for the ShaderLayer
+         * @param {Object} shaderConfig._controls    storage for the ShaderLayer's controls
+         * @param {Object} shaderConfig._cache       cache object used by the ShaderLayer's controls
          * @returns {ShaderLayer}       instantion of the created shaderLayer
          *
          * @instance
          * @memberOf WebGLModule
          */
-        createShaderLayer(shaderConfig, shaderType, shaderID) {
-            console.warn('shaderConfig =', shaderConfig);
+        createShaderLayer(shaderConfig) {
+            const shaderID = shaderConfig.id;
+            const shaderType = shaderConfig.type;
 
             const Shader = $.WebGLModule.ShaderMediator.getClass(shaderType);
             if (!Shader) {
@@ -305,7 +313,6 @@
             this._shaders[shaderID] = shader;
             this.createProgram();
 
-            // console.log('renderer.js::createShaderLayer(): PROGRAM UPDATED!');
             return shader;
         }
 

@@ -19,7 +19,7 @@
             this.debug = this.webGLOptions.debug || true;
 
             this._id = this.constructor.numOfDrawers++;
-            this.webGLVersion = "2.0";
+            this.webGLVersion = "1.0";
 
             this._destroyed = false;
             this._tileIdCounter = 0;
@@ -35,6 +35,8 @@
 
             this._backupCanvasDrawer = null;
             this._imageSmoothingEnabled = true; // will be updated by setImageSmoothingEnabled
+
+            this._sessionInfo = {}; // attribute containing session info, used for exporting
 
 
             // SETUP WEBGLMODULE
@@ -87,7 +89,7 @@
             // map to save tiles as canvases for exporting {tileId: canvas}
             this.tilesAsCanvases = {};
 
-            // create a link for exporting offScreenTextures and tiles, only for the main drawer, not the minimap
+            // create a link for downloading off-screen textures, or input image data tiles. Only for the main drawer, not the minimap.
             if (this._id === 0) {
                 const downloadLink = document.createElement('a');
                 downloadLink.id = 'download-off-screen-textures';
@@ -105,7 +107,7 @@
                 // add an event listener to trigger the download when clicked
                 downloadLink.addEventListener('click', (event) => {
                     event.preventDefault();  // prevent the default anchor behavior
-                    this.downloadOffScreenTextures();
+                    this._downloadOffScreenTextures();
                 });
 
 
@@ -123,7 +125,7 @@
                 // add an event listener to trigger the download when clicked
                 downloadLink2.addEventListener('click', (event) => {
                     event.preventDefault();  // prevent the default anchor behavior
-                    this.downloadTiles();
+                    this._downloadTiles();
                 });
             }
 
@@ -136,21 +138,20 @@
             this.viewer.addHandler("tile-ready", this._boundToTileReady);
             this.viewer.addHandler("image-unloaded", this._boundToImageUnloaded);
 
-            // Reject listening for the tile-drawing and tile-drawn events, which this drawer does not fire
+            // reject listening for the tile-drawing and tile-drawn events, which this drawer does not fire
             this.viewer.rejectEventHandler("tile-drawn", "The WebGLDrawer does not raise the tile-drawn event");
             this.viewer.rejectEventHandler("tile-drawing", "The WebGLDrawer does not raise the tile-drawing event");
 
-            this._export = {};
+
             this.viewer.world.addHandler("remove-item", (e) => {
                 // delete export info about this tiledImage
-                delete this._export[e.item.source.__renderInfo.externalID];
-                this.export();
+                delete this._sessionInfo[e.item.source.__renderInfo.externalId];
 
                 for (const sourceID of Object.keys(e.item.source.__renderInfo.drawers[this._id].shaders)) {
                     // TODO: pozriet ci funguje dobre este
                     const sourceJSON = e.item.source.__renderInfo.drawers[this._id].shaders[sourceID];
                     this.renderer.removeShader(sourceJSON, e.item.source.__renderInfo.id.toString() + '_' + sourceID.toString());
-                    this._offScreenTexturesUnusedIndices.push(sourceJSON._textureLayerIndex);
+                    this._offScreenTexturesUnusedIndices.push(sourceJSON._offScreenTextureIndex);
                 }
 
 
@@ -159,13 +160,14 @@
                 // no more WebGLDrawerModular instances are using this tiledImage
                 if (Object.keys(e.item.source.__renderInfo.drawers).length === 0) {
                     delete e.item.source.__renderInfo.id;
-                    delete e.item.source.__renderInfo.externalID;
-                    delete e.item.source.__renderInfo.drawers;
+                    delete e.item.source.__renderInfo.externalId;
                     delete e.item.source.__renderInfo.sources;
                     delete e.item.source.__renderInfo.shaders;
+                    delete e.item.source.__renderInfo.drawers;
                     delete e.item.source.__renderInfo;
                 }
             });
+
 
             this._resizeHandler = () => {
                 if(this._outputCanvas !== this.viewer.drawer.canvas) {
@@ -174,6 +176,10 @@
                 }
 
                 let viewportSize = this._calculateCanvasSize();
+                if (this.debug) {
+                    console.info('Resize event, newWidth, newHeight:', viewportSize.x, viewportSize.y);
+                }
+
                 if( this._outputCanvas.width !== viewportSize.x ||
                     this._outputCanvas.height !== viewportSize.y ) {
                     this._outputCanvas.width = viewportSize.x;
@@ -185,9 +191,6 @@
                 this._renderingCanvas.width = this._clippingCanvas.width = this._outputCanvas.width;
                 this._renderingCanvas.height = this._clippingCanvas.height = this._outputCanvas.height;
 
-                if (this.debug) {
-                    console.info('Resize event, newWidth, newHeight:', viewportSize.x, viewportSize.y);
-                }
                 this.renderer.setDimensions(0, 0, viewportSize.x, viewportSize.y);
                 this._size = viewportSize;
 
@@ -198,15 +201,21 @@
         } //end of constructor
 
         /**
+         * Return string in JSON format containing session info.
          * @returns {string}
          */
         export() {
-            // console.info('Exportujem:\n', this._export);
-            return JSON.stringify(this._export);
+            return JSON.stringify(this._sessionInfo);
         }
 
-        // FIXME: for thinking: there could be built-in functionality for reseting the whole system & re-rendering output
-        configureTiledImage(item, externalId = Date.now(), shaders = undefined) {
+        /**
+         * Configure TiledImage's properties when entering the system.
+         * @param {TiledImage} item
+         * @param {Number} externalId
+         * @param {Object} shaders
+         * @returns
+         */
+        configureTiledImage(item, externalId = Date.now(), shaders = undefined, orderOfDataSources = [0]) {
             let tileSource;
             if (item instanceof OpenSeadragon.TiledImage) {
                 tileSource = item.source;
@@ -215,60 +224,37 @@
             } else if (item instanceof Number) {
                 tileSource = this.viewer.world.getItemAt(item);
             } else {
-                throw new Error(`Invalid argument ${item}!`);
+                throw new Error(`Invalid argument ${item}! The type of argument must be TiledImage, TileSource, or Number!`);
             }
 
+            // TiledImage has already been configured
             if (tileSource.__renderInfo !== undefined) {
-                console.log('Returning already configured tiledImage, shaders =', shaders);
                 return tileSource.__renderInfo;
             }
 
 
-            console.log('TiledImage seen for the first time, shaders =', shaders);
-            const info = tileSource.__renderInfo = {};
+            const info = tileSource.__renderInfo = {
+                id: null,
+                externalId: null,
+                sources: null,
+                shaders: null,
+                drawers: null
+            };
+
             info.id = Date.now();
-            info.externalID = externalId;
+            info.externalId = externalId;
 
-            // tiledImage is shared between more webgldrawerModular instantions (main canvas, minimap, maybe more in the future...)
-            // every instantion can put it's own data here with it's id serving as the key into the map
-            info.drawers = {};
+            // the array containing numbers representing rendering order of the data sources:
+            //  example: [4, 1, 3, 2, 0] -> the fourth data source should be rendered first and the first data source should be rendered last
+            info.sources = orderOfDataSources;
 
-            // set info.sources and info.shaders, if !shaders -> set manually, else set from the parameter
-            info.sources = [];
+            // object containing settings for rendering individual data sources:
+            //  example: {0: {<rendering settings for first data source>, 1: {...}, 2: {...}, 3: {...}, 4: {<rendering settings for the last data source>}}
             info.shaders = {};
-            if (!shaders) {
-                let shaderType;
-                if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
-                    shaderType = "edgeNotPlugin";
-                } else if (tileSource._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
-                    shaderType = "negative";
-                } else {
-                    shaderType = "identity";
-                }
-
-                const sourceIndex = 0;
-                info.sources = [sourceIndex]; // jednak hovori o tom kolko tiledImage ma zdrojov a jednak o tom v akom poradi sa maju renderovat
-                info.shaders = {};
-                // TODO: warn: sourceIndex might change dynamically at runtime... use unique tiled image
-                //   keys instead... these keys shall be the shaderID values
-                info.shaders[sourceIndex] = {
-                    originalShaderDefinition: {
-                        name: shaderType + " shader",
-                        type: shaderType,
-                        visible: 1,
-                        fixed: false,
-                        dataReferences: [sourceIndex],
-                        params: {},
-                        cache: {},
-                        _cacheApplied: undefined
-                    },
-                    shaderID: info.id.toString() + '_' + sourceIndex.toString(),
-                    externalID: externalId + '_' + sourceIndex.toString()
-                };
-                console.debug('Config TI, shaders neboli nic, tak som nastavil shaderID na', info.shaders[sourceIndex].shaderID);
-
-            } else {
+            if (shaders) {
+                // TODO: vymazat
                 // SHADERS: {
+                // "order": [4, 1, 3, 2, 0],
                 // "shader_id": {
                 //         "name": "Layer 1",
                 //         "type": "identity",
@@ -288,98 +274,130 @@
                 // }
                 // }
 
-                // TODO: Object.keys does not guarantee that the order in which keys were added will be preserved!
-                // which is A MUST! because the order in which data references will be rendered depends on it!!!
-                // -> solution = get an array of shader objects ???
-                console.debug('Config TI, shaders parameter:', shaders);
+                // IMPORTANT, shaderID is a string, because <shaders> object is in JSON notation.
+                // So, with Object.keys(shaders) we get an order of shaderIDs in the order in which they were added.
+                // Which is wanted, because the order of adding objects to <shaders> defines which object to use as rendering settings for which data source.
+                // As a result, it is irrelevant what the shaderID is, because it is the order of adding objects to <shaders> that defines for which data source the object is used. The first added object is used for the first data source, the second added object is used for the second data source, and so on...
+                let i = 0;
                 for (const shaderID of Object.keys(shaders)) {
-                    const shaderDefinition = shaders[shaderID];
-                    shaderDefinition.id = shaderID;
+                    const shaderConfig = shaders[shaderID];
 
-                    // FIXME: dataReferences comes as [1] but should be [0] because it is the only source!!!
-                    for (const badSourceIndex of shaderDefinition.dataReferences) {
-                        const sourceIndex = badSourceIndex - 1;
-                        // set the rendering order of the source
-                        info.sources.push(sourceIndex);
-
-                        // set which shader to use for the source
-                        // TODO: warn: sourceIndex might change dynamically at runtime... use unique tiled image
-                        //   keys instead... these keys shall be the shaderID values
-                        info.shaders[sourceIndex] = {
-                            originalShaderDefinition: shaderDefinition,
-                            // shaderID: shaderID // wont work because I expect the exact logic as down below
-                            shaderID: info.id.toString() + '_' + sourceIndex.toString(),
-                            externalID: externalId + '_' + sourceIndex.toString()
-                        };
-                    }
-
+                    // tell that with this shader we want to render the i-th data source
+                    info.shaders[i++] = {
+                        originalShaderConfig: shaderConfig,
+                        // shaderID: info.id.toString() + '_' + shaderID.toString(),
+                        // externalId: externalId + '_' + shaderID.toString()
+                    };
                 }
+
+            } else { // manually define rendering settings for the TiledImage, assume one data source only
+                let shaderType;
+                if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
+                    shaderType = "edgeNotPlugin";
+                } else if (tileSource._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
+                    shaderType = "negative";
+                } else {
+                    shaderType = "identity";
+                }
+
+                info.shaders[0] = {
+                    originalShaderConfig: {
+                        name: shaderType + " shader",
+                        type: shaderType,
+                        visible: 1,
+                        fixed: false,
+                        dataReferences: [0],
+                        params: {},
+                        cache: {},
+                        cacheApplied: undefined
+                    },
+                    // shaderID: info.id.toString() + '_0',
+                    // externalId: externalId + '_0'
+                };
             }
+
+            // TiledImage is shared between WebGLDrawerModular instantions (main canvas, minimap, maybe more in the future...),
+            // so, every individual instantion can put it's own data here. The instantion's _id should serve as the key into this map.
+            info.drawers = {};
 
             return info;
         }
 
+        /**
+         * Register TiledImage into the system.
+         * @param {TiledImage} tiledImage
+         */
         tiledImageCreated(tiledImage) {
-
             const tiledImageInfo = this.configureTiledImage(tiledImage);
 
-            // spec is object holding data about how the tiledImage's sources are rendered
-            let spec = {shaders: {}, _utilizeLocalMethods: false, _initialized: false};
-            for (let sourceIndex = 0; sourceIndex < tiledImageInfo.sources.length; ++sourceIndex) {
-                const config = tiledImageInfo.shaders[sourceIndex];
+            // settings is an object holding the TiledImage's data sources' rendering settings
+            let settings = {
+                shaders: {},                // {dataSourceIndex: {<rendering settings>}}
+                _utilizeLocalMethods: false // whether the TiledImage should be rendered using two-pass rendering
+            };
 
-                const originalShaderDefinition = config.originalShaderDefinition;
-                const shaderID = config.shaderID;
-                const shaderType = originalShaderDefinition.type;
-                const shaderParams = originalShaderDefinition.params;
+            for (const sourceIndex of tiledImageInfo.sources) {
+                // do not touch the original incoming object, rather copy the parameters needed
+                const originalShaderConfig = tiledImageInfo.shaders[sourceIndex].originalShaderConfig;
+                const shaderID = tiledImageInfo.id.toString() + '_' + sourceIndex.toString();
+                const shaderExternalID = tiledImageInfo.externalId.toString() + '_' + sourceIndex.toString();
+                const shaderName = originalShaderConfig.name;
+                const shaderType = originalShaderConfig.type;
+                const shaderVisible = originalShaderConfig.visible;
+                const shaderFixed = originalShaderConfig.fixed;
+                const shaderParams = originalShaderConfig.params;
+                const shaderCache = originalShaderConfig.cacheApplied ? originalShaderConfig.cache : {};
 
-                // shaderObject is object holding data about how the concrete source is rendered
-                let shaderObject = spec.shaders[sourceIndex] = {};
-                // shaderObject.originalShaderDefinition = originalShaderDefinition;
-                shaderObject.id = shaderID;
-                shaderObject.externalId = config.externalId;
+                // shaderConfig is an object holding the rendering settings of the concrete TiledImage's data source. Based on this object, the ShaderLayer instantion is created.
+                let shaderConfig = {};
+                shaderConfig.id = shaderID;
+                shaderConfig.externalId = shaderExternalID;
+                shaderConfig.name = shaderName;
+                // corresponds to the return value of wanted ShaderLayer's type() method
+                shaderConfig.type = shaderType;
+                shaderConfig.visible = shaderVisible;
+                shaderConfig.fixed = shaderFixed;
+                // object holding ShaderLayer's settings
+                shaderConfig.params = shaderParams;
+                // object holding ShaderLayer's controls
+                shaderConfig._controls = {};
+                // cache object used by the ShaderLayer's controls
+                shaderConfig._cache = shaderCache;
 
-                shaderObject.type = shaderType;
-                shaderObject.fixed = originalShaderDefinition.fixed;
-                shaderObject.name = originalShaderDefinition.name;
-                shaderObject.params = shaderParams;
+                const shader = this.renderer.createShaderLayer(shaderConfig);
+                shaderConfig._renderContext = shader;
+                shaderConfig._offScreenTextureIndex = this._getOffScreenTextureIndex();
+                shaderConfig.rendering = true;
 
-                shaderObject._controls = {};
-                shaderObject._cache = {};
-
-                const shader = this.renderer.createShaderLayer(shaderObject, shaderType, shaderID);
-                shaderObject._renderContext = shader;
-                shaderObject._textureLayerIndex = this._getOffScreenTextureIndex(); //this._offScreenTexturesCount++;
-
-                // shaderObject._index = 0;
-                shaderObject.visible = true;
-                shaderObject.rendering = true;
-
+                // if the ShaderLayer requieres neighbor pixel access, tell that this TiledImage should be rendered using two-pass rendering
                 if (shaderType === "edgeNotPlugin") {
-                    spec._utilizeLocalMethods = true;
+                    settings._utilizeLocalMethods = true;
                 }
+                // add rendering settings for sourceIndex-th data source to the settings object
+                settings.shaders[sourceIndex] = shaderConfig;
             }
 
-            spec._initialized = true;
-            tiledImageInfo.drawers[this._id] = spec;
+            // add the settings object to the tiledImageInfo.drawers object using this._id as the key, ensuring that the TiledImage settings are not overwritten by another instance of WebGLDrawerModular
+            tiledImageInfo.drawers[this._id] = settings;
 
-            // object to export session settings
-            const tI = this._export[tiledImageInfo.externalID] = {};
+            // reinitialize offScreenTextures (new layers probably need to be added)
+            this._initializeOffScreenTextures();
+
+
+            // update object holding session settings
+            const tI = this._sessionInfo[tiledImageInfo.externalId] = {};
             tI.sources = tiledImageInfo.sources;
             tI.shaders = tiledImageInfo.shaders;
             tI.controlsCaches = {};
-            for (const sourceId in tiledImageInfo.drawers[this._id].shaders) {
-                tI.controlsCaches[sourceId] = tiledImageInfo.drawers[this._id].shaders[sourceId]._cache;
+            for (const sourceIndex in tiledImageInfo.drawers[this._id].shaders) {
+                tI.controlsCaches[sourceIndex] = tiledImageInfo.drawers[this._id].shaders[sourceIndex]._cache;
             }
-
-            // reinitialize offScreenTextures (new layers need to be added)
-            this._initializeOffScreenTextures();
         }
 
         /**
-         * @param {Object} data {layerId: canvas}
+         * @param {Object} data {id: Canvas}
          */
-        downloadOffScreenTextures(data) {
+        _downloadOffScreenTextures(data) {
             if (!data) {
                 data = this.offScreenTexturesAsCanvases;
             }
@@ -398,10 +416,9 @@
         }
 
         /**
-         * @param {Number} tileId
-         * @param {Object} data {tileId: canvas}
+         * @param {Object} data {id: Canvas}
          */
-        downloadTiles(data) {
+        _downloadTiles(data) {
             if (!data) {
                 data = this.tilesAsCanvases;
             }
@@ -418,6 +435,12 @@
             }
         }
 
+        /**
+         * Get tiles and off-screen textures as canvases for debugging purposes.
+         * @returns {Object} debug data
+         * @returns {Object} debugData.offScreenTextures    -> {id: Canvas}
+         * @returns {Object} debugData.tile                 -> {id: Canvas}
+         */
         getDebugData() {
             const data = {
                 offScreenTextures: this.offScreenTexturesAsCanvases,
@@ -427,52 +450,56 @@
         }
 
 
-        // Public API required by all Drawer implementations
         /**
-        * Clean up the renderer, removing all resources
-        */
+         * Clean up the WebGLDrawerModular, removing all resources.
+         */
         destroy() {
-            console.log('Drawer::destroy() function is being called.');
             if (this._destroyed) {
                 return;
             }
             const gl = this._gl;
 
-            // adapted from https://stackoverflow.com/a/23606581/1214731
+
+            // clean all texture units; adapted from https://stackoverflow.com/a/23606581/1214731
             var numTextureUnits = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
             for (let unit = 0; unit < numTextureUnits; ++unit) {
                 gl.activeTexture(gl.TEXTURE0 + unit);
                 gl.bindTexture(gl.TEXTURE_2D, null);
                 gl.bindTexture(gl.TEXTURE_CUBE_MAP, null); //unused
+
+                if (this.webGLVersion === "2.0") {
+                    gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
+                    gl.bindTexture(gl.TEXTURE_3D, null); //unused
+                }
             }
             gl.bindBuffer(gl.ARRAY_BUFFER, null);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null); //unused
             gl.bindRenderbuffer(gl.RENDERBUFFER, null); //unused
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-            // Delete all our created resources
+
+            // delete tiles' data
             this._unloadTextures();
-            // for (const id in this._TextureMap) {
-            //     this._cleanupImageData(id);
-            // }
 
-            // from drawer
-            this._offScreenTextures.forEach(t => {
-                if (t) {
-                    gl.deleteTexture(t);
+
+            // delete off-screen textures
+            if (this.webGLVersion === "1.0") {
+                for (const texture of this._offScreenTextures) {
+                    // can be null if the texture was removed
+                    if (texture) {
+                        gl.deleteTexture(texture);
+                    }
                 }
-            });
-            this._offScreenTextures = [];
-
-            // rework with Texture2DArray
-            gl.deleteTexture(this._offscreenTextureArray); // zrusi vsetky layers???
-            this._offscreenTexturesCount = 0;
-
-
-            if (this._offScreenBuffer) {
-                gl.deleteFramebuffer(this._offScreenBuffer);
-                this._offScreenBuffer = null;
+                this._offScreenTextures = [];
+            } else {
+                gl.deleteTexture(this._offscreenTextureArray);
+                this._offscreenTextureArray = null;
             }
+            this._offScreenTexturesCount = 0;
+            this._offScreenTexturesUnusedIndices = [];
+            gl.deleteFramebuffer(this._offScreenBuffer);
+            this._offScreenBuffer = null;
+
 
             // make canvases 1 x 1 px and delete references
             this._clippingCanvas.width = this._clippingCanvas.height = 1;
@@ -480,39 +507,39 @@
             this._renderingCanvas.width = this._renderingCanvas.height = 1;
             this._clippingCanvas = this._clippingContext = null;
             this._outputCanvas = this._outputContext = null;
-            this._renderingCanvas = null;
 
+            this._renderingCanvas = null;
             let ext = gl.getExtension('WEBGL_lose_context');
             if (ext) {
                 ext.loseContext();
             }
+            // set our webgl context reference to null to enable garbage collection
+            this._gl = null;
+
 
             // unbind our event listeners from the viewer
             this.viewer.removeHandler("tile-ready", this._boundToTileReady);
             this.viewer.removeHandler("image-unloaded", this._boundToImageUnloaded);
             this.viewer.removeHandler("resize", this._resizeHandler);
+            // this.viewer.world.removeHandler("remove-item", this._removeItemHandler); NOT USED
 
-            if(this._backupCanvasDrawer){
+            if (this._backupCanvasDrawer){
                 this._backupCanvasDrawer.destroy();
                 this._backupCanvasDrawer = null;
             }
 
             this.container.removeChild(this.canvas);
-            if(this.viewer.drawer === this){
+            if (this.viewer.drawer === this){
                 this.viewer.drawer = null;
             }
 
-            // set our webgl context reference to null to enable garbage collection
-            this._gl = null;
             // set our destroyed flag to true
             this._destroyed = true;
         }
 
-        // Public API required by all Drawer implementations
         /**
-        *
-        * @returns {Boolean} true
-        */
+         * @returns {Boolean} true
+         */
         canRotate() {
             return true;
         }
@@ -534,13 +561,12 @@
 
         /**
          * Drawer type.
-         * @returns 'webgl' [should return at least]
+         * @returns {String}
          */
         getType() {
             return 'myImplementation';
         }
 
-        // ADDED with merge master
         /**
          * @param {TiledImage} tiledImage the tiled image that is calling the function
          * @returns {Boolean} Whether this drawer requires enforcing minimum tile overlap to avoid showing seams.
@@ -581,20 +607,17 @@
         }
 
         /**
-         * Draw to this._outputCanvas.
+         * Draw using WebGLModule.
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          */
         draw(tiledImages) {
             const gl = this._gl;
-
-            // console.log('Draw called with tiledImages lenght=', tiledImages.length);
 
             // clear the output canvas
             this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
 
             // nothing to draw
             if (tiledImages.every(tiledImage => tiledImage.getOpacity() === 0 || tiledImage.getTilesToDraw().length === 0)) {
-                // console.error('Vyhadzujem sa z drawu!');
                 return;
             }
 
@@ -605,13 +628,6 @@
                 rotation: this.viewport.getRotation(true) * Math.PI / 180,
                 zoom: this.viewport.getZoom(true)
             };
-            // STARY pristup a podla mna fungoval lepsie...
-            // let view = {
-            //     bounds: this.viewport.getBoundsNoRotate(true),
-            //     center: this.viewport.getCenter(true),
-            //     rotation: this.viewport.getRotation(true) * Math.PI / 180,
-            //     zoom: this.viewport.getZoom(true)
-            // };
 
             // calculate view matrix for viewer
             let flipMultiplier = this.viewport.flipped ? -1 : 1;
@@ -632,47 +648,32 @@
                         useContext2DPipeline = true;
                     }
 
-                // use two-pass rendering if any tiledImage (or tile in the tiledImage) has opacity lower than zero or if it utilizes local methods (looking at neighbour's pixels)
-                if (tiledImage.source.__renderInfo.drawers[this._id]._utilizeLocalMethods ||
-                    tiledImage.getOpacity() < 1 ||
-                    (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency)) {
+                // use two-pass rendering if any tiledImage (or tile in the tiledImage) has opacity lower than zero or if it utilizes local methods (looking at neighbor's pixels)
+                if (tiledImage.getOpacity() < 1 ||
+                    (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency) ||
+                    tiledImage.source.__renderInfo.drawers[this._id]._utilizeLocalMethods) {
                         twoPassRendering = true;
                     }
             }
-            // use twoPassRendering also when context2DPipeline is used
+            // use twoPassRendering also if context2DPipeline is used
             twoPassRendering = twoPassRendering || useContext2DPipeline;
 
             if (!twoPassRendering) {
-                console.log('Single pass.');
-                // console.log('Two pass.');
-
                 this._drawSinglePassNew(tiledImages, view, viewMatrix);
-                // this._drawTwoPassNew(tiledImages, view, viewMatrix);
             } else {
-                console.log('Two pass.');
-                // this._drawSinglePassNew(tiledImages, view, viewMatrix);
-
                 this._drawTwoPassNew(tiledImages, view, viewMatrix, useContext2DPipeline);
             }
 
-            // this._drawTwoPassEZ(tiledImages, view, viewMatrix);
-
-            /* data are still in this._renderingCanvas */
+            // data are still in the rendering canvas => draw them onto the output canvas and clear the rendering canvas
             if (this._renderingCanvasHasImageData) {
                 this._outputContext.drawImage(this._renderingCanvas, 0, 0);
                 gl.clear(gl.COLOR_BUFFER_BIT);
                 this._renderingCanvasHasImageData = false;
             }
-
-            // TODO: ukazat Jirkovi
-            if (this.debug && this._id === 0) {
-                const event = new CustomEvent('debug-data-after-draw', this.getDebugData());
-                document.dispatchEvent(event);
-            }
         }//end of draw function
 
         /**
-         * Initial setup of all three canvases (output, clipping, rendering) and their contexts (2d, 2d, webgl) + resize event handler registration
+         * Initial setup of all three canvases used (output, clipping, rendering) and their contexts (2d, 2d, webgl)
          */
         _setupCanvases() {
             this._outputCanvas = this.canvas; //canvas on screen
@@ -703,17 +704,19 @@
             };
         }
 
-        /* Removes tileCanvas from texture map + free texture from GPU,
-            called from destroy and when image-unloaded event happens */
+        /**
+         * Removes tile's canvas and info from texture map.
+         * Free tile's texture from GPU.
+         * Called from destroy() method, _unloadTextures() method and when "image-unloaded" event happens.
+         */
         _cleanupImageData(tileCanvas) {
-            // console.warn('image-unloaded event called! From id =', this._id);
             let textureInfo = this._TextureMap.get(tileCanvas);
-            //remove from the map
+
+            // remove from the attribute
             this._TextureMap.delete(tileCanvas);
 
-            //release the texture from the GPU
+            // release the texture from the GPU
             if (textureInfo) {
-                console.warn('Removing textureInfo:', textureInfo);
                 if (this.webGLVersion === "1.0") {
                     for (const texture of textureInfo.textures) {
                         this._gl.deleteTexture(texture);
@@ -734,8 +737,6 @@
         * @param {Array} tilesToDraw - array of objects containing tiles that were drawn
         */
         _applyContext2dPipeline(tiledImage, tilesToDraw, tiledImageIndex) {
-            // console.log('applyContext2DPipeline, size =', this._size, '. Viewport size =', this._calculateCanvasSize());
-            // composite onto the output canvas, clipping if necessary
             this._outputContext.save();
 
             // set composite operation; ignore for first image drawn
@@ -748,6 +749,7 @@
                 this._outputContext.drawImage(this._renderingCanvas, 0, 0);
             }
             this._outputContext.restore();
+
             if(tiledImage.debugMode){
                 const flipped = this.viewer.viewport.getFlip();
                 if(flipped){
@@ -757,11 +759,6 @@
                 if(flipped){
                     this._flip();
                 }
-                // old with master merge
-                // let colorIndex = this.viewer.world.getIndexOfItem(tiledImage) % this.debugGridColor.length;
-                // let strokeStyle = this.debugGridColor[colorIndex];
-                // let fillStyle = this.debugGridColor[colorIndex];
-                // this._drawDebugInfo(tilesToDraw, tiledImage, strokeStyle, fillStyle);
             }
         }
 
@@ -771,7 +768,6 @@
         }
 
         _renderToClippingCanvas(item){
-
             this._clippingContext.clearRect(0, 0, this._clippingCanvas.width, this._clippingCanvas.height);
             this._clippingContext.save();
             if(this.viewer.viewport.getFlip()){
@@ -831,7 +827,6 @@
             this._clippingContext.restore();
         }
 
-        // NEW with merge master
         /**
          * Set rotations for viewport & tiledImage
          * @private
@@ -860,22 +855,15 @@
             var point = options.point ?
                 options.point.times($.pixelDensityRatio) :
                 this._getCanvasCenter();
-                // new $.Point(this._outputCanvas.width / 2, this._outputCanvas.height / 2); OLD with master merge
 
             var context = this._outputContext;
             context.save();
 
             context.translate(point.x, point.y);
-            // if (this.viewport.flipped) { OLD with master merge
-            //     context.rotate(Math.PI / 180 * -options.degrees);
-            //     context.scale(-1, 1);
-            // } else {
-                context.rotate(Math.PI / 180 * options.degrees);
-            // }
+            context.rotate(Math.PI / 180 * options.degrees);
             context.translate(-point.x, -point.y);
         }
 
-        // NEW with merge master
         _flip(options) {
             options = options || {};
             var point = options.point ?
@@ -888,54 +876,32 @@
             context.translate(-point.x, 0);
         }
 
-        _drawDebugInfo( tilesToDraw, tiledImage, flipped) { // stroke, fill ) { OLD with master merge
-
+        _drawDebugInfo( tilesToDraw, tiledImage, flipped) {
             for ( var i = tilesToDraw.length - 1; i >= 0; i-- ) {
                 var tile = tilesToDraw[ i ].tile;
                 try {
                     this._drawDebugInfoOnTile(tile, tilesToDraw.length, i, tiledImage, flipped);
-                    // this._drawDebugInfoOnTile(tile, tilesToDraw.length, i, tiledImage, stroke, fill);
                 } catch(e) {
                     $.console.error(e);
                 }
             }
         }
 
-        _drawDebugInfoOnTile(tile, count, i, tiledImage, flipped) { // stroke, fill) { OLD with master merge
+        _drawDebugInfoOnTile(tile, count, i, tiledImage, flipped) {
 
             var colorIndex = this.viewer.world.getIndexOfItem(tiledImage) % this.debugGridColor.length;
             var context = this.context;
-            // var context = this._outputContext;
             context.save();
             context.lineWidth = 2 * $.pixelDensityRatio;
             context.font = 'small-caps bold ' + (13 * $.pixelDensityRatio) + 'px arial';
             context.strokeStyle = this.debugGridColor[colorIndex];
             context.fillStyle = this.debugGridColor[colorIndex];
-            // context.strokeStyle = stroke;
-            // context.fillStyle = fill;
 
             this._setRotations(tiledImage);
-            // nebolo nic
 
             if(flipped){
                 this._flip({point: tile.position.plus(tile.size.divide(2))});
             }
-            // if (this.viewport.getRotation(true) % 360 !== 0 ) {
-            //     this._offsetForRotation({degrees: this.viewport.getRotation(true)});
-            // }
-            // if (tiledImage.getRotation(true) % 360 !== 0) {
-            //     this._offsetForRotation({
-            //         degrees: tiledImage.getRotation(true),
-            //         point: tiledImage.viewport.pixelFromPointNoRotate(
-            //             tiledImage._getRotationPoint(true), true)
-            //     });
-            // }
-            // if (tiledImage.viewport.getRotation(true) % 360 === 0 &&
-            //     tiledImage.getRotation(true) % 360 === 0) {
-            //     if(tiledImage._drawer.viewer.viewport.getFlip()) {
-            //         tiledImage._drawer._flip();
-            //     }
-            // }
 
             context.strokeRect(
                 tile.position.x * $.pixelDensityRatio,
@@ -946,14 +912,12 @@
 
             var tileCenterX = (tile.position.x + (tile.size.x / 2)) * $.pixelDensityRatio;
             var tileCenterY = (tile.position.y + (tile.size.y / 2)) * $.pixelDensityRatio;
-            // console.info('drawDebugInfoOnTile: tileCenterX =', tileCenterX, ', tileCenterY =', tileCenterY);
 
             // Rotate the text the right way around.
             context.translate( tileCenterX, tileCenterY );
 
             const angleInDegrees = this.viewport.getRotation(true);
             context.rotate( Math.PI / 180 * -angleInDegrees );
-            // context.rotate( Math.PI / 180 * -this.viewport.getRotation(true) ); OLD with master merge
 
             context.translate( -tileCenterX, -tileCenterY );
 
@@ -1007,13 +971,6 @@
                 this._restoreRotationChanges();
             }
 
-            // if (tiledImage.viewport.getRotation(true) % 360 === 0 && OLD with master merge
-            //     tiledImage.getRotation(true) % 360 === 0) {
-            //     if(tiledImage._drawer.viewer.viewport.getFlip()) {
-            //         tiledImage._drawer._flip();
-            //     }
-            // }
-
             context.restore();
         }
 
@@ -1031,28 +988,14 @@
          * @returns
          */
         _tileReadyHandler(event) {
-            // console.info('tile-ready event from drawer id =', this._id);
             let tile = event.tile;
             let tiledImage = event.tiledImage;
 
             // If a tiledImage is already known to be tainted, don't try to upload any
-            // textures to webgl, because they won't be used even if it succeeds
-            if(tiledImage.isTainted()) {
+            // textures to webgl, because they won't be used even if it succeeds.
+            if (tiledImage.isTainted()) {
                 return;
             }
-
-            // if (tile.__renderInfo === undefined) {
-            //     tile.__renderInfo = {
-            //         id: this._tileIdCounter++,
-            //     };
-            // } else {
-            //     console.warn('Tile already has __renderInfo, tile id =', tile.__renderInfo.id);
-            //     if (tile.getCanvasContext().canvas !== this._TextureMap.get(tile.__renderInfo.id).debugCanvas) {
-            //         throw new Error('Tile canvas is different from the one in the map! This should not happen!');
-            //     }
-            //     return;
-            // }
-            // const id = tile.__renderInfo.id;
 
 
             let tileContext = tile.getCanvasContext();
@@ -1073,12 +1016,10 @@
 
             let textureInfo = this._TextureMap.get(canvas);
             if (textureInfo) {
-                console.warn('Texture already exists in the map, returning from _tileReadyHandler.\n',
-                    'textureInfo tiledImage id =', textureInfo.debugTiledImage.source.__renderInfo.id, 'new tiledImage id =', event.tiledImage.source.__renderInfo.id);
                 return;
             }
 
-            // if this is a new image for us, create a gl Texture for this tile and bind the canvas with the image data
+            // this is a new image for us, create a texture for this tile and bind it with the canvas holding the image data
             const gl = this._gl;
             let position;
             let overlap = tiledImage.source.tileOverlap;
@@ -1120,16 +1061,19 @@
 
             const numOfDataSources = tiledImage.source.__renderInfo.sources.length;
             const tileInfo = {
-                numOfDataSources: numOfDataSources,
+                numOfDataSources: numOfDataSources, // number of data sources in the TiledImage
                 position: position,
-                textures: undefined, // used with WebGL 1, [TEXTURE_2D]
-                texture2DArray: undefined, // used with WebGL 2, TEXTURE_2D_ARRAY
-                debugTiledImage: event.tiledImage,
-                debugCanvas: canvas, // nechat urcite pomohlo mi to a neviem ci sa to nepouziva aj inde
-                debugId: this._tileIdCounter++ // tiez nechat
+                textures: null,                // used with WebGL 1, [TEXTURE_2D]
+                texture2DArray: null           // used with WebGL 2, TEXTURE_2D_ARRAY
             };
 
-            // TODO: <MORE SOURCES FEATURE> Supply the data corresponding to it's source index, this puts one canvas everywhere
+            if (this._id === 0 && this.debug) {
+                tileInfo.debugTiledImage = event.tiledImage;
+                tileInfo.debugCanvas = canvas;
+                tileInfo.debugId = this._tileIdCounter++;
+            }
+
+            // TODO: <MORE SOURCES FEATURE> Supply the data corresponding to it's source index, this puts one canvas everywhere.
             if (this.webGLVersion === "1.0") {
                 const textureArray = [];
 
@@ -1137,25 +1081,20 @@
                     const texture = gl.createTexture();
                     gl.bindTexture(gl.TEXTURE_2D, texture);
 
-                    // options.wrap -> gl.MIRRORED_REPEAT
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, this._imageSmoothingEnabled ? this._gl.LINEAR : this._gl.NEAREST);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, this._imageSmoothingEnabled ? this._gl.LINEAR : this._gl.NEAREST);
 
-                    // upload the image into the texture
+                    // upload the image data into the texture
                     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-
-                    // texImage2D(target, level, internalformat, format, type, pixels) = webgl 1 syntax!
-                    // console.log("trying using a texImage2D(target, level, internalformat, width, height, border, format, type, pixels) = also webgl 1 syntax!"); FUNGOVALO
-                    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, canvas); //FUNGOVALO
 
                     textureArray.push(texture);
                 }
 
                 tileInfo.textures = textureArray;
 
-            } else {
+            } else { // WebGL 2.0
                 const texture2DArray = gl.createTexture();
                 gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture2DArray);
 
@@ -1180,7 +1119,7 @@
             // add it to our _TextureMap
             this._TextureMap.set(canvas, tileInfo);
 
-            // if this is the main drawer (not the minimap) and debug is enabled, save the tile as canvas
+            // if this is the main drawer (not the minimap) and debug is enabled, save the tile canvas for debugging
             if (this._id === 0 && this.debug) {
                 this.tilesAsCanvases[tileInfo.debugId] = canvas;
             }
@@ -1191,9 +1130,9 @@
         // Public API required by all Drawer implementations
 
         /**
-        * Sets whether image smoothing is enabled or disabled
-        * @param {Boolean} enabled If true, uses gl.LINEAR as the TEXTURE_MIN_FILTER and TEXTURE_MAX_FILTER, otherwise gl.NEAREST.
-        */
+         * Sets whether image smoothing is enabled or disabled.
+         * @param {Boolean} enabled if true, uses gl.LINEAR as the TEXTURE_MIN_FILTER and TEXTURE_MAX_FILTER, otherwise gl.NEAREST
+         */
         setImageSmoothingEnabled(enabled){
             if( this._imageSmoothingEnabled !== enabled ){
                 this._imageSmoothingEnabled = enabled;
@@ -1202,7 +1141,10 @@
             }
         }
 
-        _unloadTextures(){
+        /**
+         * Delete all tiles-related textures from the GPU and remove their canvases from this._TextureMap
+         */
+        _unloadTextures() {
             let canvases = Array.from(this._TextureMap.keys());
             canvases.forEach(canvas => {
                 this._cleanupImageData(canvas); // deletes texture, removes from _TextureMap
@@ -1235,30 +1177,6 @@
         } //unused
 
 
-        /* NOVE FUNCKIE Z DRAW.JS ------------------------------------------------------------------------------------------------------------------ */
-        /**
-         * twopass - Enabled, singlepass - Disabled
-         * If parameter enabled is true then stencil test, else disable stencil test
-         * @param {Boolean} enabled whether enable stencil test or not
-         */
-        enableStencilTest(enabled) {
-            if (enabled) {
-                if (!this._stencilTestEnabled) {
-                    const gl = this.renderer.gl;
-                    gl.enable(gl.STENCIL_TEST);
-                    gl.stencilMask(0xff);
-                    gl.stencilFunc(gl.GREATER, 1, 0xff);
-                    gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
-                    this._stencilTestEnabled = true;
-                }
-            } else {
-                if (this._stencilTestEnabled) {
-                    this._stencilTestEnabled = false;
-                    const gl = this.renderer.gl;
-                    gl.disable(gl.STENCIL_TEST);
-                }
-            }
-        }
 
         tiledImageViewportToImageZoom(tiledImage, viewportZoom) {
             var ratio = tiledImage._scaleSpring.current.value *
@@ -1267,6 +1185,14 @@
             return ratio * viewportZoom;
         }
 
+        /**
+         * Method to possibly recycle used off-screen texture arrays indices.
+         * This is useful for example when 5 TiledImages were added and thus 5 off-screen textures were created. Then 3 were removed; making three indices free.
+         * And then 3 were added again; so the 3 free indices can be reused.
+         * If they were not reused, the next off-screen texture would be created on index 6, making the texture array bigger than necessary.
+         * Over time, this can lead to the off-screen texture array being bigger and bigger, having more and more unused indices.
+         * @returns {Number} index to this._offScreenTextures array (WebGL 1.0) or to this._offscreenTextureArray's layer (WebGL 2.0)
+         */
         _getOffScreenTextureIndex() {
             if (this._offScreenTexturesUnusedIndices.length > 0) {
                 console.info('Recyklujem uz pouzity offScreenIndex');
@@ -1276,9 +1202,9 @@
         }
 
         /**
-         * Initialize offScreenTextures used as a render target for first pass during two pass rendering.
-         *
-         * Called during "add-item", "remove-item" (number of layers has to be changed), and "resize" (size of the layers has to be changed) events.
+         * Initialize off-screen textures used as a render target for the first-pass during the two-pass rendering.
+         * Called from this.tiledImageCreated() method (number of layers has to be changed),
+         * and during "resize" event (size of the layers has to be changed).
          */
         _initializeOffScreenTextures() {
             const gl = this._gl;
@@ -1288,7 +1214,7 @@
 
             if (this.webGLVersion === "1.0") {
                 for (let i = 0; i < numOfTextures; ++i) {
-                    console.debug('Pripravujem offscreen texturu cislo', i);
+
                     let texture = this._offScreenTextures[i];
                     if (!texture) {
                         this._offScreenTextures[i] = texture = gl.createTexture();
@@ -1296,16 +1222,10 @@
                     gl.bindTexture(gl.TEXTURE_2D, texture);
 
                     const initialData = new Uint8Array(x * y * 4);
-                    // set initial data as blue pixels everywhere
-                    // for (let i = 2; i < initialData.length; i += 4) {
-                    //     initialData[i] = 255;
-                    //     initialData[i + 1] = 255;
-                    // }
 
-                    // original was internalformat = gl.RGBA8
                     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, x, y, 0, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
                 }
@@ -1315,25 +1235,19 @@
                 this._offscreenTextureArray = gl.createTexture();
                 gl.bindTexture(gl.TEXTURE_2D_ARRAY, this._offscreenTextureArray);
 
-                // once you allocate storage with gl.texStorage3D, you cannot change the texture's size
-                // or format, which helps optimize performance and ensures consistency
+                // once you allocate storage with gl.texStorage3D, you cannot change the textureArray's size or format, which helps optimize performance and ensures consistency
                 gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, x, y, numOfTextures);
 
                 const initialData = new Uint8Array(x * y * 4);
                 for (let i = 0; i < numOfTextures; ++i) {
-                    console.debug('Pripravujem offscreen layer cislo', i);
                     gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, x, y, 1, gl.RGBA, gl.UNSIGNED_BYTE, initialData);
                 }
 
-                // bol gl.LINEAR, chatgpt ale odporuca NEAREST pre two-pass rendering, kvoli The intermediate texture may use a filtering mode, like linear filtering, which causes interpolation between pixels. This interpolation can make edges appear softer or bulkier because values are blended rather than sampled strictly at each texel.
                 gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
                 gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
                 gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
                 gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             }
-
-            // send the layer's size to the glsl
-            //  this.renderer.webglContext.setTextureSize(x, y);
         }
 
         /**
@@ -1354,7 +1268,7 @@
         /**
          * Extract texture data into the canvas in this.offScreenTexturesAsCanvases[index].
          * @param {number} index of the offScreenTexture in this._offScreenTextures or index of the layer in this._offscreenTextureArray
-         * @param {number} order in which this offScreenTexture was drawn
+         * @param {number} order order in which was rendered into this offScreenTexture
          * @returns
          */
         extractOffScreenTexture(index, order) {
@@ -1362,7 +1276,7 @@
             const width = this._size.x;
             const height = this._size.y;
 
-            // create framebuffer to read from the texture layer
+            // create a temporary framebuffer to read from the texture layer
             const framebuffer = gl.createFramebuffer();
             gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
 
@@ -1384,37 +1298,33 @@
             const pixels = new Uint8Array(width * height * 4);  // RGBA format needed???
             gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
 
-            // unbind the framebuffer
+            // unbind and delete the framebuffer
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.deleteFramebuffer(framebuffer);
 
             // use a canvas to convert raw pixel data to image
-            const outputCanvas = document.createElement('canvas');
-            outputCanvas.width = width;
-            outputCanvas.height = height;
-            const ctx = outputCanvas.getContext('2d');
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
             const imageData = ctx.createImageData(width, height);
 
-            // copy the pixel data into the canvas's ImageData
-            // for (let i = 0; i < pixels.length; i++) {
-            //     imageData.data[i] = pixels[i];
-            // }
-            // ctx.putImageData(imageData, 0, 0);
-
-            // optimized copying of pixel data directly into ImageData
+            // copy pixel data into the canvas
             imageData.data.set(pixels);
             ctx.putImageData(imageData, 0, 0);
 
+            // save the canvas and the rendering order in this.offScreenTexturesAsCanvases
             this.offScreenTexturesAsCanvases[index] = {
-                canvas: outputCanvas,
+                canvas: canvas,
                 order: order
             };
         }
 
         /**
-         * Called only from draw function. Iterates over tiledImages, and the end od each cycle, data are drawn from this._renderingCanvas onto this._outputCanvas.
+         * Draw using WebGLModule directly into the rendering canvas.
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
-         * @param {Object} viewport has bounds, center, rotation, zoom
-         * @param {OpenSeadragon.Mat3} viewMatrix to apply
+         * @param {Object} viewport bounds, center, rotation, zoom
+         * @param {OpenSeadragon.Mat3} viewMatrix matrix to apply to viewport coordinates
          */
         _drawSinglePassNew(tiledImages, viewport, viewMatrix) {
             const gl = this._gl;
@@ -1559,10 +1469,10 @@
                     }
 
                     for (const i of tiledImage.source.__renderInfo.sources) {
-                        this._bindFrameBufferToOffScreenTexture(tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._textureLayerIndex);
+                        this._bindFrameBufferToOffScreenTexture(tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._offScreenTextureIndex);
                         gl.clear(gl.COLOR_BUFFER_BIT);
 
-                        // console.info('first pass, tiledImageIndex', tiledImageIndex, 'textureLayerIndex', tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._textureLayerIndex);
+                        // console.info('first pass, tiledImageIndex', tiledImageIndex, 'textureLayerIndex', tiledImage.source.__renderInfo.drawers[this._id].shaders[i]._offScreenTextureIndex);
 
                         // console.info('first pass, tiledImageIndex', tiledImageIndex, 'tilesIDs =');
                         // console.info(tilesToDraw.map(item => item.tile.__renderInfo.id));
@@ -1617,7 +1527,7 @@
 
                     const numOfSources = tiledImage.source.__renderInfo.sources.length;
                     tiledImage.source.__renderInfo.sources.forEach((value, i) => {
-                        const textureIndex = tiledImage.source.__renderInfo.drawers[this._id].shaders[value]._textureLayerIndex;
+                        const textureIndex = tiledImage.source.__renderInfo.drawers[this._id].shaders[value]._offScreenTextureIndex;
                         const order = tiledImageIndex * numOfSources + i;
 
                         this.extractOffScreenTexture(textureIndex, order);
@@ -1646,7 +1556,7 @@
                     for (const shaderKey of tiledImage.source.__renderInfo.sources) {
                         const shaderObject = shaders[shaderKey];
                         const shader = shaderObject._renderContext;
-                        const offScreenTextureIndex = shaderObject._textureLayerIndex;
+                        const offScreenTextureIndex = shaderObject._offScreenTextureIndex;
 
                         const source = {
                             textures: this._offScreenTextures,
@@ -1685,12 +1595,12 @@
                     const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;
                     for (const shaderKey of tiledImage.source.__renderInfo.sources) {
                         // DEBUG
-                        // const textureLayer = tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._textureLayerIndex;
+                        // const textureLayer = tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey]._offScreenTextureIndex;
                         // const shaderType = tiledImage.source.__renderInfo.drawers[this._id].shaders[shaderKey].type;
                         // console.debug(`Kreslim do layeru ${textureLayer} pomocou ${shaderType}`);
                         const shaderObject = shaders[shaderKey];
                         const shader = shaderObject._renderContext;
-                        const offScreenTextureIndex = shaderObject._textureLayerIndex;
+                        const offScreenTextureIndex = shaderObject._offScreenTextureIndex;
 
                         const source = {
                             textures: this._offScreenTextures,
@@ -1771,9 +1681,9 @@
         }
 
         /**
-         * Get the canvas center
+         * Get the canvas center.
          * @private
-         * @returns {OpenSeadragon.Point} The center point of the canvas
+         * @returns {OpenSeadragon.Point} the center point of the canvas
          */
         _getCanvasCenter() {
             return new $.Point(this.canvas.width / 2, this.canvas.height / 2);

@@ -80,7 +80,6 @@
 
             // merge dP < cP < rP recursively with rP having the biggest overwriting priority, without modifying the original objects
             const params = $.extend(true, {}, defaultParams, customParams, requiredParams);
-            console.warn('params =', params);
 
             // if control's type (eg.: opacity -> range) not present in this._items
             /* VOBEC SOM NEPRESIEL TUTO CAST */
