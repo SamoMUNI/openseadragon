@@ -1,13 +1,12 @@
 (function($) {
     /**
-     * Class that manages ShaderLayers, their controls, and WebGLContext to allow rendering using WebGL.
-     *
      * @property {RegExp} idPattern
      * @property {Object} BLEND_MODE
      * @property {Number} BLEND_MODE_MULTIPLY
      *
      * @class OpenSeadragon.WebGLModule
-     * @memberOf OpenSeadragon
+     * @classdesc class that manages ShaderLayers, their controls, and WebGLContext to allow rendering using WebGL
+     * @memberof OpenSeadragon
      */
     $.WebGLModule = class extends $.EventSource {
         /**
@@ -43,7 +42,7 @@
          * @param {Boolean} incomingOptions.canvasOptions.stencil
          *
          * @constructor
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         constructor(incomingOptions) {
             super();
@@ -96,7 +95,7 @@
          * @returns {WebGLImplementation}
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         static determineContext(version) {
             const namespace = $.WebGLModule;
@@ -120,7 +119,7 @@
          * @param {Number} height
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         setDimensions(x, y, width, height) {
             this.canvas.width = width;
@@ -145,7 +144,7 @@
          * @param {Number} source.index                     index of texture in textures array or index of layer in texture2DArray
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         processData(renderInfo, shaderLayer, source) {
             if (this.webGLPreferredVersion === "2.0") {
@@ -166,7 +165,7 @@
          * @param {Number} source.index                     index of texture in textures array or index of layer in texture2DArray
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         firstPassProcessData(textureCoords, transformMatrix, source) {
             if (this.webGLPreferredVersion === "2.0") {
@@ -181,7 +180,7 @@
          * @return {Boolean}
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         supportsHtmlControls() {
             return typeof this.htmlControlsId === "string" && this.htmlControlsId.length > 0;
@@ -193,7 +192,7 @@
          * Create the WebGLProgram.
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         init() {
             const Shader = $.WebGLModule.ShaderMediator.getClass("firstPass");
@@ -222,7 +221,7 @@
          * Create and load the new WebGLProgram based on ShaderLayers and their controls.
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         createProgram() {
             // create new WebGLProgram based on ShaderLayers at disposal
@@ -281,7 +280,7 @@
          * @returns {ShaderLayer}       instantion of the created shaderLayer
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         createShaderLayer(shaderConfig) {
             const shaderID = shaderConfig.id;
@@ -322,7 +321,7 @@
          * @param {string} shaderID     unique identifier
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         removeShader(shaderConfig, shaderID) {
             const shader = this._shaders[shaderID];
@@ -336,7 +335,7 @@
          * @param {Boolean} enabled if true enable alpha blending, otherwise disable blending
          *
          * @instance
-         * @memberOf WebGLModule
+         * @memberof WebGLModule
          */
         setDataBlendingEnabled(enabled) {
             if (enabled) {
@@ -356,7 +355,7 @@
      * ID pattern allowed for WebGLModule. ID's are used in GLSL to distinguish uniquely between individual ShaderLayer's generated code parts
      * @property
      * @type {RegExp}
-     * @memberOf WebGLModule
+     * @memberof WebGLModule
      */
     $.WebGLModule.idPattern = /^(?!_)(?:(?!__)[0-9a-zA-Z_])*$/;
 

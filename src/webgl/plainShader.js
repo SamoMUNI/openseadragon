@@ -1,8 +1,6 @@
 (function($) {
     /**
      * Identity shader
-     *
-     * data reference must contain one index to the data to render using identity
      */
     $.WebGLModule.IdentityLayer = class extends $.WebGLModule.ShaderLayer {
 
@@ -13,8 +11,6 @@
         static name() {
             return "Identity";
         }
-
-        // static singleSourceVariableCount}]
 
         static description() {
             return "shows the data AS-IS";
@@ -33,7 +29,6 @@
         }
     };
 
-    //todo why cannot be inside object :/
     $.WebGLModule.IdentityLayer.defaultControls["use_channel0"] = {
         required: "rgba"
     };
