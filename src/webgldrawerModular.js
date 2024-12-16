@@ -25,7 +25,7 @@
             this.debug = this.webGLOptions.debug || false;
 
             this._id = this.constructor.numOfDrawers++;
-            this.webGLVersion = "1.0";
+            this.webGLVersion = "2.0";
 
             this._destroyed = false;
             this._tileIdCounter = 0;
@@ -40,7 +40,7 @@
             this._renderingCanvasHasImageData = false;
 
             this._backupCanvasDrawer = null;
-            this._imageSmoothingEnabled = true; // will be updated by setImageSmoothingEnabled
+            this._imageSmoothingEnabled = false; // will be updated by setImageSmoothingEnabled
 
             this._sessionInfo = {}; // attribute containing session info, used for exporting
 
@@ -96,7 +96,7 @@
             this.tilesAsCanvases = {};
 
             // create a link for downloading off-screen textures, or input image data tiles. Only for the main drawer, not the minimap.
-            if (this._id === 0) {
+            if (this._id === 0 && this.debug) {
                 const downloadLink = document.createElement('a');
                 downloadLink.id = 'download-off-screen-textures';
                 downloadLink.href = '#';  // make it a clickable link
@@ -297,8 +297,25 @@
          * Configure TiledImage's properties when entering the system.
          * @param {TiledImage} item
          * @param {Number} externalId
-         * @param {Object} shaders
-         * @returns
+         *
+         * @typedef {Object} shaderConfig
+         * @param {Object} shaders map; {shaderID: shaderConfig}
+         * @param {String} shaderConfig.name
+         * @param {String} shaderConfig.type
+         *
+         * @param {Number} shaderConfig.visible
+         * @param {Boolean} shaderConfig.fixed
+         * @param {[Number]} shaderConfig.dataReferences // for backward compatibility
+         * @param {Object} shaderConfig.params
+         * @param {Object} shaderConfig.cache
+         * @param {Boolean} shaderConfig._cacheApplied   // use cache object
+         *
+         * @returns {Object} TiledImageInfo
+         * @returns {Number} TiledImageInfo.id
+         * @returns {Number} TiledImageInfo.externalId
+         * @returns {[Number]} TiledImageInfo.sources
+         * @returns {Object} TiledImageInfo.shaders
+         * @returns {Object} TiledImageInfo.drawers
          */
         configureTiledImage(item, externalId = Date.now(), shaders = undefined, orderOfDataSources = [0]) {
             let tileSource;
@@ -337,28 +354,6 @@
             //  example: {0: {<rendering settings for first data source>, 1: {...}, 2: {...}, 3: {...}, 4: {<rendering settings for the last data source>}}
             info.shaders = {};
             if (shaders) {
-                // TODO: vymazat
-                // SHADERS: {
-                // "order": [4, 1, 3, 2, 0],
-                // "shader_id": {
-                //         "name": "Layer 1",
-                //         "type": "identity",
-                //         "visible": 1,
-                //         "fixed": false,
-                //         "dataReferences":  ["0[1]", 5, "5"], FOR NOW I ASSUME JUST NUMBERS
-                //         "params": {
-                //             "opacity": {
-                //                 default: 3
-                //             }
-                //         }
-                //         "cache": {}
-                //         "_cacheApplied": undefined
-                // },
-                // "shader_id2": {
-                //       ...
-                // }
-                // }
-
                 // IMPORTANT, shaderID is a string, because <shaders> object is in JSON notation.
                 // So, with Object.keys(shaders) we get an order of shaderIDs in the order in which they were added.
                 // Which is wanted, because the order of adding objects to <shaders> defines which object to use as rendering settings for which data source.
@@ -370,8 +365,6 @@
                     // tell that with this shader we want to render the i-th data source
                     info.shaders[i++] = {
                         originalShaderConfig: shaderConfig,
-                        // shaderID: info.id.toString() + '_' + shaderID.toString(),
-                        // externalId: externalId + '_' + shaderID.toString()
                     };
                 }
 
@@ -394,7 +387,7 @@
                         dataReferences: [0],
                         params: {},
                         cache: {},
-                        cacheApplied: undefined
+                        _cacheApplied: undefined
                     },
                     // shaderID: info.id.toString() + '_0',
                     // externalId: externalId + '_0'
@@ -431,7 +424,7 @@
                 const shaderVisible = originalShaderConfig.visible;
                 const shaderFixed = originalShaderConfig.fixed;
                 const shaderParams = originalShaderConfig.params;
-                const shaderCache = originalShaderConfig.cacheApplied ? originalShaderConfig.cache : {};
+                const shaderCache = originalShaderConfig._cacheApplied ? originalShaderConfig.cache : {};
 
                 // shaderConfig is an object holding the rendering settings of the concrete TiledImage's data source. Based on this object, the ShaderLayer instantion is created.
                 let shaderConfig = {};
@@ -795,15 +788,16 @@
                         twoPassRendering = true;
                     }
             }
-            // use twoPassRendering also if context2DPipeline is used
-            twoPassRendering = twoPassRendering || useContext2DPipeline;
+
+            // use twoPassRendering also if context2DPipeline is used (as in original WebGLDrawer)
+            // twoPassRendering = twoPassRendering || useContext2DPipeline;
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.clear(gl.COLOR_BUFFER_BIT);
             if (!twoPassRendering) {
-                this._drawSinglePassNew(tiledImages, view, viewMatrix);
+                this._drawSinglePass(tiledImages, view, viewMatrix);
             } else {
-                this._drawTwoPassNew(tiledImages, view, viewMatrix, useContext2DPipeline);
+                this._drawTwoPass(tiledImages, view, viewMatrix, useContext2DPipeline);
             }
 
             // data are still in the rendering canvas => draw them onto the output canvas and clear the rendering canvas
@@ -820,7 +814,7 @@
          * @param {Object} viewport bounds, center, rotation, zoom
          * @param {OpenSeadragon.Mat3} viewMatrix
          */
-        _drawSinglePassNew(tiledImages, viewport, viewMatrix) {
+        _drawSinglePass(tiledImages, viewport, viewMatrix) {
             tiledImages.forEach((tiledImage, tiledImageIndex) => {
                 if (tiledImage.isTainted()) {
                     // first, draw any data left in the rendering buffer onto the output canvas
@@ -916,7 +910,7 @@
          * @param {Object} viewport has bounds, center, rotation, zoom
          * @param {OpenSeadragon.Mat3} viewMatrix
          */
-        _drawTwoPassNew(tiledImages, viewport, viewMatrix, useContext2DPipeline) {
+        _drawTwoPass(tiledImages, viewport, viewMatrix, useContext2DPipeline) {
             const gl = this._gl;
             const skippedTiledImages = {};
 
@@ -1053,8 +1047,6 @@
                         this.renderer.processData(renderInfo, shader, source);
                     }
 
-                    // TODO: <MORE SOURCES FEATURE> apply context2dpipeline for every source? Probably not because only tiledImage has _clip, _crop, debugmode...
-
                     // draw from the rendering canvas onto the output canvas and clear the rendering canvas
                     this._applyContext2dPipeline(tiledImage, tiledImage.getTilesToDraw(), tiledImageIndex);
                     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -1063,19 +1055,18 @@
                 // flag that the data was already put to the output canvas and that the rendering canvas was cleared
                 this._renderingCanvasHasImageData = false;
 
-            } else {
+            } else { // future extension = instanced rendering
                 tiledImages.forEach((tiledImage, tiledImageIndex) => {
                     if (skippedTiledImages[tiledImageIndex]) {
                         return;
                     }
 
                     const renderInfo = {
-                        transform: new Float32Array([2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0]), // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
+                        transform: new Float32Array([2.0, 0.0, 0.0, 0.0, 2.0, 0.0, -1.0, -1.0, 1.0]),   // matrix to get clip space coords from unit coords (coordinates supplied in column-major order)
                         zoom: viewport.zoom,
                         pixelSize: this._tiledImageViewportToImageZoom(tiledImage, viewport.zoom),
                         globalOpacity: tiledImage.getOpacity(),
-                        // textureCoords: new Float32Array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]) // tileInfo.position
-                        textureCoords: new Float32Array([0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0]) // tileInfo.position
+                        textureCoords: new Float32Array([0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0])       // cover the whole texture
                     };
 
                     const shaders = tiledImage.source.__renderInfo.drawers[this._id].shaders;

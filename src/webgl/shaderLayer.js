@@ -115,10 +115,10 @@
 
             this.__shaderConfig = privateOptions.shaderConfig;
             this.webglContext = privateOptions.webglContext;
-            this._controls = privateOptions.controls;
+            this._controls = privateOptions.controls ? privateOptions.controls : {};
             this._hasInteractiveControls = privateOptions.interactive;
-            this._cache = privateOptions.cache;
-            this._customControls = privateOptions.params;
+            this._cache = privateOptions.cache ? privateOptions.cache : {};
+            this._customControls = privateOptions.params ? privateOptions.params : {};
 
             this.invalidate = privateOptions.invalidate;
             this._rebuild = privateOptions.rebuild;
@@ -132,8 +132,12 @@
             // parameters used for applying filters
             this.__scalePrefix = null;
             this.__scaleSuffix = null;
+        }
 
-
+        /**
+         * Manuall constructor for ShaderLayer. Keeped for backward compatibility.
+         */
+        construct() {
             // set up the color channel(s) for texture sampling
             this.resetChannel(this._customControls);
             // set up the blending mode
@@ -143,8 +147,6 @@
             // build the ShaderLayer's controls
             this._buildControls();
         }
-
-
 
         // STATIC METHODS
         /**
@@ -281,8 +283,6 @@
          */
         removeControls() {
             for (const controlName in this._controls) {
-                const control = this[controlName];
-                control.destroy();
                 this.removeControl(controlName);
                 // delete config._cache[controlName]; // kedze cache je naprogramovana neviem ako ale kluce su tam dake mena tak neviem ju zrusit TODO:
             }
@@ -394,7 +394,11 @@
          * @param {Object} options
          * @param {String} options.use_channel[X] "r", "g" or "b" channel to sample index X, default "r"
          */
-        resetChannel(options) {
+        resetChannel(options = {}) {
+            if (Object.keys(options) === 0) {
+                options = this._customControls;
+            }
+
             // regex to compare with value used with use_channel, to check its correctness
             const channelPattern = new RegExp('[rgba]{1,4}');
             const parseChannel = (controlName, def, sourceDef) => {
@@ -455,8 +459,8 @@
          * @param {Object} options
          * @param {String} options.use_mode blending mode to use: "show" or "mask" or "mask_clip"
          */
-        resetMode(options) {
-            if (!options) {
+        resetMode(options = {}) {
+            if (Object.keys(options) === 0) {
                 options = this._customControls;
             }
 

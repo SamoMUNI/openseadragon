@@ -42,7 +42,7 @@
          * @param {function(error: string, description: string)} onError callback to call when error happens
          * @return {boolean} true if program was built successfully
          */
-        static _compileProgram(program, gl, onError) {
+        static _compileProgram(program, gl, onError, debug = false) {
             /* Napriklad gl.getProgramParameter(program, gl.LINK_STATUS) pre kind = "Program", status = "LINK", value = program */
             function ok(kind, status, value, sh) {
                 if (!gl['get' + kind + 'Parameter'](value, gl[status + '_STATUS'])) {
@@ -88,11 +88,11 @@
                     onError("Unable to correctly build WebGL program.",
                         "Linking of WebGLProgram failed. For more information, see logs in the $.console.");
                     return false;
-                } else { //if (this.renderer.debug) { //TODO: uncomment in production
-                    $.console.debug("VERTEX SHADER\n", numberLines( opts.vs ));
-                    $.console.debug("FRAGMENT SHADER\n", numberLines( opts.fs ));
-                    return true;
+                } else if (debug) {
+                    $.console.info("VERTEX SHADER\n", numberLines( opts.vs ));
+                    $.console.info("FRAGMENT SHADER\n", numberLines( opts.fs ));
                 }
+                return true;
             }
         }
 
@@ -248,7 +248,7 @@
             program._osdOptions.vs = vertexShaderSource;
             program._osdOptions.fs = fragmentShaderSource;
 
-            const build = this.constructor._compileProgram(program, gl, $.console.error);
+            const build = this.constructor._compileProgram(program, gl, $.console.error, this.renderer.debug);
             if (!build) {
                 throw new Error("$.WebGLModule.WebGL20::createProgram: WebGLProgram could not be built!");
             }
@@ -622,7 +622,7 @@
             program._osdOptions.vs = vertexShaderSource;
             program._osdOptions.fs = fragmentShaderSource;
 
-            const build = this.constructor._compileProgram(program, gl, $.console.error);
+            const build = this.constructor._compileProgram(program, gl, $.console.error, this.renderer.debug);
             if (!build) {
                 throw new Error("$.WebGLModule.WebGL10::createProgram: WebGLProgram could not be built!");
             }

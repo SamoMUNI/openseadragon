@@ -11,7 +11,6 @@
      * @class OpenSeadragon.WebGLModule.UIControls
      */
     $.WebGLModule.UIControls = class {
-
         /**
          * Get all available control types
          * @return {string[]} array of available control types
@@ -81,41 +80,28 @@
             // merge dP < cP < rP recursively with rP having the biggest overwriting priority, without modifying the original objects
             const params = $.extend(true, {}, defaultParams, customParams, requiredParams);
 
-            // if control's type (eg.: opacity -> range) not present in this._items
-            /* VOBEC SOM NEPRESIEL TUTO CAST */
             if (!this._items[params.type]) {
                 const controlType = params.type;
-                console.debug('UIControls:build - if vetva, typ =', controlType, 'neni v UIControls._items');
-                console.debug('UIControls:build - if vetva, this._impls =', this._impls);
 
                 // if cannot use the new control type, try to use the default one
                 if (!this._impls[controlType]) {
                     return this._buildFallback(controlType, originalType, owner, controlName, controlObject, params);
                 }
 
-                /* Toz toto robi nieco divne pretoze to cucia uz z Jirkovho pluginu, cize neviem presne co to robi.
-                Ale myslel som ze to ma vytvorit jeden control a ked si vypisujem iba ze prechod konstruktormi SIMPLE a ICONTROL
-                tak to vyzera ako by sa tym riadkom cls =... robil jeden control viac raz co neviem preco. */
-                console.debug('Vytvaram custom control implementaciu');
                 let cls = new this._impls[controlType](owner, controlName, controlId, params);
-                console.debug('Vytvoril som custom control implementaciu');
 
                 if (accepts(cls.type, cls)) {
-                    console.debug('Idem pouzit custom control implementaciu');
                     return cls;
                 }
 
-                // cannot built with custom implementation, try to build with default one
-                console.debug('Nejde pouzit vytvorenu custom control implementaciu, vyskusam defaultnu.');
+                // cannot built with custom implementation, try to build with a default one
                 return this._buildFallback(controlType, originalType, owner, controlName, controlObject, params);
 
             } else { // control's type (eg.: range/number/...) is defined in this._items
-                console.debug('UIControls:build - typ controlu je definovany v UIControls._items.');
                 let intristicComponent = this.getUiElement(params.type);
                 let comp = new $.WebGLModule.UIControls.SimpleUIControl(
                     owner, controlName, controlId, params, intristicComponent
                 );
-                /* comp.type === float, tuto naozaj pri range v _items je definovany type: float */
 
                 if (accepts(comp.type, comp)) {
                     return comp;
@@ -198,15 +184,13 @@
         }
     };
 
-    //definitions of possible control's types -> kazdy shader ma definovane dake controls a podla ich type: sa niektory shit z tadeto prideli do SimpleUIControl.componentco ty
-    //simple functionality
-    // intristic component for SimpleUIControl
+    // Definitions of possible controls' types, simple functionalities:
     $.WebGLModule.UIControls._items = {
         number: {
             defaults: function() {
                 return {title: "Number", interactive: true, default: 0, min: 0, max: 100, step: 1};
             },
-            // returns string corresponding to html injection
+            // returns string corresponding to html code for injection
             html: function(uniqueId, params, css = "") {
                 let title = params.title ? `<span> ${params.title}</span>` : "";
                 return `${title}<input class="form-control input-sm" style="${css}" min="${params.min}" max="${params.max}"
@@ -314,10 +298,9 @@
         }
     };
 
-    //implementation of UI control classes
-    //more complex functionality
+    // Implementation of UI control classes, complex functionalities.
     $.WebGLModule.UIControls._impls = {
-        //colormap: $.WebGLModule.UIControls.ColorMap
+        // e.g.: colormap: $.WebGLModule.UIControls.ColorMap
     };
 
     /**
@@ -350,11 +333,9 @@
          * @param {string} name name of the control (key to the params in the shader configuration)
          * @param {string} uniq another element to construct the DOM id from, mostly for compound controls
          */
-        constructor(owner, name, id, uniq = "") {
-            console.debug('V konstruktori IControlu, owner=', owner.constructor.name(), 'name=', name, 'id=', id);
+        constructor(owner, name, id) {
             this.owner = owner;
             this.name = name;
-            // this.id = `${uniq}${name}-${owner.uid}`;
             this.id = id;
             this.webGLVariableName = `${name}_${owner.uid}`;
             this._params = {};
@@ -403,16 +384,9 @@
                         }
                     }
                 });
-                // console.log('to = ', to);
                 return to;
             }
 
-            // console.log('const t =', t);
-            // console.log('this.supports.all', this.supportsAll);
-            // console.log('this.supports = ', this.supports);
-            // console.log('realne idem aj cez getParams, inak do params doslo: ', params);
-            /* params = Object { type: "range", default: 1, min: 0, max: 1, step: 0.1, title: "Opacity: ", interactive: false } */
-            /* supports = Object { title: "Range", interactive: true, default: 0, min: 0, max: 100, step: 1 } */
             return mergeSafeType(this.supports, params, this.supportsAll);
         }
 
@@ -465,8 +439,6 @@
                 }
             }
 
-            // HINT was uncommented by Jirka, este som sa sem nedostal aby som vedel co to ma robit
-            //console.debug("Failed to load safe param -> new feature, debugging! ", value, defaultValue, paramName);
             return defaultValue;
         }
 
@@ -656,10 +628,6 @@
         load(defaultValue, paramName = "") {
             const value = this.owner.loadProperty(this.name + (paramName === "default" ? "" : paramName), defaultValue);
             return value;
-
-            // TODO: check this
-            //check param in case of input cache collision between shader types
-            // return this.getSafeParam(value, defaultValue, paramName === "" ? "default" : paramName);
         }
 
         /**
@@ -739,59 +707,6 @@
             this._cache = cache;
             this.set(cache.encodedValue);
         }
-
-        /**
-         * Create HTML DOM element bind to this control.
-         * @param {HTMLElement} parentElement html element into which should this control's html code be placed into
-         * @returns {HTMLElement} this control's html element
-         */
-        createDOMElement(parentElement) {
-            const html = this.toHtml(true);
-            // console.log('createDOMElement, html injection =', html);
-            if (!html) {
-                console.info(`Control ${this.name} failed to create HTML element. Should it ?`);
-                return null;
-            }
-
-            // this should create element in the DOM with this.id as the id of the element
-            parentElement.insertAdjacentHTML('beforeend', html);
-            this._htmlDOMElement = document.getElementById(this.id);
-            this._htmlDOMElement.setAttribute('value', this.encodedValue);
-
-            // call to this.toHtml(true) returns html elements for control wrapped in one more <div> element,
-            // this element is now pointed onto with this._htmlDOMParentContainer
-            this._htmlDOMParentContainer = this._htmlDOMElement.parentElement;
-
-            return this._htmlDOMElement;
-        }
-
-        registerDOMElementEventHandler(functionToCall) {
-            const _this = this;
-            const node = document.getElementById(this.id);
-            if (!node) {
-                console.error('registerDOMElementEventHandler: HTML element not found, id =', this.id);
-                return;
-            }
-
-            node.setAttribute('value', this.encodedValue);
-
-            let handler = function(e) {
-                // console.info('from event handler, calling set on control with value =', e.target.value, '.');
-                node.setAttribute('value', e.target.value);
-                _this.set(e.target.value);
-                functionToCall();
-            };
-            node.addEventListener('change', handler);
-        }
-
-        destroy() {
-            if (this._htmlDOMElement) {
-                this._htmlDOMElement.remove();
-                this._htmlDOMParentContainer.remove();
-            }
-
-            // maybe something more??
-        }
     };
 
 
@@ -812,27 +727,24 @@
      * @class WebGLModule.UIControls.SimpleUIControl
      */
     $.WebGLModule.UIControls.SimpleUIControl = class extends $.WebGLModule.UIControls.IControl {
-
         /**
-         *
+         * Uses intristicComponent from UIControls._items that corresponds to type of this control.
          * @param {ShaderLayer} owner owner of the control (shaderLayer)
          * @param {string} name name of the control (eg. "opacity")
          * @param {string} id unique control's id, corresponds to it's DOM's element's id
          * @param {object} params
          * @param {object} intristicComponent control's object from UIControls._items, keyed with it's params.default.type?
          */
-        //uses intristicComponent that holds all specifications needed to work with the component uniformly
         constructor(owner, name, id, params, intristicComponent) {
-            console.debug('V konstruktori SimpleUIControlu, owner=', owner.constructor.name(), 'name=', name, 'id=', id, 'params=', params, 'intristicComp=', intristicComponent);
             super(owner, name, id);
             this.component = intristicComponent;
-            // do _params da params s urcenym poradim properties (asi)
             this._params = this.getParams(params);
         }
 
         /**
-         * do encodedvalue nastavi default hodnotu aku ma control definovanu v jsone jemu odpovedajucom
-         * do value da vypocitanu (z jsonu) uz finalnu hodnotu ktora sa bude posielat do glsl
+         * Set this.encodedValue to the default value defined in the intristicComponent.
+         * Set this.value to the normalized value (from the encoded value) that will be sent to the GLSL.
+         * Register "change" event handler to the control, if interactive.
          */
         init() {
             this.encodedValue = this.load(this.params.default);
@@ -841,20 +753,17 @@
                 this.store(this.encodedValue);
             }
 
-
-            // did not know why this is here so I just commented it out
-            // this unfortunatelly makes cache erasing and rebuilding vis impossible, the shader part has to be fully re-instantiated
-            // this.params.default = this.encodedValue;
-
-            // najprv dekoduje encodedValue, pri color to znamena napriklad ze zo stringu #ffffff sa prevedie na array troch floatov, pre range ze proste parse float na vstupe
-            // potom normalizuje, co pri farbe nerobi nic ale napriklad pri range to uz nejakym sposobom dostava do rozmedzia <0, 1> s tym ze napriklad ak min je 0 a max 100 a default hodnota 40 tak hodnotu
-            // tomu da 0.4, asi chapes, nech to sedi s originalom, klasicky ako v statistike ze vzdialenosti ostanu rovnake, hodnota je default hodnota a hranice intervalu su min a max v json definicii
+            /** Firstly decode encodedValue:
+             *      for color it means that it is converted from string "#ffffff" to an array of three floats,
+             *      for range it just parses the float on input.
+             *  Secondly normalize the obtained value:
+             *      for color it does nothing,
+             *      for range it somehow gets it to the range <0, 1>;
+             *          e.g.: with the range-min being 0 and range-max 100 and default value 40, it will set the min to 0, max to 100, and value to 0.4;
+             *                  so that "distances" between the value and min and max remain the same.
+             */
             this.value = this.component.normalize(this.component.decode(this.encodedValue), this.params);
 
-            // console.error(`UIControl ${this.name} INIT() -> value without normalizing`, this.component.decode(this.encodedValue));
-            // console.error(`UIControl ${this.name} INIT() -> sets its value to ${this.value}`);
-
-            // console.log('UIControl::init() - setting value to', this.value, 'encodedValue =', this.encodedValue, 'interactive= ', this.params.interactive);
             if (this.params.interactive) {
                 const _this = this;
                 let node = document.getElementById(this.id);
@@ -865,45 +774,33 @@
                     };
 
                     // TODO: some elements do not have 'value' attribute, but 'checked' or 'selected' instead
-                    // console.log('Setting node.value to', this.encodedValue);
                     node.value = this.encodedValue;
                     node.addEventListener('change', updater);
                 } else {
-                    console.error('UIControl::init() - HTML element not found, id =', this.id);
+                    console.error('$.WebGLModule.UIControls.SimpleUIControl::init: HTML element with id =', this.id, 'not found! Cannot set event listener for the control.');
                 }
             }
         }
 
         set(encodedValue) {
-            // console.warn('control\'s set call, value =', encodedValue);
             this.encodedValue = encodedValue;
             this.value = this.component.normalize(this.component.decode(this.encodedValue), this.params);
 
-            // zmenil sa params.default, posledne zaregistrovany handler na tuto zmenu sa zavola..
             this.changed("default", this.value, this.encodedValue, this);
-
-            // bud alebo
             this.store(this.encodedValue);
-            // this._cache.encodedValue = this.encodedValue;
-            // this._cache.value = this.value;
         }
 
         glDrawing(program, gl) {
-            // console.log('Settujem', this.component.glUniformFunName(), 'odpovedajuci', this.webGLVariableName, 'na', this.value);
+            // console.debug('Setting', this.component.glUniformFunName(), 'corresponding to', this.webGLVariableName, 'to value', this.value);
             gl[this.component.glUniformFunName()](this.glLocation, this.value);
         }
 
         glLoaded(program, gl) {
-            // console.log(`setting this.glLocation to ${this.webGLVariableName}`);
+            // console.debug(`Setting control's glLocation to ${this.webGLVariableName}`);
             this.glLocation = gl.getUniformLocation(program, this.webGLVariableName);
         }
 
-        // POZRIET
         toHtml(breakLine = true, controlCss = "") {
-            // if (!this.params.interactive) {
-            //     return "";
-            // }
-            // console.log('toHtml, componenr =', this.component);
             const result = this.component.html(this.id, this.params, controlCss);
             return breakLine ? `<div>${result}</div>` : result;
         }
