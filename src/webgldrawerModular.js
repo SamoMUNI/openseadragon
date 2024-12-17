@@ -20,12 +20,14 @@
          * @memberof OpenSeadragon.WebGLDrawerModular
          */
         constructor(options){
+            console.log('Robim mna');
+
             super(options);
             this.webGLOptions = this.options;
             this.debug = this.webGLOptions.debug || false;
 
             this._id = this.constructor.numOfDrawers++;
-            this.webGLVersion = "2.0";
+            this.webGLVersion = "1.0";
 
             this._destroyed = false;
             this._tileIdCounter = 0;
@@ -369,14 +371,12 @@
                 }
 
             } else { // manually define rendering settings for the TiledImage, assume one data source only
-                let shaderType;
-                if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
-                    shaderType = "edgeNotPlugin";
-                } else if (tileSource._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
-                    shaderType = "negative";
-                } else {
-                    shaderType = "identity";
-                }
+                let shaderType = "identity";
+                // if (tileSource.tilesUrl === 'https://openseadragon.github.io/example-images/duomo/duomo_files/') {
+                //     shaderType = "edgeNotPlugin";
+                // } else if (tileSource._id === "http://localhost:8000/test/data/iiif_2_0_sizes") {
+                //     shaderType = "negative";
+                // }
 
                 info.shaders[0] = {
                     originalShaderConfig: {
@@ -744,68 +744,68 @@
          * @param {[TiledImage]} tiledImages array of TiledImage objects to draw
          */
         draw(tiledImages) {
-            const gl = this._gl;
+                const gl = this._gl;
 
-            // clear the output canvas
-            this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
+                // clear the output canvas
+                this._outputContext.clearRect(0, 0, this._outputCanvas.width, this._outputCanvas.height);
 
-            // nothing to draw
-            if (tiledImages.every(tiledImage => tiledImage.getOpacity() === 0 || tiledImage.getTilesToDraw().length === 0)) {
-                return;
-            }
+                // nothing to draw
+                if (tiledImages.every(tiledImage => tiledImage.getOpacity() === 0 || tiledImage.getTilesToDraw().length === 0)) {
+                    return;
+                }
 
-            const bounds = this.viewport.getBoundsNoRotateWithMargins(true);
-            let view = {
-                bounds: bounds,
-                center: new OpenSeadragon.Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
-                rotation: this.viewport.getRotation(true) * Math.PI / 180,
-                zoom: this.viewport.getZoom(true)
-            };
+                const bounds = this.viewport.getBoundsNoRotateWithMargins(true);
+                let view = {
+                    bounds: bounds,
+                    center: new OpenSeadragon.Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
+                    rotation: this.viewport.getRotation(true) * Math.PI / 180,
+                    zoom: this.viewport.getZoom(true)
+                };
 
-            // calculate view matrix for viewer
-            let flipMultiplier = this.viewport.flipped ? -1 : 1;
-            let posMatrix = $.Mat3.makeTranslation(-view.center.x, -view.center.y);
-            let scaleMatrix = $.Mat3.makeScaling(2 / view.bounds.width * flipMultiplier, -2 / view.bounds.height);
-            let rotMatrix = $.Mat3.makeRotation(-view.rotation);
-            let viewMatrix = scaleMatrix.multiply(rotMatrix).multiply(posMatrix);
+                // calculate view matrix for viewer
+                let flipMultiplier = this.viewport.flipped ? -1 : 1;
+                let posMatrix = $.Mat3.makeTranslation(-view.center.x, -view.center.y);
+                let scaleMatrix = $.Mat3.makeScaling(2 / view.bounds.width * flipMultiplier, -2 / view.bounds.height);
+                let rotMatrix = $.Mat3.makeRotation(-view.rotation);
+                let viewMatrix = scaleMatrix.multiply(rotMatrix).multiply(posMatrix);
 
 
-            let useContext2DPipeline = this.viewer.compositeOperation || false;
-            let twoPassRendering = false;
-            for (const tiledImage of tiledImages) {
-                // use context2DPipeline if any tiledImage has compositeOperation, clip, crop or debugMode
-                if (tiledImage.compositeOperation ||
-                    tiledImage._clip ||
-                    tiledImage._croppingPolygons ||
-                    tiledImage.debugMode) {
-                        useContext2DPipeline = true;
-                    }
+                let useContext2DPipeline = this.viewer.compositeOperation || false;
+                let twoPassRendering = false;
+                for (const tiledImage of tiledImages) {
+                    // use context2DPipeline if any tiledImage has compositeOperation, clip, crop or debugMode
+                    if (tiledImage.compositeOperation ||
+                        tiledImage._clip ||
+                        tiledImage._croppingPolygons ||
+                        tiledImage.debugMode) {
+                            useContext2DPipeline = true;
+                        }
 
-                // use two-pass rendering if any tiledImage (or tile in the tiledImage) has opacity lower than zero or if it utilizes local methods (looking at neighbor's pixels)
-                if (tiledImage.getOpacity() < 1 ||
-                    (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency) ||
-                    tiledImage.source.__renderInfo.drawers[this._id]._utilizeLocalMethods) {
-                        twoPassRendering = true;
-                    }
-            }
+                    // use two-pass rendering if any tiledImage (or tile in the tiledImage) has opacity lower than zero or if it utilizes local methods (looking at neighbor's pixels)
+                    if (tiledImage.getOpacity() < 1 ||
+                        (tiledImage.getTilesToDraw().length !== 0 && tiledImage.getTilesToDraw()[0].hasTransparency) ||
+                        tiledImage.source.__renderInfo.drawers[this._id]._utilizeLocalMethods) {
+                            twoPassRendering = true;
+                        }
+                }
 
-            // use twoPassRendering also if context2DPipeline is used (as in original WebGLDrawer)
-            // twoPassRendering = twoPassRendering || useContext2DPipeline;
+                // use twoPassRendering also if context2DPipeline is used (as in original WebGLDrawer)
+                twoPassRendering = twoPassRendering || useContext2DPipeline;
 
-            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-            if (!twoPassRendering) {
-                this._drawSinglePass(tiledImages, view, viewMatrix);
-            } else {
-                this._drawTwoPass(tiledImages, view, viewMatrix, useContext2DPipeline);
-            }
-
-            // data are still in the rendering canvas => draw them onto the output canvas and clear the rendering canvas
-            if (this._renderingCanvasHasImageData) {
-                this._outputContext.drawImage(this._renderingCanvas, 0, 0);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
                 gl.clear(gl.COLOR_BUFFER_BIT);
-                this._renderingCanvasHasImageData = false;
-            }
+                if (!twoPassRendering) {
+                    this._drawSinglePass(tiledImages, view, viewMatrix);
+                } else {
+                    this._drawTwoPass(tiledImages, view, viewMatrix, useContext2DPipeline);
+                }
+
+                // data are still in the rendering canvas => draw them onto the output canvas and clear the rendering canvas
+                if (this._renderingCanvasHasImageData) {
+                    this._outputContext.drawImage(this._renderingCanvas, 0, 0);
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+                    this._renderingCanvasHasImageData = false;
+                }
         } // end of function
 
         /**
