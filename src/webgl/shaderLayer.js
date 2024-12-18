@@ -1525,11 +1525,13 @@
         }
 
         glDrawing(program, gl) {
+            // debugging purposes
             // console.debug('Setting', this.component.glUniformFunName(), 'corresponding to', this.webGLVariableName, 'to value', this.value);
             gl[this.component.glUniformFunName()](this.glLocation, this.value);
         }
 
         glLoaded(program, gl) {
+            // debugging purposes
             // console.debug(`Setting control's glLocation to ${this.webGLVariableName}`);
             this.glLocation = gl.getUniformLocation(program, this.webGLVariableName);
         }

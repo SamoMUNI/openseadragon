@@ -673,7 +673,6 @@
          */
         _getOffScreenTextureIndex() {
             if (this._offScreenTexturesUnusedIndices.length > 0) {
-                console.info('Recyklujem uz pouzity offScreenIndex');
                 return this._offScreenTexturesUnusedIndices.pop();
             }
             return this._offScreenTexturesCount++;
