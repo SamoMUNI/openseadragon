@@ -319,14 +319,14 @@
         /**
          * Remove ShaderLayer instantion and its controls.
          * @param {object} shaderConfig object bind to a concrete ShaderLayer instantion
-         * @param {string} shaderID     unique identifier
          *
          * @instance
          * @memberof WebGLModule
          */
-        removeShader(shaderConfig, shaderID) {
+        removeShader(shaderConfig) {
+            const shaderID = shaderConfig.id;
             const shader = this._shaders[shaderID];
-            shader.removeControls(shaderConfig, shaderID);
+            shader.removeControls();
 
             delete this._shaders[shaderID];
             this.createProgram();

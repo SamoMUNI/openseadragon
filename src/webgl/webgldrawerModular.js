@@ -20,14 +20,12 @@
          * @memberof OpenSeadragon.WebGLDrawerModular
          */
         constructor(options){
-            console.log('Robim mna');
-
             super(options);
             this.webGLOptions = this.options;
             this.debug = this.webGLOptions.debug || false;
 
             this._id = this.constructor.numOfDrawers++;
-            this.webGLVersion = "1.0";
+            this.webGLVersion = "2.0";
 
             this._destroyed = false;
             this._tileIdCounter = 0;
@@ -97,7 +95,8 @@
             // map to save tiles as canvases for exporting {tileId: canvas}
             this.tilesAsCanvases = {};
 
-            // create a link for downloading off-screen textures, or input image data tiles. Only for the main drawer, not the minimap.
+            // Create a link for downloading off-screen textures, or input image data tiles. Only for the main drawer, not the minimap.
+            // Generated with ChatGPT, customized.
             if (this._id === 0 && this.debug) {
                 const downloadLink = document.createElement('a');
                 downloadLink.id = 'download-off-screen-textures';
@@ -156,9 +155,8 @@
                 delete this._sessionInfo[e.item.source.__renderInfo.externalId];
 
                 for (const sourceID of Object.keys(e.item.source.__renderInfo.drawers[this._id].shaders)) {
-                    // TODO: pozriet ci funguje dobre este
                     const sourceJSON = e.item.source.__renderInfo.drawers[this._id].shaders[sourceID];
-                    this.renderer.removeShader(sourceJSON, e.item.source.__renderInfo.id.toString() + '_' + sourceID.toString());
+                    this.renderer.removeShader(sourceJSON);
                     this._offScreenTexturesUnusedIndices.push(sourceJSON._offScreenTextureIndex);
                 }
 
@@ -207,6 +205,14 @@
             };
             this.viewer.addHandler("resize", this._resizeHandler);
         } // end of constructor
+
+        /**
+         * Drawer type.
+         * @returns {String}
+         */
+        getType() {
+            return 'myImplementation';
+        }
 
         /**
          * Clean up the WebGLDrawerModular, removing all resources.
@@ -603,7 +609,7 @@
                 tileInfo.debugId = this._tileIdCounter++;
             }
 
-            // TODO: <MORE SOURCES FEATURE> Supply the data corresponding to it's source index, this puts one canvas everywhere.
+            // TODO: <MORE SOURCES FEATURE> In the future supply the data corresponding to it's source index, this puts one canvas everywhere.
             if (this.webGLVersion === "1.0") {
                 const textureArray = [];
 
@@ -1210,6 +1216,7 @@
          * @param {number} order order in which was rendered into this offScreenTexture
          * @returns
          */
+        // Generated with ChatGPT, customized.
         _extractOffScreenTexture(index, order) {
             const gl = this._gl;
             const width = this._size.x;
@@ -1261,7 +1268,7 @@
 
 
 
-        // FUNCTIONS TAKEN FROM WEBGLDRAWER WITHOUT MODIFICATIONS
+        // FUNCTIONS TAKEN FROM ORIGINAL OPENSEADRAGON WEBGLDRAWER --- WITHOUT MODIFICATIONS
         /**
          * @returns {Boolean} true
          */
@@ -1281,14 +1288,6 @@
                 ext.loseContext();
             }
             return !!(webglContext);
-        }
-
-        /**
-         * Drawer type.
-         * @returns {String}
-         */
-        getType() {
-            return 'myImplementation';
         }
 
         /**

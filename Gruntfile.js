@@ -62,23 +62,20 @@ module.exports = function(grunt) {
             "src/htmldrawer.js",
             "src/canvasdrawer.js",
             "src/webgldrawer.js",
-            "src/webgldrawerModular.js",
-            "src/webgldrawerDOCs.js",
             "src/viewport.js",
             "src/tiledimage.js",
             "src/tilecache.js",
             "src/world.js",
-            //Aiosa's webgl drawer - needs optimization, polishing, trimming
+
+            // New implementation of the WebGL drawer
+            "src/webgl/webgldrawerModular.js",
             "src/webgl/renderer.js",
             "src/webgl/shaderLayer.js",
-            "src/webgl/uiControls.js",
             "src/webgl/webGLContext.js",
-            "src/webgl/drawer.js",
             "src/webgl/firstPassShader.js",
             "src/webgl/plainShader.js",
             "src/webgl/edgeShader.js",
             "src/webgl/negativeShader.js",
-            "src/webgl/edgeShaderSobel.js",
         ];
 
     var banner = "//! <%= pkg.name %> <%= pkg.version %>\n" +
