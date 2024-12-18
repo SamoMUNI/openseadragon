@@ -14,11 +14,9 @@ const labels = {
     duomo: 'Duomo',
 }
 const drawers = {
-    canvas: "Context2d drawer (default in OSD &lt;= 4.1.0)",
-    webglOld: "webgldrawerOLD",
-    webgl: "original Webgldrawer",
-    myImplementation: "my new implementation",
-    universalWebgl: "Jirka's modular drawer",
+    canvas: "Context2d renderer (default in OSD &lt;= 4.1.0)",
+    webgl: "Original OSD WebGL renderer",
+    myImplementation: "New implementation",
 }
 
 const viewportMargins = {

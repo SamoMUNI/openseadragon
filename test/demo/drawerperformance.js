@@ -14,13 +14,12 @@ const labels = {
     duomo: 'Duomo',
 }
 const drawers = {
-    canvas: "Context2d drawer (default in OSD &lt;= 4.1.0)",
-    webgl: "New WebGL drawer",
-    myImplementation: "New WebGL (Modular)",
-    // canvas: "Context2d renderer (default in OSD &lt;= 4.1.0)",
-    // webgl: "Original OSD WebGL renderer",
-    // myImplementation: "New implementation",
-    // universalWebgl: "Jirka",
+    // canvas: "Context2d drawer (default in OSD &lt;= 4.1.0)",
+    // webgl: "New WebGL drawer",
+    // myImplementation: "New WebGL (Modular)",
+    canvas: "Context2d renderer (default in OSD &lt;= 4.1.0)",
+    webgl: "Original OSD WebGL renderer",
+    myImplementation: "New implementation",
     html: ""
 }
 
